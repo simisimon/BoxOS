@@ -1389,14 +1389,15 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         title = require_schedule_title(body.get("title"))
         class_type = require_class_type(body.get("class_type"))
         start_time = require_future_datetime(body.get("start_time"), label="Start time")
-        duration_minutes = require_duration_minutes(body.get("duration_minutes"))
+        duration_minutes = require_schedule_duration_minutes(body)
         capacity = require_capacity(body.get("capacity"))
-        trainer_user_id = require_user_id(body.get("trainer_user_id"))
+        trainer_user_id = require_optional_user_id(body.get("trainer_user_id"))
         wod_description = require_wod_description(body.get("wod_description"))
         end_time = start_time + timedelta(minutes=duration_minutes)
         timestamp = isoformat(now_utc())
         connection = get_connection()
-        assigned_trainer = connection.execute(
+        if trainer_user_id is not None:
+            assigned_trainer = connection.execute(
             """
             select users.id
             from gym_memberships
@@ -1409,9 +1410,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             """,
             (session["active_gym_id"], trainer_user_id),
         ).fetchone()
-        if assigned_trainer is None:
-            connection.close()
-            raise ApiError(HTTPStatus.BAD_REQUEST, "Selected trainer is not active in this gym.")
+            if assigned_trainer is None:
+                connection.close()
+                raise ApiError(HTTPStatus.BAD_REQUEST, "Selected trainer is not active in this gym.")
         with connection:
             cursor = connection.execute(
                 """
@@ -1455,7 +1456,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                   class_schedules.wod_description
                 from class_schedules
                 left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
-                where id = ?
+                where class_schedules.id = ?
                 """,
                 (schedule_id,),
             ).fetchone()
@@ -1479,9 +1480,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         title = require_schedule_title(body.get("title"))
         class_type = require_class_type(body.get("class_type"))
         start_time = require_future_datetime(body.get("start_time"), label="Start time")
-        duration_minutes = require_duration_minutes(body.get("duration_minutes"))
+        duration_minutes = require_schedule_duration_minutes(body)
         capacity = require_capacity(body.get("capacity"))
-        trainer_user_id = require_user_id(body.get("trainer_user_id"))
+        trainer_user_id = require_optional_user_id(body.get("trainer_user_id"))
         wod_description = require_wod_description(body.get("wod_description"))
         end_time = start_time + timedelta(minutes=duration_minutes)
         connection = get_connection()
@@ -1517,7 +1518,8 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 HTTPStatus.BAD_REQUEST,
                 "Capacity cannot be lower than the current booking count.",
             )
-        assigned_trainer = connection.execute(
+        if trainer_user_id is not None:
+            assigned_trainer = connection.execute(
             """
             select users.id
             from gym_memberships
@@ -1530,9 +1532,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             """,
             (session["active_gym_id"], trainer_user_id),
         ).fetchone()
-        if assigned_trainer is None:
-            connection.close()
-            raise ApiError(HTTPStatus.BAD_REQUEST, "Selected trainer is not active in this gym.")
+            if assigned_trainer is None:
+                connection.close()
+                raise ApiError(HTTPStatus.BAD_REQUEST, "Selected trainer is not active in this gym.")
         with connection:
             connection.execute(
                 """
@@ -1580,7 +1582,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                   class_schedules.wod_description
                 from class_schedules
                 left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
-                where id = ?
+                where class_schedules.id = ?
                 """,
                 (schedule_id,),
             ).fetchone()
@@ -1806,7 +1808,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                   class_schedules.wod_description
                 from class_schedules
                 left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
-                where id = ?
+                where class_schedules.id = ?
                 """,
                 (schedule_id,),
             ).fetchone()
@@ -2650,6 +2652,15 @@ def require_user_id(value: Any) -> int:
     return user_id
 
 
+def require_optional_user_id(value: Any) -> int | None:
+    if value is None:
+        return None
+    trimmed = str(value).strip()
+    if not trimmed:
+        return None
+    return require_user_id(trimmed)
+
+
 def require_account_type(value: Any) -> str:
     account_type = normalize_account_type_value(value)
     if account_type not in ALLOWED_ACCOUNT_TYPES:
@@ -2731,6 +2742,27 @@ def require_duration_minutes(value: Any) -> int:
             "Duration must be between 1 and 1440 minutes.",
         )
     return duration_minutes
+
+
+def require_schedule_duration_minutes(body: dict[str, Any]) -> int:
+    if body.get("duration_minutes") not in (None, ""):
+        return require_duration_minutes(body.get("duration_minutes"))
+
+    end_time_value = body.get("end_time")
+    if end_time_value in (None, ""):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Duration is required.")
+
+    try:
+        start_time = parse_iso(str(body.get("start_time") or "").strip())
+        end_time = parse_iso(str(end_time_value).strip())
+    except ValueError:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "End time must be a valid ISO-8601 datetime.",
+        )
+
+    duration_minutes = int(round((end_time - start_time).total_seconds() / 60))
+    return require_duration_minutes(duration_minutes)
 
 
 def require_wod_description(value: Any) -> str:
