@@ -197,6 +197,21 @@ def init_db() -> None:
             created_at text not null,
             unique(class_schedule_id, user_id)
           );
+
+          create table if not exists daily_workouts (
+            id integer primary key autoincrement,
+            gym_id integer not null references gyms(id) on delete cascade,
+            scheduled_date text not null,
+            title text not null,
+            strength_text text not null default '',
+            metcon_text text not null default '',
+            notes_text text not null default '',
+            created_by_user_id integer not null references users(id) on delete cascade,
+            updated_by_user_id integer not null references users(id) on delete cascade,
+            created_at text not null,
+            updated_at text not null,
+            unique(gym_id, scheduled_date)
+          );
           """
       )
       ensure_user_columns(connection)
@@ -868,6 +883,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/schedule/trainers":
                 self.handle_list_schedule_trainers()
                 return
+            if path == "/programming/workouts":
+                self.handle_list_daily_workouts()
+                return
             if path == "/gyms/join-requests":
                 self.handle_list_join_requests()
                 return
@@ -928,6 +946,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/schedule/bookings":
                 self.handle_create_class_booking(body)
                 return
+            if path == "/programming/workouts":
+                self.handle_create_daily_workout(body)
+                return
             if path == "/gyms/join-requests":
                 self.handle_create_join_request(body)
                 return
@@ -978,6 +999,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/schedule/bookings/attendance":
                 self.handle_update_class_attendance(body)
+                return
+            if path == "/programming/workouts":
+                self.handle_update_daily_workout(body)
                 return
             if path == "/gyms/join-requests":
                 self.handle_review_join_request(body)
@@ -1822,6 +1846,140 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"class": payload})
+
+    def handle_list_daily_workouts(self) -> None:
+        session = self.require_active_gym_member_session()
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select
+              daily_workouts.id,
+              daily_workouts.gym_id,
+              daily_workouts.scheduled_date,
+              daily_workouts.title,
+              daily_workouts.strength_text,
+              daily_workouts.metcon_text,
+              daily_workouts.notes_text,
+              daily_workouts.created_at,
+              daily_workouts.updated_at
+            from daily_workouts
+            where daily_workouts.gym_id = ?
+            order by daily_workouts.scheduled_date asc
+            """,
+            (session["active_gym_id"],),
+        ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {
+                "workouts": [
+                    daily_workout_payload(row, can_edit=session["role"] in {"admin", "trainer"})
+                    for row in rows
+                ]
+            },
+        )
+
+    def handle_create_daily_workout(self, body: dict[str, Any]) -> None:
+        session = self.require_schedule_manager_session()
+        scheduled_date = require_programming_date(body.get("scheduled_date"))
+        title = require_programming_title(body.get("title"))
+        strength_text = require_programming_section(body.get("strength_text"), label="Strength")
+        metcon_text = require_programming_section(body.get("metcon_text"), label="MetCon")
+        notes_text = require_programming_section(body.get("notes_text"), label="Notes")
+        connection = get_connection()
+        existing = connection.execute(
+            "select id from daily_workouts where gym_id = ? and scheduled_date = ?",
+            (session["active_gym_id"], scheduled_date),
+        ).fetchone()
+        if existing is not None:
+            connection.close()
+            raise ApiError(HTTPStatus.CONFLICT, "A workout already exists for this date.")
+        timestamp = isoformat(now_utc())
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into daily_workouts (
+                  gym_id, scheduled_date, title, strength_text, metcon_text, notes_text,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session["active_gym_id"],
+                    scheduled_date,
+                    title,
+                    strength_text,
+                    metcon_text,
+                    notes_text,
+                    session["user_id"],
+                    session["user_id"],
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            row = connection.execute(
+                "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
+                (int(cursor.lastrowid),),
+            ).fetchone()
+        connection.close()
+        self.send_json(HTTPStatus.CREATED, {"workout": daily_workout_payload(row, can_edit=True)})
+
+    def handle_update_daily_workout(self, body: dict[str, Any]) -> None:
+        session = self.require_schedule_manager_session()
+        workout_id = require_user_id(body.get("id"))
+        scheduled_date = require_programming_date(body.get("scheduled_date"))
+        title = require_programming_title(body.get("title"))
+        strength_text = require_programming_section(body.get("strength_text"), label="Strength")
+        metcon_text = require_programming_section(body.get("metcon_text"), label="MetCon")
+        notes_text = require_programming_section(body.get("notes_text"), label="Notes")
+        connection = get_connection()
+        existing = connection.execute(
+            "select id, scheduled_date from daily_workouts where id = ? and gym_id = ?",
+            (workout_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Workout not found.")
+        if parse_programming_date(existing["scheduled_date"]) < today_utc_date():
+            connection.close()
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Past workouts cannot be edited.")
+        duplicate = connection.execute(
+            "select id from daily_workouts where gym_id = ? and scheduled_date = ? and id != ?",
+            (session["active_gym_id"], scheduled_date, workout_id),
+        ).fetchone()
+        if duplicate is not None:
+            connection.close()
+            raise ApiError(HTTPStatus.CONFLICT, "A workout already exists for this date.")
+        with connection:
+            connection.execute(
+                """
+                update daily_workouts
+                set scheduled_date = ?,
+                    title = ?,
+                    strength_text = ?,
+                    metcon_text = ?,
+                    notes_text = ?,
+                    updated_by_user_id = ?,
+                    updated_at = ?
+                where id = ?
+                """,
+                (
+                    scheduled_date,
+                    title,
+                    strength_text,
+                    metcon_text,
+                    notes_text,
+                    session["user_id"],
+                    isoformat(now_utc()),
+                    workout_id,
+                ),
+            )
+            row = connection.execute(
+                "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
+                (workout_id,),
+            ).fetchone()
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"workout": daily_workout_payload(row, can_edit=True)})
 
     def handle_create_gym(self, body: dict[str, Any]) -> None:
         session = self.require_session()
@@ -2799,6 +2957,56 @@ def require_future_datetime(value: Any, *, label: str) -> datetime:
             f"{label} must be in the future.",
         )
     return parsed
+
+
+def daily_workout_payload(row: sqlite3.Row, *, can_edit: bool) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "gym_id": row["gym_id"],
+        "scheduled_date": row["scheduled_date"],
+        "title": row["title"],
+        "strength_text": row["strength_text"],
+        "metcon_text": row["metcon_text"],
+        "notes_text": row["notes_text"],
+        "can_edit": can_edit,
+    }
+
+
+def today_utc_date() -> datetime.date:
+    return now_utc().date()
+
+
+def parse_programming_date(value: str) -> datetime.date:
+    return datetime.fromisoformat(value).date()
+
+
+def require_programming_date(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Scheduled date is required.")
+    try:
+        scheduled_date = parse_programming_date(raw)
+    except ValueError:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Scheduled date must be a valid ISO-8601 date.")
+    if scheduled_date < today_utc_date():
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Scheduled date must be today or later.")
+    return scheduled_date.isoformat()
+
+
+def require_programming_title(value: Any) -> str:
+    title = str(value or "").strip()
+    if not title:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title is required.")
+    if len(title) > 80:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title must be 80 characters or fewer.")
+    return title
+
+
+def require_programming_section(value: Any, *, label: str) -> str:
+    text_value = str(value or "").strip()
+    if len(text_value) > 4000:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} must be 4000 characters or fewer.")
+    return text_value
 
 
 def require_join_request_decision(value: Any) -> str:

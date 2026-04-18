@@ -21,6 +21,7 @@ import 'package:app/features/profile/presentation/screens/edit_profile_screen.da
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/role_management_screen.dart';
+import 'package:app/features/programming/presentation/screens/programming_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -202,6 +203,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/gym-requests',
         name: 'gym-requests',
         builder: (context, state) => const JoinRequestsScreen(),
+      ),
+      GoRoute(
+        path: '/programming',
+        name: 'programming',
+        builder: (context, state) => const ProgrammingScreen(),
       ),
     ],
   );

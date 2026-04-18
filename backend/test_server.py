@@ -1241,6 +1241,191 @@ class BackendServerTests(unittest.TestCase):
         )
         self.assertEqual(created["class"]["class_type"], "Specialty")
 
+    def test_admin_can_create_and_update_daily_workout(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Programming Gym",
+                "logo_url": "https://example.com/programming.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        scheduled_date = (server.now_utc() + timedelta(days=1)).date().isoformat()
+        created = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": scheduled_date,
+                "title": "Tuesday WOD",
+                "strength_text": "Back squat 5x5",
+                "metcon_text": "12 min AMRAP: 10 burpees, 15 air squats",
+                "notes_text": "Scale reps for beginners.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(created["workout"]["title"], "Tuesday WOD")
+        self.assertEqual(created["workout"]["scheduled_date"], scheduled_date)
+
+        updated = self.patch_json(
+            "/programming/workouts",
+            {
+                "id": created["workout"]["id"],
+                "scheduled_date": scheduled_date,
+                "title": "Tuesday Engine",
+                "strength_text": "Back squat 6x3",
+                "metcon_text": "15 min AMRAP: 12 cals, 12 wall balls",
+                "notes_text": "Push the final 5 minutes.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(updated["workout"]["title"], "Tuesday Engine")
+        self.assertEqual(updated["workout"]["strength_text"], "Back squat 6x3")
+
+    def test_active_gym_members_can_list_daily_workouts(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Athlete Programming Gym",
+                "logo_url": "https://example.com/athlete-programming.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        scheduled_date = (server.now_utc() + timedelta(days=2)).date().isoformat()
+        self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": scheduled_date,
+                "title": "Wednesday Grind",
+                "strength_text": "Strict press 5x5",
+                "metcon_text": "For time: 21-15-9 deadlifts and hand-release push-ups",
+                "notes_text": "Stimulus is steady pace.",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {
+                "request_id": pending_requests["requests"][0]["id"],
+                "decision": "approve",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        listed = self.get_json_with_auth(
+            "/programming/workouts",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(len(listed["workouts"]), 1)
+        self.assertEqual(listed["workouts"][0]["title"], "Wednesday Grind")
+        self.assertFalse(listed["workouts"][0]["can_edit"])
+
+    def test_athlete_cannot_manage_daily_workouts(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Blocked Programming Gym",
+                "logo_url": "https://example.com/blocked-programming.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {
+                "request_id": pending_requests["requests"][0]["id"],
+                "decision": "approve",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/programming/workouts",
+            data=json_bytes(
+                {
+                    "scheduled_date": (server.now_utc() + timedelta(days=1)).date().isoformat(),
+                    "title": "Blocked Workout",
+                    "strength_text": "",
+                    "metcon_text": "Run 400m",
+                    "notes_text": "",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
     def test_athlete_cannot_manage_schedule(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

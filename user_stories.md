@@ -347,7 +347,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 ## Epic D - Workout Programming & Whiteboard
 
 #### US-D1-01 - Create daily WOD
-**Status:** Not Started
+**Status:** Complete
 
 **As a trainer or admin**, I want to create a daily workout for my gym.
 
@@ -357,7 +357,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Appropriate gym roles can edit future workouts.
 
 #### US-D1-02 - Programming calendar
-**Status:** Not Started
+**Status:** Complete
 
 **As a trainer or admin**, I want to manage workouts on a calendar.
 

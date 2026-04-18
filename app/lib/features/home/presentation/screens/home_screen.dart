@@ -252,6 +252,14 @@ class _QuickAccessRow extends StatelessWidget {
           onTap: () => context.go('/my-box'),
         ),
         _ActionCard(
+          icon: Icons.event_note_outlined,
+          title: 'Open Programming',
+          subtitle:
+              'Review the daily workout plan and upcoming gym programming.',
+          actionLabel: 'Open Programming',
+          onTap: () => context.go('/programming'),
+        ),
+        _ActionCard(
           icon: Icons.menu_book_outlined,
           title: 'Open Logbook',
           subtitle:

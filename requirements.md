@@ -233,7 +233,8 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 - Not started
 
 ### 11.4 Workout Programming & Whiteboard
-- Not started
+- Daily WOD creation and date-based programming management: implemented
+- Whiteboard workflows: not started
 
 ### 11.5 Workout Logging & PR Tracking
 - Not started

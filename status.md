@@ -6,7 +6,7 @@ Last updated: 2026-04-18
 - Repository: `C:\GitHub\BoxOS`
 - Product direction: production-ready core platform for a single gym
 - Primary client direction: athlete mobile app plus admin-focused backoffice, with core admin access also available in mobile
-- Focus area: Epic A (Accounts, Roles & Authentication) plus A4 gym association
+- Focus area: Epic B scheduling plus Epic D workout programming
 - State: In Progress
 - Active backend: local REST backend in `backend/server.py`
 - Permanent dev logins: athlete `demo@boxos.app` / `BoxOS123!`, admin `admin@boxos.app` / `BoxOS123!`
@@ -71,11 +71,17 @@ Last updated: 2026-04-18
   - trainer/admin users can mark bookings as attended or no-show after class start
   - athletes can see their own attendance state in the schedule
 - Renamed the product role vocabulary from `owner`/`box` to `admin` across backend, app, tests, and docs, with compatibility handling for legacy local data
+- Closed US-D1-01 daily WOD creation and US-D1-02 programming calendar:
+  - added active-gym daily workout programming endpoints in the local backend
+  - trainers and admins can create and update one daily workout per date
+  - workouts support title, strength, MetCon, and coach notes sections
+  - active gym members can view upcoming workouts by date in the Flutter app
+  - added a dedicated Programming screen and navigation entry from the home surface
 
 ## Validation State
 - `cd app && dart analyze`: passed
 - `cd app && flutter test`: hangs in the current environment
-- `python -m unittest backend.test_server`: passed
+- `python3 -m unittest backend.test_server`: passed (29 tests)
 
 ## Story Status (Epic A)
 - US-A1-01 Sign up: Complete
@@ -103,17 +109,20 @@ Last updated: 2026-04-18
 - B1 Class Scheduling: In Progress
 - B2 Athlete Booking: Complete
 - B3 Attendance Tracking: Partial
+- D1 Daily WOD Creation: Complete
+- D2 Programming Calendar: Complete
+- D3 Digital Whiteboard: Not Started
 - A5: Not Started
 
 ## Current Risks / Gaps
 1. Verification and password-reset tokens are printed to the backend terminal for local development instead of being emailed.
 2. Profile photo upload is still out of scope for the current A2 slice; only display name and nickname are implemented.
-3. Trainer permissions for workout programming are still not implemented; scheduling, booking, and attendance are ahead of programming.
-4. Memberships, billing, programming, logging, and analytics are still documented as core product modules but are not implemented yet.
+3. Digital whiteboard submission and leaderboard workflows are still not implemented.
+4. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
 
 ## Recommended Next Steps
-1. Implement Epic D workout programming so trainers and admins can manage daily workouts for the active gym.
-2. Add A5 audit logging for role changes, join-request decisions, and scheduling mutations.
+1. Implement Epic D3 digital whiteboard submission and ranking for the active workout.
+2. Add A5 audit logging for role changes, join-request decisions, scheduling mutations, and programming updates.
 3. Define the first production slice of memberships and payments before expanding secondary modules.
 
 ## Notes
