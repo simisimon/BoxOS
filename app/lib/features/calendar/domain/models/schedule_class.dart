@@ -1,0 +1,39 @@
+import 'package:app/features/calendar/domain/models/schedule_booking.dart';
+import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
+
+class ScheduleClass {
+  const ScheduleClass({
+    required this.id,
+    required this.gymId,
+    required this.title,
+    required this.classType,
+    required this.startTime,
+    required this.durationMinutes,
+    required this.capacity,
+    this.assignedTrainer,
+    this.wodDescription = '',
+    this.bookedCount = 0,
+    this.remainingSpots = 0,
+    this.isBooked = false,
+    this.attendanceStatus,
+    this.bookings = const [],
+  });
+
+  final int id;
+  final int gymId;
+  final String title;
+  final String classType;
+  final DateTime startTime;
+  final int durationMinutes;
+  final int capacity;
+  final ScheduleTrainer? assignedTrainer;
+  final String wodDescription;
+  final int bookedCount;
+  final int remainingSpots;
+  final bool isBooked;
+  final String? attendanceStatus;
+  final List<ScheduleBooking> bookings;
+
+  DateTime get endTime => startTime.add(Duration(minutes: durationMinutes));
+  bool get isFull => remainingSpots <= 0;
+}
