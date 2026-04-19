@@ -34,6 +34,8 @@ class WorkoutLogEntrySummary {
     required this.scoreLabel,
     required this.notesText,
     required this.updatedAt,
+    required this.isPr,
+    required this.prRank,
   });
 
   final int id;
@@ -42,6 +44,8 @@ class WorkoutLogEntrySummary {
   final String scoreLabel;
   final String notesText;
   final DateTime updatedAt;
+  final bool isPr;
+  final int? prRank;
 }
 
 class WhiteboardResult {

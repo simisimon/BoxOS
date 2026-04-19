@@ -398,7 +398,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Entries can be tied back to workouts or classes where appropriate.
 
 #### US-E1-03 - Basic PR detection
-**Status:** Not Started
+**Status:** Complete
 
 **As an athlete**, I want personal records to be detected automatically.
 

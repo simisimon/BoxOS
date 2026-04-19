@@ -76,6 +76,8 @@ class ApiLogbookRepository implements LogbookRepository {
       scoreLabel: data['score_label'] as String? ?? '',
       notesText: data['notes_text'] as String? ?? '',
       updatedAt: DateTime.parse(data['updated_at'] as String? ?? ''),
+      isPr: data['is_pr'] as bool? ?? false,
+      prRank: data['pr_rank'] as int?,
     );
   }
 }

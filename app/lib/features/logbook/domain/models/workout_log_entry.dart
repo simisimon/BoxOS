@@ -12,6 +12,8 @@ class WorkoutLogEntry {
     required this.scoreLabel,
     required this.notesText,
     required this.updatedAt,
+    required this.isPr,
+    required this.prRank,
   });
 
   final int id;
@@ -26,4 +28,6 @@ class WorkoutLogEntry {
   final String scoreLabel;
   final String notesText;
   final DateTime updatedAt;
+  final bool isPr;
+  final int? prRank;
 }

@@ -251,6 +251,8 @@ def init_db() -> None:
             score_value real not null,
             score_label text not null,
             notes_text text not null default '',
+            is_pr integer not null default 0,
+            pr_rank integer,
             created_at text not null,
             updated_at text not null,
             unique(user_id, daily_workout_id)
@@ -260,6 +262,7 @@ def init_db() -> None:
       ensure_user_columns(connection)
       ensure_class_schedule_columns(connection)
       ensure_class_booking_columns(connection)
+      ensure_workout_log_columns(connection)
       migrate_legacy_auth_terms(connection)
       purge_deleted_users(connection)
     connection.close()
@@ -396,6 +399,28 @@ def ensure_class_schedule_columns(connection: sqlite3.Connection) -> None:
     if "assigned_trainer_user_id" not in columns:
         connection.execute(
             "alter table class_schedules add column assigned_trainer_user_id integer references users(id) on delete set null"
+        )
+
+
+def ensure_workout_log_columns(connection: sqlite3.Connection) -> None:
+    tables = {
+        row["name"]
+        for row in connection.execute(
+            "select name from sqlite_master where type = 'table'"
+        ).fetchall()
+    }
+    if "workout_logs" not in tables:
+        return
+    columns = {
+        row["name"] for row in connection.execute("pragma table_info(workout_logs)").fetchall()
+    }
+    if "is_pr" not in columns:
+        connection.execute(
+            "alter table workout_logs add column is_pr integer not null default 0"
+        )
+    if "pr_rank" not in columns:
+        connection.execute(
+            "alter table workout_logs add column pr_rank integer"
         )
 
 
@@ -2246,7 +2271,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
               daily_workouts.scheduled_date,
               daily_workouts.title as workout_title,
               class_schedules.title as class_title,
-              class_schedules.start_time as class_start_time
+              class_schedules.start_time as class_start_time,
+              workout_logs.is_pr,
+              workout_logs.pr_rank
             from workout_logs
             join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
             left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
@@ -2356,7 +2383,41 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                   daily_workouts.scheduled_date,
                   daily_workouts.title as workout_title,
                   class_schedules.title as class_title,
-                  class_schedules.start_time as class_start_time
+                  class_schedules.start_time as class_start_time,
+                  workout_logs.is_pr,
+                  workout_logs.pr_rank
+                from workout_logs
+                join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
+                left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
+                where workout_logs.user_id = ? and workout_logs.daily_workout_id = ?
+                """,
+                (session["user_id"], workout_id),
+            ).fetchone()
+            refresh_pr_flags_for_workout_title(
+                connection,
+                user_id=session["user_id"],
+                gym_id=session["active_gym_id"],
+                workout_title=workout["title"],
+                score_type=score_type,
+            )
+            row = connection.execute(
+                """
+                select
+                  workout_logs.id,
+                  workout_logs.daily_workout_id,
+                  workout_logs.class_schedule_id,
+                  workout_logs.score_type,
+                  workout_logs.score_value,
+                  workout_logs.score_label,
+                  workout_logs.notes_text,
+                  workout_logs.created_at,
+                  workout_logs.updated_at,
+                  daily_workouts.scheduled_date,
+                  daily_workouts.title as workout_title,
+                  class_schedules.title as class_title,
+                  class_schedules.start_time as class_start_time,
+                  workout_logs.is_pr,
+                  workout_logs.pr_rank
                 from workout_logs
                 join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
                 left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
@@ -3510,6 +3571,8 @@ def workout_log_payload(row: sqlite3.Row) -> dict[str, Any]:
         "score_label": row["score_label"],
         "notes_text": row["notes_text"],
         "updated_at": row["updated_at"],
+        "is_pr": bool(row["is_pr"]) if "is_pr" in row.keys() else False,
+        "pr_rank": row["pr_rank"] if "pr_rank" in row.keys() else None,
     }
 
 
@@ -3533,7 +3596,9 @@ def get_workout_log_for_user(
           daily_workouts.scheduled_date,
           daily_workouts.title as workout_title,
           class_schedules.title as class_title,
-          class_schedules.start_time as class_start_time
+          class_schedules.start_time as class_start_time,
+          workout_logs.is_pr,
+          workout_logs.pr_rank
         from workout_logs
         join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
         left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
@@ -3544,6 +3609,50 @@ def get_workout_log_for_user(
     if row is None:
         return None
     return workout_log_payload(row)
+
+
+def refresh_pr_flags_for_workout_title(
+    connection: sqlite3.Connection,
+    *,
+    user_id: int,
+    gym_id: int,
+    workout_title: str,
+    score_type: str,
+) -> None:
+    rows = connection.execute(
+        """
+        select
+          workout_logs.id,
+          workout_logs.score_value,
+          daily_workouts.scheduled_date,
+          workout_logs.updated_at
+        from workout_logs
+        join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
+        where workout_logs.user_id = ?
+          and workout_logs.gym_id = ?
+          and daily_workouts.title = ?
+          and workout_logs.score_type = ?
+        order by
+          case when ? = 'time' then workout_logs.score_value end asc,
+          case when ? in ('reps', 'load') then workout_logs.score_value end desc,
+          daily_workouts.scheduled_date asc,
+          workout_logs.updated_at asc,
+          workout_logs.id asc
+        """,
+        (user_id, gym_id, workout_title, score_type, score_type, score_type),
+    ).fetchall()
+    if not rows:
+        return
+
+    best_id = rows[0]["id"]
+    updates: list[tuple[int, int, int]] = []
+    for index, row in enumerate(rows, start=1):
+        updates.append((1 if row["id"] == best_id else 0, index, row["id"]))
+
+    connection.executemany(
+        "update workout_logs set is_pr = ?, pr_rank = ? where id = ?",
+        updates,
+    )
 
 
 def list_whiteboard_results(

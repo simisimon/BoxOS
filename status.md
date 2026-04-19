@@ -95,6 +95,10 @@ Last updated: 2026-04-19
   - programming payloads now expose each athlete's own workout log for the current workout
   - athletes can log or update their own workout result from the Programming screen
   - the Logbook screen now shows live chronological workout history instead of placeholders
+- Closed US-E1-03 basic PR detection:
+  - added benchmark-style PR detection on workout logs by workout title and score type
+  - time scores rank lower-is-better, reps/load rank higher-is-better
+  - programming and logbook surfaces now show PR badges and benchmark rank context
 
 ## Validation State
 - `cd app && dart analyze`: passed
@@ -134,6 +138,7 @@ Last updated: 2026-04-19
 - D3 Digital Whiteboard: Complete
 - E1 Workout Logging: Complete
 - E2 Workout History: Complete
+- E3 Basic PR Detection: Complete
 - A5: Not Started
 
 ## Current Risks / Gaps
@@ -142,8 +147,8 @@ Last updated: 2026-04-19
 3. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
 
 ## Recommended Next Steps
-1. Implement US-E1-03 basic PR detection on top of the new workout-log data.
-2. Define the first production slice of memberships and payments before expanding secondary modules.
+1. Define the first production slice of memberships and payments before expanding secondary modules.
+2. Start notifications for PR and workout events on top of the new logging data.
 3. Tighten remaining production security concerns such as real email delivery, secret management, and deployment posture.
 
 ## Notes

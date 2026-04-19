@@ -131,7 +131,7 @@ class _LogbookHero extends StatelessWidget {
               children: const [
                 Chip(label: Text('Workout History: Live')),
                 Chip(label: Text('Result Logging: Live')),
-                Chip(label: Text('PR Tracking: Next')),
+                Chip(label: Text('PR Tracking: Live')),
               ],
             ),
           ],
@@ -164,6 +164,13 @@ class _SnapshotGrid extends StatelessWidget {
       return entry.scheduledDate.isAfter(now.subtract(const Duration(days: 7)));
     }).length;
     final latest = entries.isEmpty ? 'Not yet' : entries.first.scoreLabel;
+    WorkoutLogEntry? latestPr;
+    for (final entry in entries) {
+      if (entry.isPr) {
+        latestPr = entry;
+        break;
+      }
+    }
 
     return Wrap(
       spacing: 12,
@@ -172,6 +179,10 @@ class _SnapshotGrid extends StatelessWidget {
         _SnapshotStat(label: 'Workouts This Week', value: '$thisWeekCount'),
         _SnapshotStat(label: 'Total Logged', value: '${entries.length}'),
         _SnapshotStat(label: 'Latest Score', value: latest),
+        _SnapshotStat(
+          label: 'Latest PR',
+          value: latestPr?.scoreLabel ?? 'Not yet',
+        ),
       ],
     );
   }
@@ -231,7 +242,17 @@ class _HistoryRow extends StatelessWidget {
             children: [
               Text(entry.workoutTitle, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
-              Text('$dateLabel • ${entry.scoreLabel}'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('$dateLabel • ${entry.scoreLabel}'),
+                  if (entry.isPr) const Chip(label: Text('PR')),
+                  if (!entry.isPr && entry.prRank != null)
+                    Chip(label: Text('Rank #${entry.prRank}')),
+                ],
+              ),
               if (entry.classTitle != null && entry.classTitle!.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text('Class: ${entry.classTitle!}'),

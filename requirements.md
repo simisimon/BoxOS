@@ -240,7 +240,7 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 
 ### 11.5 Workout Logging & PR Tracking
 - Workout result logging and chronological workout history: implemented
-- Basic PR detection: not started
+- Basic PR detection for repeated benchmark-style workout logs: implemented
 
 ### 11.6 Notifications
 - Preferences and device registration are implemented

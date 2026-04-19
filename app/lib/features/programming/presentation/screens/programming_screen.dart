@@ -301,12 +301,24 @@ class _WorkoutLogSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${workout.myWorkoutLog!.scoreLabel} (${_scoreTypeLabel(workout.myWorkoutLog!.scoreType)})',
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${workout.myWorkoutLog!.scoreLabel} (${_scoreTypeLabel(workout.myWorkoutLog!.scoreType)})',
+                        ),
+                      ),
+                      if (workout.myWorkoutLog!.isPr)
+                        const Chip(label: Text('PR')),
+                    ],
                   ),
                   if (workout.myWorkoutLog!.notesText.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(workout.myWorkoutLog!.notesText),
+                  ],
+                  if (!workout.myWorkoutLog!.isPr && workout.myWorkoutLog!.prRank != null) ...[
+                    const SizedBox(height: 4),
+                    Text('Benchmark rank: #${workout.myWorkoutLog!.prRank}'),
                   ],
                 ],
               ),

@@ -1666,6 +1666,103 @@ class BackendServerTests(unittest.TestCase):
         )
         self.assertEqual(audit_logs["logs"][0]["action"], "workout_log_created")
 
+    def test_workout_log_pr_detection_marks_best_benchmark_result(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "PR Gym",
+                "logo_url": "https://example.com/pr.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        first_date = server.now_utc().date().isoformat()
+        second_date = (server.now_utc() + timedelta(days=1)).date().isoformat()
+        first_workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": first_date,
+                "title": "Fran",
+                "strength_text": "",
+                "metcon_text": "21-15-9 thrusters and pull-ups",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+        second_workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": second_date,
+                "title": "Fran",
+                "strength_text": "",
+                "metcon_text": "21-15-9 thrusters and pull-ups",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": pending_requests["requests"][0]["id"], "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        first_entry = self.post_json_with_auth(
+            "/logbook/entries",
+            {
+                "workout_id": first_workout["workout"]["id"],
+                "score_type": "time",
+                "score_value": "08:00",
+                "notes_text": "",
+            },
+            access_token=athlete_login["access_token"],
+        )
+        second_entry = self.post_json_with_auth(
+            "/logbook/entries",
+            {
+                "workout_id": second_workout["workout"]["id"],
+                "score_type": "time",
+                "score_value": "07:20",
+                "notes_text": "Big improvement.",
+            },
+            access_token=athlete_login["access_token"],
+        )
+
+        self.assertTrue(second_entry["entry"]["is_pr"])
+        self.assertEqual(second_entry["entry"]["pr_rank"], 1)
+
+        listed = self.get_json_with_auth(
+            "/logbook/entries",
+            access_token=athlete_login["access_token"],
+        )
+        fran_entries = [entry for entry in listed["entries"] if entry["workout_title"] == "Fran"]
+        self.assertEqual(len(fran_entries), 2)
+        self.assertTrue(fran_entries[0]["is_pr"])
+        self.assertEqual(fran_entries[0]["score_label"], "07:20")
+        self.assertFalse(fran_entries[1]["is_pr"])
+        self.assertEqual(fran_entries[1]["pr_rank"], 2)
+
     def test_whiteboard_results_are_ranked_for_gym_members(self) -> None:
         admin_login = self.post_json(
             "/auth/login",
