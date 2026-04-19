@@ -380,7 +380,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 ## Epic E - Workout Logging & Performance
 
 #### US-E1-01 - Log workout result
-**Status:** Not Started
+**Status:** Complete
 
 **As an athlete**, I want to log my workout result.
 
@@ -389,7 +389,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Notes can be added.
 
 #### US-E1-02 - Workout history
-**Status:** Not Started
+**Status:** Complete
 
 **As an athlete**, I want to review my workout history.
 

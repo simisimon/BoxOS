@@ -10,6 +10,7 @@ class DailyWorkout {
     required this.canEdit,
     required this.whiteboardResults,
     required this.myWhiteboardResult,
+    required this.myWorkoutLog,
   });
 
   final int id;
@@ -22,6 +23,25 @@ class DailyWorkout {
   final bool canEdit;
   final List<WhiteboardResult> whiteboardResults;
   final WhiteboardResult? myWhiteboardResult;
+  final WorkoutLogEntrySummary? myWorkoutLog;
+}
+
+class WorkoutLogEntrySummary {
+  const WorkoutLogEntrySummary({
+    required this.id,
+    required this.scoreType,
+    required this.scoreValue,
+    required this.scoreLabel,
+    required this.notesText,
+    required this.updatedAt,
+  });
+
+  final int id;
+  final String scoreType;
+  final double scoreValue;
+  final String scoreLabel;
+  final String notesText;
+  final DateTime updatedAt;
 }
 
 class WhiteboardResult {

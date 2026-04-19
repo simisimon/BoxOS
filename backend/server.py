@@ -240,6 +240,21 @@ def init_db() -> None:
             details_json text not null default '{}',
             created_at text not null
           );
+
+          create table if not exists workout_logs (
+            id integer primary key autoincrement,
+            user_id integer not null references users(id) on delete cascade,
+            gym_id integer not null references gyms(id) on delete cascade,
+            daily_workout_id integer not null references daily_workouts(id) on delete cascade,
+            class_schedule_id integer references class_schedules(id) on delete set null,
+            score_type text not null,
+            score_value real not null,
+            score_label text not null,
+            notes_text text not null default '',
+            created_at text not null,
+            updated_at text not null,
+            unique(user_id, daily_workout_id)
+          );
           """
       )
       ensure_user_columns(connection)
@@ -915,6 +930,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/programming/workouts":
                 self.handle_list_daily_workouts()
                 return
+            if path == "/logbook/entries":
+                self.handle_list_workout_logs()
+                return
             if path == "/gyms/join-requests":
                 self.handle_list_join_requests()
                 return
@@ -986,6 +1004,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/programming/whiteboard-results":
                 self.handle_submit_whiteboard_result(body)
+                return
+            if path == "/logbook/entries":
+                self.handle_submit_workout_log(body)
                 return
             if path == "/gyms/join-requests":
                 self.handle_create_join_request(body)
@@ -2207,6 +2228,157 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         connection.close()
         self.send_json(HTTPStatus.OK, {"workout": payload})
 
+    def handle_list_workout_logs(self) -> None:
+        session = self.require_active_gym_member_session()
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select
+              workout_logs.id,
+              workout_logs.daily_workout_id,
+              workout_logs.class_schedule_id,
+              workout_logs.score_type,
+              workout_logs.score_value,
+              workout_logs.score_label,
+              workout_logs.notes_text,
+              workout_logs.created_at,
+              workout_logs.updated_at,
+              daily_workouts.scheduled_date,
+              daily_workouts.title as workout_title,
+              class_schedules.title as class_title,
+              class_schedules.start_time as class_start_time
+            from workout_logs
+            join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
+            left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
+            where workout_logs.user_id = ? and workout_logs.gym_id = ?
+            order by daily_workouts.scheduled_date desc, workout_logs.updated_at desc
+            """,
+            (session["user_id"], session["active_gym_id"]),
+        ).fetchall()
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"entries": [workout_log_payload(row) for row in rows]})
+
+    def handle_submit_workout_log(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        workout_id = require_user_id(body.get("workout_id"))
+        class_id = require_optional_user_id(body.get("class_id"))
+        score_type, score_value, score_label = require_whiteboard_score(
+            body.get("score_type"),
+            body.get("score_value"),
+        )
+        notes_text = require_whiteboard_notes(body.get("notes_text"))
+        connection = get_connection()
+        workout = connection.execute(
+            """
+            select id, gym_id, scheduled_date, title
+            from daily_workouts
+            where id = ? and gym_id = ?
+            """,
+            (workout_id, session["active_gym_id"]),
+        ).fetchone()
+        if workout is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Workout not found.")
+        if class_id is not None:
+            class_row = connection.execute(
+                """
+                select id from class_schedules
+                where id = ? and gym_id = ?
+                """,
+                (class_id, session["active_gym_id"]),
+            ).fetchone()
+            if class_row is None:
+                connection.close()
+                raise ApiError(HTTPStatus.NOT_FOUND, "Class not found.")
+        timestamp = isoformat(now_utc())
+        with connection:
+            existing = connection.execute(
+                "select id from workout_logs where user_id = ? and daily_workout_id = ?",
+                (session["user_id"], workout_id),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    """
+                    insert into workout_logs (
+                      user_id, gym_id, daily_workout_id, class_schedule_id, score_type,
+                      score_value, score_label, notes_text, created_at, updated_at
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session["user_id"],
+                        session["active_gym_id"],
+                        workout_id,
+                        class_id,
+                        score_type,
+                        score_value,
+                        score_label,
+                        notes_text,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+                action = "workout_log_created"
+            else:
+                connection.execute(
+                    """
+                    update workout_logs
+                    set class_schedule_id = ?,
+                        score_type = ?,
+                        score_value = ?,
+                        score_label = ?,
+                        notes_text = ?,
+                        updated_at = ?
+                    where id = ?
+                    """,
+                    (
+                        class_id,
+                        score_type,
+                        score_value,
+                        score_label,
+                        notes_text,
+                        timestamp,
+                        existing["id"],
+                    ),
+                )
+                action = "workout_log_updated"
+            row = connection.execute(
+                """
+                select
+                  workout_logs.id,
+                  workout_logs.daily_workout_id,
+                  workout_logs.class_schedule_id,
+                  workout_logs.score_type,
+                  workout_logs.score_value,
+                  workout_logs.score_label,
+                  workout_logs.notes_text,
+                  workout_logs.created_at,
+                  workout_logs.updated_at,
+                  daily_workouts.scheduled_date,
+                  daily_workouts.title as workout_title,
+                  class_schedules.title as class_title,
+                  class_schedules.start_time as class_start_time
+                from workout_logs
+                join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
+                left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
+                where workout_logs.user_id = ? and workout_logs.daily_workout_id = ?
+                """,
+                (session["user_id"], workout_id),
+            ).fetchone()
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                target_user_id=session["user_id"],
+                action=action,
+                entity_type="workout_log",
+                entity_id=row["id"] if row is not None else None,
+                details={"workout_id": workout_id, "score_type": score_type, "score_label": score_label},
+            )
+        connection.close()
+        if row is None:
+            raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "Workout log could not be saved.")
+        self.send_json(HTTPStatus.OK, {"entry": workout_log_payload(row)})
+
     def handle_create_gym(self, body: dict[str, Any]) -> None:
         session = self.require_session()
         if session["account_type"] != "admin":
@@ -3320,7 +3492,58 @@ def daily_workout_payload(
         "can_edit": can_edit,
         "whiteboard_results": list_whiteboard_results(connection, row["id"]),
         "my_whiteboard_result": get_whiteboard_result_for_user(connection, row["id"], current_user_id),
+        "my_workout_log": get_workout_log_for_user(connection, row["id"], current_user_id),
     }
+
+
+def workout_log_payload(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "daily_workout_id": row["daily_workout_id"],
+        "class_schedule_id": row["class_schedule_id"],
+        "scheduled_date": row["scheduled_date"],
+        "workout_title": row["workout_title"],
+        "class_title": row["class_title"],
+        "class_start_time": row["class_start_time"],
+        "score_type": row["score_type"],
+        "score_value": row["score_value"],
+        "score_label": row["score_label"],
+        "notes_text": row["notes_text"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def get_workout_log_for_user(
+    connection: sqlite3.Connection,
+    workout_id: int,
+    user_id: int,
+) -> dict[str, Any] | None:
+    row = connection.execute(
+        """
+        select
+          workout_logs.id,
+          workout_logs.daily_workout_id,
+          workout_logs.class_schedule_id,
+          workout_logs.score_type,
+          workout_logs.score_value,
+          workout_logs.score_label,
+          workout_logs.notes_text,
+          workout_logs.created_at,
+          workout_logs.updated_at,
+          daily_workouts.scheduled_date,
+          daily_workouts.title as workout_title,
+          class_schedules.title as class_title,
+          class_schedules.start_time as class_start_time
+        from workout_logs
+        join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
+        left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
+        where workout_logs.daily_workout_id = ? and workout_logs.user_id = ?
+        """,
+        (workout_id, user_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return workout_log_payload(row)
 
 
 def list_whiteboard_results(

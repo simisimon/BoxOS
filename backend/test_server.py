@@ -1590,6 +1590,82 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(audit_logs["logs"][0]["action"], "whiteboard_result_created")
         self.assertEqual(audit_logs["logs"][0]["details"]["score_label"], "08:41")
 
+    def test_active_gym_member_can_log_workout_and_list_history(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Logbook Gym",
+                "logo_url": "https://example.com/logbook.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        scheduled_date = server.now_utc().date().isoformat()
+        created_workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": scheduled_date,
+                "title": "Sunday Hero",
+                "strength_text": "",
+                "metcon_text": "For time: 21-15-9 thrusters and pull-ups",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": pending_requests["requests"][0]["id"], "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        created_entry = self.post_json_with_auth(
+            "/logbook/entries",
+            {
+                "workout_id": created_workout["workout"]["id"],
+                "score_type": "time",
+                "score_value": "07:32",
+                "notes_text": "Scaled pull-ups with band.",
+            },
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(created_entry["entry"]["score_label"], "07:32")
+        self.assertEqual(created_entry["entry"]["workout_title"], "Sunday Hero")
+
+        listed = self.get_json_with_auth(
+            "/logbook/entries",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(len(listed["entries"]), 1)
+        self.assertEqual(listed["entries"][0]["notes_text"], "Scaled pull-ups with band.")
+
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(audit_logs["logs"][0]["action"], "workout_log_created")
+
     def test_whiteboard_results_are_ranked_for_gym_members(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

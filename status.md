@@ -90,6 +90,11 @@ Last updated: 2026-04-19
   - reduced access-token lifetime to a short-lived backend session window
   - refresh now continues to rotate sessions and invalidates prior refresh tokens
   - added explicit all-session revocation support for authenticated users
+- Closed US-E1-01 workout result logging and US-E1-02 workout history:
+  - added persistent athlete workout logs tied to programmed workouts, with optional class linkage support in the backend model
+  - programming payloads now expose each athlete's own workout log for the current workout
+  - athletes can log or update their own workout result from the Programming screen
+  - the Logbook screen now shows live chronological workout history instead of placeholders
 
 ## Validation State
 - `cd app && dart analyze`: passed
@@ -127,6 +132,8 @@ Last updated: 2026-04-19
 - D1 Daily WOD Creation: Complete
 - D2 Programming Calendar: Complete
 - D3 Digital Whiteboard: Complete
+- E1 Workout Logging: Complete
+- E2 Workout History: Complete
 - A5: Not Started
 
 ## Current Risks / Gaps
@@ -135,8 +142,8 @@ Last updated: 2026-04-19
 3. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
 
 ## Recommended Next Steps
-1. Define the first production slice of memberships and payments before expanding secondary modules.
-2. Decide whether workout logging should extend the whiteboard model or remain a separate athlete history flow.
+1. Implement US-E1-03 basic PR detection on top of the new workout-log data.
+2. Define the first production slice of memberships and payments before expanding secondary modules.
 3. Tighten remaining production security concerns such as real email delivery, secret management, and deployment posture.
 
 ## Notes

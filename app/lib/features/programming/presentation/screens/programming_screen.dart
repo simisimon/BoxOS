@@ -1,5 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/mobile_content.dart';
+import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
@@ -136,6 +137,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                           _WorkoutCard(
                             workout: workout,
                             canSubmitWhiteboard: profile?.activeGym != null,
+                            canLogWorkout: profile?.activeGym != null,
                             onEdit: canManage && workout.canEdit
                                 ? () => _openEditor(existing: workout)
                                 : null,
@@ -144,6 +146,16 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                                 context: context,
                                 builder: (context) =>
                                     _WhiteboardResultDialog(workout: workout),
+                              );
+                              if (updated == true) {
+                                await _refresh();
+                              }
+                            },
+                            onLogWorkout: () async {
+                              final updated = await showDialog<bool>(
+                                context: context,
+                                builder: (context) =>
+                                    _WorkoutLogDialog(workout: workout),
                               );
                               if (updated == true) {
                                 await _refresh();
@@ -168,14 +180,18 @@ class _WorkoutCard extends StatelessWidget {
   const _WorkoutCard({
     required this.workout,
     required this.canSubmitWhiteboard,
+    required this.canLogWorkout,
     this.onEdit,
     this.onSubmitWhiteboard,
+    this.onLogWorkout,
   });
 
   final DailyWorkout workout;
   final bool canSubmitWhiteboard;
+  final bool canLogWorkout;
   final VoidCallback? onEdit;
   final VoidCallback? onSubmitWhiteboard;
+  final VoidCallback? onLogWorkout;
 
   @override
   Widget build(BuildContext context) {
@@ -229,9 +245,74 @@ class _WorkoutCard extends StatelessWidget {
               canSubmit: canSubmitWhiteboard,
               onSubmit: onSubmitWhiteboard,
             ),
+            const SizedBox(height: 16),
+            _WorkoutLogSection(
+              workout: workout,
+              canLog: canLogWorkout,
+              onLog: onLogWorkout,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WorkoutLogSection extends StatelessWidget {
+  const _WorkoutLogSection({
+    required this.workout,
+    required this.canLog,
+    this.onLog,
+  });
+
+  final DailyWorkout workout;
+  final bool canLog;
+  final VoidCallback? onLog;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'My log',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            if (canLog && onLog != null)
+              OutlinedButton.icon(
+                onPressed: onLog,
+                icon: const Icon(Icons.edit_note_outlined),
+                label: Text(workout.myWorkoutLog == null ? 'Log Workout' : 'Update Log'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (workout.myWorkoutLog == null)
+          const Text('No personal workout log yet.')
+        else
+          Card(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${workout.myWorkoutLog!.scoreLabel} (${_scoreTypeLabel(workout.myWorkoutLog!.scoreType)})',
+                  ),
+                  if (workout.myWorkoutLog!.notesText.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(workout.myWorkoutLog!.notesText),
+                  ],
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -669,6 +750,142 @@ class _WhiteboardResultDialogState extends ConsumerState<_WhiteboardResultDialog
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorkoutLogDialog extends ConsumerStatefulWidget {
+  const _WorkoutLogDialog({required this.workout});
+
+  final DailyWorkout workout;
+
+  @override
+  ConsumerState<_WorkoutLogDialog> createState() => _WorkoutLogDialogState();
+}
+
+class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late String _scoreType;
+  late TextEditingController _scoreValueController;
+  late TextEditingController _notesController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scoreType = widget.workout.myWorkoutLog?.scoreType ?? 'time';
+    _scoreValueController = TextEditingController(
+      text: widget.workout.myWorkoutLog?.scoreLabel ?? '',
+    );
+    _notesController = TextEditingController(
+      text: widget.workout.myWorkoutLog?.notesText ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _scoreValueController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(logbookRepositoryProvider).submitEntry(
+            workoutId: widget.workout.id,
+            scoreType: _scoreType,
+            scoreValue: _scoreValueController.text.trim(),
+            notesText: _notesController.text.trim(),
+          );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to save workout log'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Log Workout Result'),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _scoreType,
+                  decoration: const InputDecoration(labelText: 'Score Type'),
+                  items: const [
+                    DropdownMenuItem(value: 'time', child: Text('For time')),
+                    DropdownMenuItem(value: 'reps', child: Text('Reps')),
+                    DropdownMenuItem(value: 'load', child: Text('Load')),
+                  ],
+                  onChanged: _isSaving ? null : (value) {
+                    if (value != null) {
+                      setState(() => _scoreType = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _scoreValueController,
+                  decoration: InputDecoration(
+                    labelText: _scoreType == 'time'
+                        ? 'Score (mm:ss or hh:mm:ss)'
+                        : _scoreType == 'reps'
+                            ? 'Score (reps)'
+                            : 'Score (load)',
+                  ),
+                  validator: (value) => (value ?? '').trim().isEmpty ? 'Enter a score' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _submit,
+          child: _isSaving
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Save'),
         ),
       ],

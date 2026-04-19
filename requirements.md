@@ -239,7 +239,8 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 - Whiteboard workflows: implemented for in-app result submission and ranked viewing
 
 ### 11.5 Workout Logging & PR Tracking
-- Not started
+- Workout result logging and chronological workout history: implemented
+- Basic PR detection: not started
 
 ### 11.6 Notifications
 - Preferences and device registration are implemented
