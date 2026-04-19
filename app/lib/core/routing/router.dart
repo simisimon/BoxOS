@@ -19,6 +19,7 @@ import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
+import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/role_management_screen.dart';
 import 'package:app/features/programming/presentation/screens/programming_screen.dart';
@@ -131,6 +132,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: '/edit-profile',

@@ -99,11 +99,17 @@ Last updated: 2026-04-19
   - added benchmark-style PR detection on workout logs by workout title and score type
   - time scores rank lower-is-better, reps/load rank higher-is-better
   - programming and logbook surfaces now show PR badges and benchmark rank context
+- Closed US-F1-02 WOD and performance notifications:
+  - added persistent in-app notification feed with unread tracking and mark-all-read support
+  - WOD create/update now generates notifications for active members who enabled WOD alerts
+  - new PR workout logs now generate athlete notifications when PR alerts are enabled
+  - home header and home snapshot now surface live notification counts
+  - notification bell now opens a real inbox screen instead of a placeholder
 
 ## Validation State
 - `cd app && dart analyze`: passed
 - `cd app && flutter test`: hangs in the current environment
-- `python3 -m unittest backend.test_server`: passed (31 tests)
+- `python3 -m unittest backend.test_server`: passed (38 tests)
 
 ## Story Status (Epic A)
 - US-A1-01 Sign up: Complete
@@ -139,6 +145,7 @@ Last updated: 2026-04-19
 - E1 Workout Logging: Complete
 - E2 Workout History: Complete
 - E3 Basic PR Detection: Complete
+- F1 WOD and Performance Notifications: Complete
 - A5: Not Started
 
 ## Current Risks / Gaps
@@ -147,8 +154,8 @@ Last updated: 2026-04-19
 3. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
 
 ## Recommended Next Steps
-1. Define the first production slice of memberships and payments before expanding secondary modules.
-2. Start notifications for PR and workout events on top of the new logging data.
+1. Extend notifications into booking confirmations, waitlist promotions, and schedule-change alerts.
+2. Define the first production slice of memberships and payments before expanding secondary modules.
 3. Tighten remaining production security concerns such as real email delivery, secret management, and deployment posture.
 
 ## Notes

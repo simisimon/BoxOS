@@ -11,8 +11,12 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(currentProfileProvider);
+    final notificationInboxAsync = ref.watch(notificationInboxProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final activeGymName = profile?.activeGym?.name ?? 'No gym selected';
+    final unreadNotifications = notificationInboxAsync.hasValue
+        ? notificationInboxAsync.value!.unreadCount
+        : 0;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -26,7 +30,7 @@ class HomeScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         const _SectionTitle('Today'),
         const SizedBox(height: 8),
-        const _TodaySnapshot(),
+        _TodaySnapshot(unreadNotifications: unreadNotifications),
         const SizedBox(height: 16),
         const _SectionTitle('Highlights'),
         const SizedBox(height: 8),
@@ -134,7 +138,9 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _TodaySnapshot extends StatelessWidget {
-  const _TodaySnapshot();
+  const _TodaySnapshot({required this.unreadNotifications});
+
+  final int unreadNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -157,8 +163,8 @@ class _TodaySnapshot extends StatelessWidget {
         _SnapshotCard(
           icon: Icons.notifications_active_outlined,
           title: 'Reminders',
-          value: '0',
-          subtitle: 'Booking, waitlist, and gym reminders are planned.',
+          value: '$unreadNotifications',
+          subtitle: 'Workout and PR alerts now appear in your notification inbox.',
         ),
       ],
     );
@@ -221,7 +227,7 @@ class _HighlightList extends StatelessWidget {
           icon: Icons.leaderboard_outlined,
           title: 'Workout Highlights',
           subtitle:
-              'Daily shoutouts, gym highlights, and whiteboard moments can surface here later.',
+              'Workout-posted and PR alerts are now live in the notification inbox.',
         ),
       ],
     );

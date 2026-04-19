@@ -421,7 +421,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - User preferences are respected.
 
 #### US-F1-02 - WOD and performance notifications
-**Status:** Not Started
+**Status:** Complete
 
 **As a user**, I want workout and PR events to trigger useful alerts.
 

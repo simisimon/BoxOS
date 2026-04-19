@@ -14,28 +14,27 @@ class AuthenticatedShellScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(currentProfileProvider);
+    final notificationInboxAsync = ref.watch(notificationInboxProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
+    final unreadNotifications = notificationInboxAsync.hasValue
+        ? notificationInboxAsync.value!.unreadCount
+        : 0;
 
     return AuthenticatedScaffold(
       selectedIndex: navigationShell.currentIndex,
       displayName: profile?.displayName ?? '',
       roleLabel: profile?.role.label ?? 'Athlete',
       availableRoles: profile?.availableRoles ?? const [UserRole.athlete],
+      unreadNotifications: unreadNotifications,
       body: navigationShell,
       onHomeTap: () => navigationShell.goBranch(0),
       onMyBoxTap: () => navigationShell.goBranch(1),
       onLogbookTap: () => navigationShell.goBranch(2),
       onProfileTap: () => navigationShell.goBranch(3),
       onHeaderProfileTap: () => navigationShell.goBranch(3),
-      onNotificationsTap: () => _showComingSoon(context, 'Notifications'),
+      onNotificationsTap: () => context.push('/notifications'),
       onRoleSelected: (role) => _switchRole(context, ref, role),
     );
-  }
-
-  static void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$label is not implemented yet.')));
   }
 
   static Future<void> _switchRole(

@@ -2174,6 +2174,190 @@ class BackendServerTests(unittest.TestCase):
         self.assertFalse(updated["wod_posted"])
         self.assertFalse(updated["pr_achievements"])
 
+    def test_workout_post_creates_notifications_for_active_members(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Notify Box",
+                "logo_url": "https://example.com/notify.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": pending_requests["requests"][0]["id"], "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": server.now_utc().date().isoformat(),
+                "title": "Nancy",
+                "strength_text": "",
+                "metcon_text": "5 rounds for time",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        notifications = self.get_json_with_auth(
+            "/notifications",
+            access_token=athlete_login["access_token"],
+        )
+
+        self.assertEqual(notifications["unread_count"], 1)
+        self.assertEqual(notifications["notifications"][0]["type"], "wod_posted")
+        self.assertIn("Nancy", notifications["notifications"][0]["body"])
+
+    def test_pr_notification_respects_preferences_and_can_be_marked_read(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "PR Notify Box",
+                "logo_url": "https://example.com/pr-notify.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": pending_requests["requests"][0]["id"], "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": server.now_utc().date().isoformat(),
+                "title": "Grace",
+                "strength_text": "",
+                "metcon_text": "30 clean and jerks for time",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/notifications",
+            {
+                "booking_confirmations": True,
+                "waitlist_promotions": True,
+                "payment_issues": True,
+                "wod_posted": True,
+                "pr_achievements": False,
+            },
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/logbook/entries",
+            {
+                "workout_id": workout["workout"]["id"],
+                "score_type": "time",
+                "score_value": "03:30",
+                "notes_text": "",
+            },
+            access_token=athlete_login["access_token"],
+        )
+        notifications_without_pr = self.get_json_with_auth(
+            "/notifications",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(
+            [item["type"] for item in notifications_without_pr["notifications"]],
+            ["wod_posted"],
+        )
+
+        self.patch_json(
+            "/profile/notifications",
+            {
+                "booking_confirmations": True,
+                "waitlist_promotions": True,
+                "payment_issues": True,
+                "wod_posted": True,
+                "pr_achievements": True,
+            },
+            access_token=athlete_login["access_token"],
+        )
+        next_workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": (server.now_utc() + timedelta(days=1)).date().isoformat(),
+                "title": "Grace",
+                "strength_text": "",
+                "metcon_text": "30 clean and jerks for time",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/logbook/entries",
+            {
+                "workout_id": next_workout["workout"]["id"],
+                "score_type": "time",
+                "score_value": "03:10",
+                "notes_text": "",
+            },
+            access_token=athlete_login["access_token"],
+        )
+        notifications_with_pr = self.get_json_with_auth(
+            "/notifications",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(notifications_with_pr["unread_count"], 3)
+        self.assertEqual(notifications_with_pr["notifications"][0]["type"], "pr_achieved")
+
+        marked = self.patch_json(
+            "/notifications/read-all",
+            {},
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(marked["unread_count"], 0)
+        self.assertIsNotNone(marked["notifications"][0]["read_at"])
+
     def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
         request = urllib.request.Request(
             f"{self.base_url}{path}",

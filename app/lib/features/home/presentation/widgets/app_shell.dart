@@ -11,6 +11,7 @@ class AuthenticatedScaffold extends StatelessWidget {
     required this.displayName,
     required this.roleLabel,
     required this.availableRoles,
+    required this.unreadNotifications,
     required this.body,
     required this.onHomeTap,
     required this.onMyBoxTap,
@@ -25,6 +26,7 @@ class AuthenticatedScaffold extends StatelessWidget {
   final String displayName;
   final String roleLabel;
   final List<UserRole> availableRoles;
+  final int unreadNotifications;
   final Widget body;
   final VoidCallback onHomeTap;
   final VoidCallback onMyBoxTap;
@@ -43,6 +45,7 @@ class AuthenticatedScaffold extends StatelessWidget {
           displayName: displayName,
           roleLabel: roleLabel,
           availableRoles: availableRoles,
+          unreadNotifications: unreadNotifications,
           onProfileTap: onHeaderProfileTap,
           onNotificationsTap: onNotificationsTap,
           onRoleSelected: onRoleSelected,
@@ -76,6 +79,7 @@ class _ShellHeader extends StatelessWidget {
     required this.displayName,
     required this.roleLabel,
     required this.availableRoles,
+    required this.unreadNotifications,
     required this.onProfileTap,
     required this.onNotificationsTap,
     required this.onRoleSelected,
@@ -84,6 +88,7 @@ class _ShellHeader extends StatelessWidget {
   final String displayName;
   final String roleLabel;
   final List<UserRole> availableRoles;
+  final int unreadNotifications;
   final VoidCallback onProfileTap;
   final VoidCallback onNotificationsTap;
   final ValueChanged<UserRole> onRoleSelected;
@@ -151,9 +156,10 @@ class _ShellHeader extends StatelessWidget {
               IconButton(
                 onPressed: onNotificationsTap,
                 icon: Badge(
-                  isLabelVisible: true,
-                  smallSize: 8,
-                  label: const SizedBox.shrink(),
+                  isLabelVisible: unreadNotifications > 0,
+                  label: Text(
+                    unreadNotifications > 99 ? '99+' : '$unreadNotifications',
+                  ),
                   child: const Icon(Icons.notifications_none_rounded),
                 ),
                 tooltip: 'Notifications',

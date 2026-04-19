@@ -1,3 +1,4 @@
+import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/domain/models/user_profile.dart';
 import 'package:app/features/profile/domain/models/notification_preferences.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
@@ -16,6 +17,10 @@ abstract class ProfileRepository {
   Future<NotificationPreferences> updateNotificationPreferences({
     required NotificationPreferences preferences,
   });
+
+  Future<NotificationInbox> fetchNotifications();
+
+  Future<NotificationInbox> markAllNotificationsRead();
 
   Future<List<RoleManagedUser>> fetchRoleManagedUsers();
 

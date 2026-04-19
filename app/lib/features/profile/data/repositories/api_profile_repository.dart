@@ -2,6 +2,7 @@ import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
+import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/notification_preferences.dart';
@@ -73,6 +74,25 @@ class ApiProfileRepository implements ProfileRepository {
       options: Options(headers: await _authHeaders()),
     );
     return _notificationPreferencesFromJson(response.data);
+  }
+
+  @override
+  Future<NotificationInbox> fetchNotifications() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/notifications',
+      options: Options(headers: await _authHeaders()),
+    );
+    return _notificationInboxFromJson(response.data);
+  }
+
+  @override
+  Future<NotificationInbox> markAllNotificationsRead() async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/notifications/read-all',
+      data: const <String, dynamic>{},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _notificationInboxFromJson(response.data);
   }
 
   @override
@@ -168,6 +188,37 @@ class ApiProfileRepository implements ProfileRepository {
       paymentIssues: data['payment_issues'] as bool? ?? true,
       wodPosted: data['wod_posted'] as bool? ?? true,
       prAchievements: data['pr_achievements'] as bool? ?? true,
+    );
+  }
+
+  NotificationInbox _notificationInboxFromJson(Map<String, dynamic>? data) {
+    if (data == null) {
+      throw Exception('Missing notification inbox data.');
+    }
+    final items = data['notifications'] as List<dynamic>? ?? const [];
+    return NotificationInbox(
+      unreadCount: data['unread_count'] as int? ?? 0,
+      notifications: items
+          .map((item) => _appNotificationFromJson(item as Map<String, dynamic>?))
+          .toList(),
+    );
+  }
+
+  AppNotification _appNotificationFromJson(Map<String, dynamic>? data) {
+    if (data == null) {
+      throw Exception('Missing notification data.');
+    }
+    return AppNotification(
+      id: data['id'] as int? ?? 0,
+      type: data['type'] as String? ?? '',
+      title: data['title'] as String? ?? '',
+      body: data['body'] as String? ?? '',
+      entityType: data['entity_type'] as String?,
+      entityId: data['entity_id'] as int?,
+      readAt: data['read_at'] == null
+          ? null
+          : DateTime.parse(data['read_at'] as String),
+      createdAt: DateTime.parse(data['created_at'] as String? ?? ''),
     );
   }
 

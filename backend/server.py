@@ -257,6 +257,19 @@ def init_db() -> None:
             updated_at text not null,
             unique(user_id, daily_workout_id)
           );
+
+          create table if not exists notifications (
+            id integer primary key autoincrement,
+            user_id integer not null references users(id) on delete cascade,
+            gym_id integer references gyms(id) on delete cascade,
+            type text not null,
+            title text not null,
+            body text not null,
+            entity_type text,
+            entity_id integer,
+            read_at text,
+            created_at text not null
+          );
           """
       )
       ensure_user_columns(connection)
@@ -943,6 +956,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/profile/notifications":
                 self.handle_get_notification_preferences()
                 return
+            if path == "/notifications":
+                self.handle_list_notifications()
+                return
             if path == "/gyms":
                 self.handle_list_gyms()
                 return
@@ -1071,6 +1087,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/profile/notifications":
                 self.handle_update_notification_preferences(body)
+                return
+            if path == "/notifications/read-all":
+                self.handle_mark_notifications_read()
                 return
             if path == "/profile/active-role":
                 self.handle_update_active_role(body)
@@ -1337,6 +1356,60 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         if user is None:
             raise ApiError(HTTPStatus.NOT_FOUND, "Notification preferences not found.")
         self.send_json(HTTPStatus.OK, notification_preferences_payload(user))
+
+    def handle_list_notifications(self) -> None:
+        session = self.require_session()
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select id, user_id, gym_id, type, title, body, entity_type, entity_id, read_at, created_at
+            from notifications
+            where user_id = ?
+            order by created_at desc, id desc
+            limit 50
+            """,
+            (session["user_id"],),
+        ).fetchall()
+        unread_count = connection.execute(
+            "select count(*) as count from notifications where user_id = ? and read_at is null",
+            (session["user_id"],),
+        ).fetchone()["count"]
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {
+                "unread_count": unread_count,
+                "notifications": [notification_payload(row) for row in rows],
+            },
+        )
+
+    def handle_mark_notifications_read(self) -> None:
+        session = self.require_session()
+        connection = get_connection()
+        timestamp = isoformat(now_utc())
+        with connection:
+            connection.execute(
+                "update notifications set read_at = ? where user_id = ? and read_at is null",
+                (timestamp, session["user_id"]),
+            )
+        rows = connection.execute(
+            """
+            select id, user_id, gym_id, type, title, body, entity_type, entity_id, read_at, created_at
+            from notifications
+            where user_id = ?
+            order by created_at desc, id desc
+            limit 50
+            """,
+            (session["user_id"],),
+        ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {
+                "unread_count": 0,
+                "notifications": [notification_payload(row) for row in rows],
+            },
+        )
 
     def handle_update_active_role(self, body: dict[str, Any]) -> None:
         session = self.require_session()
@@ -2068,6 +2141,14 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 current_user_id=session["user_id"],
                 can_edit=True,
             )
+            create_wod_notifications(
+                connection,
+                gym_id=session["active_gym_id"],
+                workout_id=int(cursor.lastrowid),
+                scheduled_date=scheduled_date,
+                title=title,
+                is_update=False,
+            )
             write_audit_log(
                 connection,
                 gym_id=session["active_gym_id"],
@@ -2142,6 +2223,14 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 row,
                 current_user_id=session["user_id"],
                 can_edit=True,
+            )
+            create_wod_notifications(
+                connection,
+                gym_id=session["active_gym_id"],
+                workout_id=workout_id,
+                scheduled_date=scheduled_date,
+                title=title,
+                is_update=True,
             )
             write_audit_log(
                 connection,
@@ -2425,6 +2514,15 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 """,
                 (session["user_id"], workout_id),
             ).fetchone()
+            if row is not None and row["is_pr"]:
+                create_pr_achievement_notification(
+                    connection,
+                    user_id=session["user_id"],
+                    gym_id=session["active_gym_id"],
+                    workout_id=workout_id,
+                    workout_title=workout["title"],
+                    score_label=score_label,
+                )
             write_audit_log(
                 connection,
                 gym_id=session["active_gym_id"],
@@ -3240,6 +3338,104 @@ def notification_preferences_payload(row: sqlite3.Row) -> dict[str, bool]:
         "wod_posted": bool(row["notify_wod_posted"]),
         "pr_achievements": bool(row["notify_pr_achievements"]),
     }
+
+
+def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "type": row["type"],
+        "title": row["title"],
+        "body": row["body"],
+        "entity_type": row["entity_type"],
+        "entity_id": row["entity_id"],
+        "read_at": row["read_at"],
+        "created_at": row["created_at"],
+    }
+
+
+def create_notification(
+    connection: sqlite3.Connection,
+    *,
+    user_id: int,
+    gym_id: int | None,
+    type: str,
+    title: str,
+    body: str,
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+) -> None:
+    connection.execute(
+        """
+        insert into notifications (
+          user_id, gym_id, type, title, body, entity_type, entity_id, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, gym_id, type, title, body, entity_type, entity_id, isoformat(now_utc())),
+    )
+
+
+def create_wod_notifications(
+    connection: sqlite3.Connection,
+    *,
+    gym_id: int,
+    workout_id: int,
+    scheduled_date: str,
+    title: str,
+    is_update: bool,
+) -> None:
+    users = connection.execute(
+        """
+        select users.id
+        from gym_memberships
+        join users on users.id = gym_memberships.user_id
+        where gym_memberships.gym_id = ?
+          and gym_memberships.status = 'active'
+          and users.deleted_at is null
+          and users.notify_wod_posted = 1
+        """,
+        (gym_id,),
+    ).fetchall()
+    notification_type = "wod_updated" if is_update else "wod_posted"
+    title_text = "Workout updated" if is_update else "New workout posted"
+    body_text = f"{scheduled_date}: {title}"
+    for user in users:
+        create_notification(
+            connection,
+            user_id=user["id"],
+            gym_id=gym_id,
+            type=notification_type,
+            title=title_text,
+            body=body_text,
+            entity_type="daily_workout",
+            entity_id=workout_id,
+        )
+
+
+def create_pr_achievement_notification(
+    connection: sqlite3.Connection,
+    *,
+    user_id: int,
+    gym_id: int,
+    workout_id: int,
+    workout_title: str,
+    score_label: str,
+) -> None:
+    user = connection.execute(
+        "select notify_pr_achievements from users where id = ? and deleted_at is null",
+        (user_id,),
+    ).fetchone()
+    if user is None or not bool(user["notify_pr_achievements"]):
+        return
+    create_notification(
+        connection,
+        user_id=user_id,
+        gym_id=gym_id,
+        type="pr_achieved",
+        title="New personal record",
+        body=f"{workout_title}: {score_label}",
+        entity_type="daily_workout",
+        entity_id=workout_id,
+    )
 
 
 def require_notification_preferences(body: dict[str, Any]) -> dict[str, bool]:

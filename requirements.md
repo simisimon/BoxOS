@@ -244,7 +244,8 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 
 ### 11.6 Notifications
 - Preferences and device registration are implemented
-- Production notification delivery is not complete
+- In-app notifications for WOD publication/update and PR achievements are implemented
+- Booking, waitlist, and external push delivery remain incomplete
 
 ### 11.7 Admin Analytics
 - Not started
