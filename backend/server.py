@@ -226,6 +226,18 @@ def init_db() -> None:
             updated_at text not null,
             unique(daily_workout_id, user_id)
           );
+
+          create table if not exists audit_logs (
+            id integer primary key autoincrement,
+            gym_id integer references gyms(id) on delete cascade,
+            actor_user_id integer not null references users(id) on delete cascade,
+            target_user_id integer references users(id) on delete set null,
+            action text not null,
+            entity_type text not null,
+            entity_id integer,
+            details_json text not null default '{}',
+            created_at text not null
+          );
           """
       )
       ensure_user_columns(connection)
@@ -903,6 +915,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/gyms/join-requests":
                 self.handle_list_join_requests()
                 return
+            if path == "/audit-logs":
+                self.handle_list_audit_logs()
+                return
             if path == "/gyms/my-requests":
                 self.handle_list_my_join_requests()
                 return
@@ -1512,6 +1527,22 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     current_user_id=session["user_id"],
                     include_bookings=session["role"] in {"admin", "trainer"},
                 )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="schedule_class_created",
+                entity_type="schedule_class",
+                entity_id=schedule_id,
+                details={
+                    "title": title,
+                    "class_type": class_type,
+                    "start_time": isoformat(start_time),
+                    "duration_minutes": duration_minutes,
+                    "capacity": capacity,
+                    "trainer_user_id": trainer_user_id,
+                },
+            )
         connection.close()
         self.send_json(HTTPStatus.CREATED, {"class": payload})
 
@@ -1635,6 +1666,22 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     current_user_id=session["user_id"],
                     include_bookings=session["role"] in {"admin", "trainer"},
                 )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="schedule_class_updated",
+                entity_type="schedule_class",
+                entity_id=schedule_id,
+                details={
+                    "title": title,
+                    "class_type": class_type,
+                    "start_time": isoformat(start_time),
+                    "duration_minutes": duration_minutes,
+                    "capacity": capacity,
+                    "trainer_user_id": trainer_user_id,
+                },
+            )
         connection.close()
         self.send_json(HTTPStatus.OK, {"class": payload})
 
@@ -1663,6 +1710,14 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             connection.execute(
                 "delete from class_schedules where id = ?",
                 (schedule_id,),
+            )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="schedule_class_deleted",
+                entity_type="schedule_class",
+                entity_id=schedule_id,
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"message": "Schedule class deleted."})
@@ -1945,6 +2000,18 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 current_user_id=session["user_id"],
                 can_edit=True,
             )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="daily_workout_created",
+                entity_type="daily_workout",
+                entity_id=int(cursor.lastrowid),
+                details={
+                    "scheduled_date": scheduled_date,
+                    "title": title,
+                },
+            )
         connection.close()
         self.send_json(HTTPStatus.CREATED, {"workout": payload})
 
@@ -2008,6 +2075,18 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 current_user_id=session["user_id"],
                 can_edit=True,
             )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="daily_workout_updated",
+                entity_type="daily_workout",
+                entity_id=workout_id,
+                details={
+                    "scheduled_date": scheduled_date,
+                    "title": title,
+                },
+            )
         connection.close()
         self.send_json(HTTPStatus.OK, {"workout": payload})
 
@@ -2041,6 +2120,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 "select id from whiteboard_results where daily_workout_id = ? and user_id = ?",
                 (workout_id, session["user_id"]),
             ).fetchone()
+            action = "whiteboard_result_created" if existing is None else "whiteboard_result_updated"
             if existing is None:
                 connection.execute(
                     """
@@ -2087,6 +2167,20 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 workout,
                 current_user_id=session["user_id"],
                 can_edit=session["role"] in {"admin", "trainer"},
+            )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                target_user_id=session["user_id"],
+                action=action,
+                entity_type="whiteboard_result",
+                entity_id=workout_id,
+                details={
+                    "workout_id": workout_id,
+                    "score_type": score_type,
+                    "score_label": score_label,
+                },
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"workout": payload})
@@ -2247,6 +2341,44 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             },
         )
 
+    def handle_list_audit_logs(self) -> None:
+        session = self.require_role("admin")
+        if session["active_gym_id"] is None:
+            raise ApiError(
+                HTTPStatus.FORBIDDEN,
+                "An active admin gym context is required.",
+            )
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select
+              audit_logs.id,
+              audit_logs.action,
+              audit_logs.entity_type,
+              audit_logs.entity_id,
+              audit_logs.details_json,
+              audit_logs.created_at,
+              actor.email as actor_email,
+              actor.display_name as actor_display_name,
+              actor.nickname as actor_nickname,
+              target.email as target_email,
+              target.display_name as target_display_name,
+              target.nickname as target_nickname
+            from audit_logs
+            join users actor on actor.id = audit_logs.actor_user_id
+            left join users target on target.id = audit_logs.target_user_id
+            where audit_logs.gym_id = ?
+            order by audit_logs.created_at desc, audit_logs.id desc
+            limit 100
+            """,
+            (session["active_gym_id"],),
+        ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {"logs": [audit_log_payload(row) for row in rows]},
+        )
+
     def handle_list_my_join_requests(self) -> None:
         session = self.require_session()
         connection = get_connection()
@@ -2359,6 +2491,19 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     request_id,
                 ),
             )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                target_user_id=join_request["user_id"],
+                action="join_request_reviewed",
+                entity_type="gym_join_request",
+                entity_id=request_id,
+                details={
+                    "decision": decision,
+                    "join_request_id": request_id,
+                },
+            )
         connection.close()
         self.send_json(
             HTTPStatus.OK,
@@ -2455,6 +2600,19 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 ),
             )
             sync_user_context(connection, user_id)
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                target_user_id=user_id,
+                action="gym_member_roles_updated",
+                entity_type="gym_membership",
+                entity_id=membership_before["id"],
+                details={
+                    "roles": managed_roles,
+                    "active_role": active_role,
+                },
+            )
         if updated.rowcount == 0:
             connection.close()
             raise ApiError(HTTPStatus.NOT_FOUND, "Gym member not found.")
@@ -2887,6 +3045,59 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
         "nickname": row["nickname"],
         "can_edit_role": can_edit_role,
     }
+
+
+def audit_log_payload(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "action": row["action"],
+        "entity_type": row["entity_type"],
+        "entity_id": row["entity_id"],
+        "details": json.loads(row["details_json"]),
+        "created_at": row["created_at"],
+        "actor": {
+            "email": row["actor_email"],
+            "display_name": row["actor_display_name"],
+            "nickname": row["actor_nickname"],
+        },
+        "target": None if row["target_email"] is None else {
+            "email": row["target_email"],
+            "display_name": row["target_display_name"],
+            "nickname": row["target_nickname"],
+        },
+    }
+
+
+def write_audit_log(
+    connection: sqlite3.Connection,
+    *,
+    gym_id: int | None,
+    actor_user_id: int,
+    action: str,
+    entity_type: str,
+    entity_id: int | None = None,
+    target_user_id: int | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    connection.execute(
+        """
+        insert into audit_logs (
+          gym_id, actor_user_id, target_user_id, action, entity_type,
+          entity_id, details_json, created_at
+        )
+        values (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            gym_id,
+            actor_user_id,
+            target_user_id,
+            action,
+            entity_type,
+            entity_id,
+            json.dumps(details or {}, sort_keys=True),
+            isoformat(now_utc()),
+        ),
+    )
 
 
 def profile_payload(row: sqlite3.Row) -> dict[str, Any]:

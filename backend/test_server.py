@@ -560,6 +560,13 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(updated["role"], "athlete")
         self.assertEqual(updated["available_roles"], ["athlete", "trainer"])
 
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=login_response["access_token"],
+        )
+        self.assertEqual(audit_logs["logs"][0]["action"], "gym_member_roles_updated")
+        self.assertEqual(audit_logs["logs"][0]["details"]["roles"], ["athlete", "trainer"])
+
     def test_non_admin_role_cannot_manage_roles(self) -> None:
         login_response = self.post_json(
             "/auth/login",
@@ -626,6 +633,13 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(updated["class"]["title"], "Morning Open Gym")
         self.assertEqual(updated["class"]["class_type"], "Open Gym")
         self.assertEqual(updated["class"]["capacity"], 16)
+
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=login_response["access_token"],
+        )
+        actions = [entry["action"] for entry in audit_logs["logs"][:2]]
+        self.assertEqual(actions, ["schedule_class_updated", "schedule_class_created"])
 
     def test_athlete_can_book_and_cancel_future_class(self) -> None:
         admin_login = self.post_json(
@@ -1289,6 +1303,13 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(updated["workout"]["title"], "Tuesday Engine")
         self.assertEqual(updated["workout"]["strength_text"], "Back squat 6x3")
 
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=admin_login["access_token"],
+        )
+        actions = [entry["action"] for entry in audit_logs["logs"][:2]]
+        self.assertEqual(actions, ["daily_workout_updated", "daily_workout_created"])
+
     def test_active_gym_members_can_list_daily_workouts(self) -> None:
         admin_login = self.post_json(
             "/auth/login",
@@ -1501,6 +1522,13 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(len(updated["workout"]["whiteboard_results"]), 1)
         self.assertEqual(updated["workout"]["whiteboard_results"][0]["athlete_name"], "Demo Athlete")
 
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(audit_logs["logs"][0]["action"], "whiteboard_result_created")
+        self.assertEqual(audit_logs["logs"][0]["details"]["score_label"], "08:41")
+
     def test_whiteboard_results_are_ranked_for_gym_members(self) -> None:
         admin_login = self.post_json(
             "/auth/login",
@@ -1611,6 +1639,56 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(listed["workout"]["whiteboard_results"][0]["rank"], 1)
         self.assertEqual(listed["workout"]["whiteboard_results"][1]["score_label"], "120")
         self.assertEqual(listed["workout"]["whiteboard_results"][1]["rank"], 2)
+
+    def test_join_request_review_is_audited(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Audit Join Request Gym",
+                "logo_url": "https://example.com/audit-join.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+
+        self.patch_json(
+            "/gyms/join-requests",
+            {
+                "request_id": pending_requests["requests"][0]["id"],
+                "decision": "approve",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(audit_logs["logs"][0]["action"], "join_request_reviewed")
+        self.assertEqual(audit_logs["logs"][0]["details"]["decision"], "approve")
 
     def test_athlete_cannot_manage_schedule(self) -> None:
         admin_login = self.post_json(

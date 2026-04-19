@@ -256,7 +256,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Session revocation is supported.
 
 #### US-A5-02 - Audit log
-**Status:** Not Started
+**Status:** Complete
 
 **As an admin**, I want an audit log of critical operational changes.
 

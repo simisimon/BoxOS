@@ -82,6 +82,10 @@ Last updated: 2026-04-19
   - one whiteboard result per member per workout can be created and updated
   - programming payloads now include ranked whiteboard results plus each member's own result
   - the Flutter programming screen now shows a live whiteboard and result submission flow
+- Closed US-A5-02 audit log:
+  - added backend audit-log storage for critical gym operations
+  - audited actions now include role changes, join-request decisions, schedule create/update/delete, programming create/update, and whiteboard submissions
+  - added admin-only audit log listing endpoint for the active gym
 
 ## Validation State
 - `cd app && dart analyze`: passed
@@ -111,6 +115,7 @@ Last updated: 2026-04-19
 - US-A4-04 Review join requests: Complete
 - US-A4-05 Approve or reject join request: Complete
 - US-A4-06 Switch gyms: Complete
+- US-A5-02 Audit log: Complete
 - B1 Class Scheduling: In Progress
 - B2 Athlete Booking: Complete
 - B3 Attendance Tracking: Partial
@@ -125,9 +130,9 @@ Last updated: 2026-04-19
 3. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
 
 ## Recommended Next Steps
-1. Add A5 audit logging for role changes, join-request decisions, scheduling mutations, programming updates, and whiteboard submissions.
-2. Define the first production slice of memberships and payments before expanding secondary modules.
-3. Decide whether workout logging should extend the whiteboard model or remain a separate athlete history flow.
+1. Define the first production slice of memberships and payments before expanding secondary modules.
+2. Decide whether workout logging should extend the whiteboard model or remain a separate athlete history flow.
+3. Finish the remaining A5 token/session-security hardening slice.
 
 ## Notes
 - Supabase is no longer the active backend for the Flutter app.
