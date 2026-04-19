@@ -25,6 +25,8 @@ TRAINER_EMAIL = "trainer@boxos.app"
 TRAINER_PASSWORD = "BoxOS123!"
 ADMIN_EMAIL = "admin@boxos.app"
 ADMIN_PASSWORD = "BoxOS123!"
+ACCESS_TOKEN_TTL_MINUTES = 15
+REFRESH_TOKEN_TTL_DAYS = 30
 
 
 def now_utc() -> datetime:
@@ -532,6 +534,7 @@ def seed_user(
 def create_session(connection: sqlite3.Connection, user_id: int) -> dict[str, str]:
     access_token = create_token("access")
     refresh_token = create_token("refresh")
+    now = now_utc()
     connection.execute(
         """
         insert into sessions (
@@ -548,9 +551,9 @@ def create_session(connection: sqlite3.Connection, user_id: int) -> dict[str, st
             user_id,
             hash_token(access_token),
             hash_token(refresh_token),
-            isoformat(now_utc() + timedelta(hours=8)),
-            isoformat(now_utc() + timedelta(days=30)),
-            isoformat(now_utc()),
+            isoformat(now + timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES)),
+            isoformat(now + timedelta(days=REFRESH_TOKEN_TTL_DAYS)),
+            isoformat(now),
         ),
     )
     return {
@@ -945,6 +948,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/auth/logout":
                 self.handle_logout()
                 return
+            if path == "/auth/logout-all":
+                self.handle_logout_all()
+                return
             if path == "/auth/refresh":
                 self.handle_refresh(body)
                 return
@@ -1124,6 +1130,22 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"message": "Signed out."})
+
+    def handle_logout_all(self) -> None:
+        session = self.require_session()
+        connection = get_connection()
+        with connection:
+            delete_sessions(connection, session["user_id"])
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                target_user_id=session["user_id"],
+                action="all_sessions_revoked",
+                entity_type="session",
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"message": "All sessions revoked."})
 
     def handle_refresh(self, body: dict[str, Any]) -> None:
         refresh_token = require_token(body.get("refresh_token"), label="Refresh token")

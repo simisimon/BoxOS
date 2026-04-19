@@ -76,6 +76,11 @@ class BackendServerTests(unittest.TestCase):
         self.assertIn("access_token", tokens)
         self.assertIn("refresh_token", tokens)
         self.assertEqual(stored["access_token_hash"], server.hash_token(tokens["access_token"]))
+        expires_at = server.parse_iso(stored["access_expires_at"])
+        created_at = server.parse_iso(stored["created_at"])
+        ttl_seconds = (expires_at - created_at).total_seconds()
+        self.assertGreaterEqual(ttl_seconds, 14 * 60)
+        self.assertLessEqual(ttl_seconds, 15 * 60)
 
     def test_demo_login_and_session_endpoint(self) -> None:
         login_response = self.post_json(
@@ -98,6 +103,62 @@ class BackendServerTests(unittest.TestCase):
 
         self.assertIn(server.DEMO_EMAIL, payload)
         self.assertIn("athlete", payload)
+
+    def test_refresh_rotates_session_and_invalidates_old_refresh_token(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+
+        refreshed = self.post_json(
+            "/auth/refresh",
+            {"refresh_token": login_response["refresh_token"]},
+        )
+
+        self.assertNotEqual(refreshed["refresh_token"], login_response["refresh_token"])
+
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            self.post_json(
+                "/auth/refresh",
+                {"refresh_token": login_response["refresh_token"]},
+            )
+
+        self.assertEqual(error_context.exception.code, 401)
+
+    def test_logout_all_revokes_other_active_sessions(self) -> None:
+        first_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        second_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+
+        self.post_json_with_auth(
+            "/auth/logout-all",
+            {},
+            access_token=first_login["access_token"],
+        )
+
+        session_request = urllib.request.Request(
+            f"{self.base_url}/auth/session",
+            headers={"Authorization": f"Bearer {second_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(session_request)
+
+        self.assertEqual(error_context.exception.code, 401)
 
     def test_profile_fetch_and_update(self) -> None:
         login_response = self.post_json(

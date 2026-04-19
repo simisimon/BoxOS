@@ -246,7 +246,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 ### A5. Security & Audit
 
 #### US-A5-01 - Secure tokens
-**Status:** Not Started
+**Status:** Complete
 
 **As the system**, I want secure session token handling.
 

@@ -86,6 +86,10 @@ Last updated: 2026-04-19
   - added backend audit-log storage for critical gym operations
   - audited actions now include role changes, join-request decisions, schedule create/update/delete, programming create/update, and whiteboard submissions
   - added admin-only audit log listing endpoint for the active gym
+- Closed US-A5-01 secure tokens:
+  - reduced access-token lifetime to a short-lived backend session window
+  - refresh now continues to rotate sessions and invalidates prior refresh tokens
+  - added explicit all-session revocation support for authenticated users
 
 ## Validation State
 - `cd app && dart analyze`: passed
@@ -115,6 +119,7 @@ Last updated: 2026-04-19
 - US-A4-04 Review join requests: Complete
 - US-A4-05 Approve or reject join request: Complete
 - US-A4-06 Switch gyms: Complete
+- US-A5-01 Secure tokens: Complete
 - US-A5-02 Audit log: Complete
 - B1 Class Scheduling: In Progress
 - B2 Athlete Booking: Complete
@@ -132,7 +137,7 @@ Last updated: 2026-04-19
 ## Recommended Next Steps
 1. Define the first production slice of memberships and payments before expanding secondary modules.
 2. Decide whether workout logging should extend the whiteboard model or remain a separate athlete history flow.
-3. Finish the remaining A5 token/session-security hardening slice.
+3. Tighten remaining production security concerns such as real email delivery, secret management, and deployment posture.
 
 ## Notes
 - Supabase is no longer the active backend for the Flutter app.

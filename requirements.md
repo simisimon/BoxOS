@@ -222,8 +222,9 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 - Profile, notification preferences, and device registration: implemented
 - Role-based access: in progress
 - Gym association flows: implemented
+- Short-lived access tokens, refresh rotation, and session revocation: implemented in the local backend
 - Audit logging for critical gym operations: implemented in the local backend
-- Broader token hardening and session-security work: still incomplete
+- Additional production security hardening beyond the local backend baseline: still incomplete
 
 ### 11.2 Scheduling & Bookings
 - Schedule management: partial
