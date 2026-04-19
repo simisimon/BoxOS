@@ -212,6 +212,20 @@ def init_db() -> None:
             updated_at text not null,
             unique(gym_id, scheduled_date)
           );
+
+          create table if not exists whiteboard_results (
+            id integer primary key autoincrement,
+            daily_workout_id integer not null references daily_workouts(id) on delete cascade,
+            gym_id integer not null references gyms(id) on delete cascade,
+            user_id integer not null references users(id) on delete cascade,
+            score_type text not null,
+            score_value real not null,
+            score_label text not null,
+            notes_text text not null default '',
+            created_at text not null,
+            updated_at text not null,
+            unique(daily_workout_id, user_id)
+          );
           """
       )
       ensure_user_columns(connection)
@@ -948,6 +962,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/programming/workouts":
                 self.handle_create_daily_workout(body)
+                return
+            if path == "/programming/whiteboard-results":
+                self.handle_submit_whiteboard_result(body)
                 return
             if path == "/gyms/join-requests":
                 self.handle_create_join_request(body)
@@ -1868,16 +1885,17 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             """,
             (session["active_gym_id"],),
         ).fetchall()
+        workouts = [
+            daily_workout_payload(
+                connection,
+                row,
+                current_user_id=session["user_id"],
+                can_edit=session["role"] in {"admin", "trainer"},
+            )
+            for row in rows
+        ]
         connection.close()
-        self.send_json(
-            HTTPStatus.OK,
-            {
-                "workouts": [
-                    daily_workout_payload(row, can_edit=session["role"] in {"admin", "trainer"})
-                    for row in rows
-                ]
-            },
-        )
+        self.send_json(HTTPStatus.OK, {"workouts": workouts})
 
     def handle_create_daily_workout(self, body: dict[str, Any]) -> None:
         session = self.require_schedule_manager_session()
@@ -1921,8 +1939,14 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
                 (int(cursor.lastrowid),),
             ).fetchone()
+            payload = daily_workout_payload(
+                connection,
+                row,
+                current_user_id=session["user_id"],
+                can_edit=True,
+            )
         connection.close()
-        self.send_json(HTTPStatus.CREATED, {"workout": daily_workout_payload(row, can_edit=True)})
+        self.send_json(HTTPStatus.CREATED, {"workout": payload})
 
     def handle_update_daily_workout(self, body: dict[str, Any]) -> None:
         session = self.require_schedule_manager_session()
@@ -1978,8 +2002,94 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
                 (workout_id,),
             ).fetchone()
+            payload = daily_workout_payload(
+                connection,
+                row,
+                current_user_id=session["user_id"],
+                can_edit=True,
+            )
         connection.close()
-        self.send_json(HTTPStatus.OK, {"workout": daily_workout_payload(row, can_edit=True)})
+        self.send_json(HTTPStatus.OK, {"workout": payload})
+
+    def handle_submit_whiteboard_result(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        workout_id = require_user_id(body.get("workout_id"))
+        score_type, score_value, score_label = require_whiteboard_score(
+            body.get("score_type"),
+            body.get("score_value"),
+        )
+        notes_text = require_whiteboard_notes(body.get("notes_text"))
+        connection = get_connection()
+        workout = connection.execute(
+            """
+            select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at
+            from daily_workouts
+            where id = ? and gym_id = ?
+            """,
+            (workout_id, session["active_gym_id"]),
+        ).fetchone()
+        if workout is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Workout not found.")
+        if parse_programming_date(workout["scheduled_date"]) > today_utc_date():
+            connection.close()
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Results can only be submitted on or after the workout date.")
+
+        timestamp = isoformat(now_utc())
+        with connection:
+            existing = connection.execute(
+                "select id from whiteboard_results where daily_workout_id = ? and user_id = ?",
+                (workout_id, session["user_id"]),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    """
+                    insert into whiteboard_results (
+                      daily_workout_id, gym_id, user_id, score_type, score_value,
+                      score_label, notes_text, created_at, updated_at
+                    )
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        workout_id,
+                        session["active_gym_id"],
+                        session["user_id"],
+                        score_type,
+                        score_value,
+                        score_label,
+                        notes_text,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+            else:
+                connection.execute(
+                    """
+                    update whiteboard_results
+                    set score_type = ?,
+                        score_value = ?,
+                        score_label = ?,
+                        notes_text = ?,
+                        updated_at = ?
+                    where id = ?
+                    """,
+                    (
+                        score_type,
+                        score_value,
+                        score_label,
+                        notes_text,
+                        timestamp,
+                        existing["id"],
+                    ),
+                )
+            payload = daily_workout_payload(
+                connection,
+                workout,
+                current_user_id=session["user_id"],
+                can_edit=session["role"] in {"admin", "trainer"},
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"workout": payload})
 
     def handle_create_gym(self, body: dict[str, Any]) -> None:
         session = self.require_session()
@@ -2959,7 +3069,13 @@ def require_future_datetime(value: Any, *, label: str) -> datetime:
     return parsed
 
 
-def daily_workout_payload(row: sqlite3.Row, *, can_edit: bool) -> dict[str, Any]:
+def daily_workout_payload(
+    connection: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    current_user_id: int,
+    can_edit: bool,
+) -> dict[str, Any]:
     return {
         "id": row["id"],
         "gym_id": row["gym_id"],
@@ -2969,6 +3085,81 @@ def daily_workout_payload(row: sqlite3.Row, *, can_edit: bool) -> dict[str, Any]
         "metcon_text": row["metcon_text"],
         "notes_text": row["notes_text"],
         "can_edit": can_edit,
+        "whiteboard_results": list_whiteboard_results(connection, row["id"]),
+        "my_whiteboard_result": get_whiteboard_result_for_user(connection, row["id"], current_user_id),
+    }
+
+
+def list_whiteboard_results(
+    connection: sqlite3.Connection,
+    workout_id: int,
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """
+        select
+          whiteboard_results.id,
+          whiteboard_results.user_id,
+          whiteboard_results.score_type,
+          whiteboard_results.score_value,
+          whiteboard_results.score_label,
+          whiteboard_results.notes_text,
+          whiteboard_results.created_at,
+          whiteboard_results.updated_at,
+          users.display_name,
+          users.nickname
+        from whiteboard_results
+        join users on users.id = whiteboard_results.user_id
+        where whiteboard_results.daily_workout_id = ?
+        order by
+          case whiteboard_results.score_type
+            when 'time' then 0
+            when 'reps' then 1
+            when 'load' then 2
+            else 3
+          end asc,
+          case when whiteboard_results.score_type = 'time' then whiteboard_results.score_value end asc,
+          case when whiteboard_results.score_type in ('reps', 'load') then whiteboard_results.score_value end desc,
+          whiteboard_results.updated_at asc
+        """,
+        (workout_id,),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "user_id": row["user_id"],
+            "athlete_name": row["display_name"] or row["nickname"] or "Member",
+            "score_type": row["score_type"],
+            "score_value": row["score_value"],
+            "score_label": row["score_label"],
+            "notes_text": row["notes_text"],
+            "rank": index + 1,
+        }
+        for index, row in enumerate(rows)
+    ]
+
+
+def get_whiteboard_result_for_user(
+    connection: sqlite3.Connection,
+    workout_id: int,
+    user_id: int,
+) -> dict[str, Any] | None:
+    row = connection.execute(
+        """
+        select id, user_id, score_type, score_value, score_label, notes_text
+        from whiteboard_results
+        where daily_workout_id = ? and user_id = ?
+        """,
+        (workout_id, user_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "score_type": row["score_type"],
+        "score_value": row["score_value"],
+        "score_label": row["score_label"],
+        "notes_text": row["notes_text"],
     }
 
 
@@ -3007,6 +3198,64 @@ def require_programming_section(value: Any, *, label: str) -> str:
     if len(text_value) > 4000:
         raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} must be 4000 characters or fewer.")
     return text_value
+
+
+def require_whiteboard_score(score_type_value: Any, score_value_value: Any) -> tuple[str, float, str]:
+    score_type = str(score_type_value or "").strip().lower()
+    if score_type not in {"time", "reps", "load"}:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Score type must be time, reps, or load.",
+        )
+    raw_score_value = str(score_value_value or "").strip()
+    if not raw_score_value:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Score value is required.")
+
+    if score_type == "time":
+        normalized = raw_score_value.replace(".", ":")
+        parts = normalized.split(":")
+        if len(parts) not in {2, 3}:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "Time score must be mm:ss or hh:mm:ss.",
+            )
+        try:
+            numbers = [int(part) for part in parts]
+        except ValueError:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "Time score must be mm:ss or hh:mm:ss.",
+            )
+        if any(number < 0 for number in numbers):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Time score must be positive.")
+        if len(numbers) == 2:
+            minutes, seconds = numbers
+            hours = 0
+        else:
+            hours, minutes, seconds = numbers
+        if minutes >= 60 and len(numbers) == 3:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Minutes must be below 60 for hh:mm:ss.")
+        if seconds >= 60:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Seconds must be below 60.")
+        total_seconds = float(hours * 3600 + minutes * 60 + seconds)
+        if total_seconds <= 0:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Time score must be positive.")
+        return score_type, total_seconds, raw_score_value
+
+    try:
+        score_value = float(raw_score_value)
+    except ValueError:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Score value must be numeric.")
+    if score_value <= 0:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Score value must be positive.")
+    return score_type, score_value, raw_score_value
+
+
+def require_whiteboard_notes(value: Any) -> str:
+    notes = str(value or "").strip()
+    if len(notes) > 500:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Notes must be 500 characters or fewer.")
+    return notes
 
 
 def require_join_request_decision(value: Any) -> str:

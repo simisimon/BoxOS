@@ -366,7 +366,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Future programming can be updated cleanly.
 
 #### US-D1-03 - Digital whiteboard
-**Status:** Not Started
+**Status:** Complete
 
 **As an athlete**, I want to submit results to a gym whiteboard.
 

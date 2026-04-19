@@ -77,6 +77,26 @@ class ApiProgrammingRepository implements ProgrammingRepository {
     return _fromJson(response.data?['workout'] as Map<String, dynamic>?);
   }
 
+  @override
+  Future<DailyWorkout> submitWhiteboardResult({
+    required int workoutId,
+    required String scoreType,
+    required String scoreValue,
+    required String notesText,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/programming/whiteboard-results',
+      data: {
+        'workout_id': workoutId,
+        'score_type': scoreType,
+        'score_value': scoreValue,
+        'notes_text': notesText,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return _fromJson(response.data?['workout'] as Map<String, dynamic>?);
+  }
+
   Future<Map<String, String>> _authHeaders() async {
     final tokens = await _tokenStorage.readTokens();
     if (tokens == null) {
@@ -98,6 +118,28 @@ class ApiProgrammingRepository implements ProgrammingRepository {
       metconText: data['metcon_text'] as String? ?? '',
       notesText: data['notes_text'] as String? ?? '',
       canEdit: data['can_edit'] as bool? ?? false,
+      whiteboardResults: (data['whiteboard_results'] as List<dynamic>? ?? const [])
+          .map((item) => _whiteboardFromJson(item as Map<String, dynamic>?))
+          .toList(),
+      myWhiteboardResult: data['my_whiteboard_result'] == null
+          ? null
+          : _whiteboardFromJson(data['my_whiteboard_result'] as Map<String, dynamic>?),
+    );
+  }
+
+  WhiteboardResult _whiteboardFromJson(Map<String, dynamic>? data) {
+    if (data == null) {
+      throw Exception('Missing whiteboard result data.');
+    }
+    return WhiteboardResult(
+      id: data['id'] as int? ?? 0,
+      userId: data['user_id'] as int? ?? 0,
+      athleteName: data['athlete_name'] as String? ?? '',
+      scoreType: data['score_type'] as String? ?? '',
+      scoreValue: (data['score_value'] as num?)?.toDouble() ?? 0,
+      scoreLabel: data['score_label'] as String? ?? '',
+      notesText: data['notes_text'] as String? ?? '',
+      rank: data['rank'] as int? ?? 0,
     );
   }
 

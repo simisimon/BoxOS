@@ -19,4 +19,11 @@ abstract class ProgrammingRepository {
     required String metconText,
     required String notesText,
   });
+
+  Future<DailyWorkout> submitWhiteboardResult({
+    required int workoutId,
+    required String scoreType,
+    required String scoreValue,
+    required String notesText,
+  });
 }

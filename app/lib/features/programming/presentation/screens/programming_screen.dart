@@ -135,9 +135,20 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                         for (final workout in workouts) ...[
                           _WorkoutCard(
                             workout: workout,
+                            canSubmitWhiteboard: profile?.activeGym != null,
                             onEdit: canManage && workout.canEdit
                                 ? () => _openEditor(existing: workout)
                                 : null,
+                            onSubmitWhiteboard: () async {
+                              final updated = await showDialog<bool>(
+                                context: context,
+                                builder: (context) =>
+                                    _WhiteboardResultDialog(workout: workout),
+                              );
+                              if (updated == true) {
+                                await _refresh();
+                              }
+                            },
                           ),
                           const SizedBox(height: 12),
                         ],
@@ -154,10 +165,17 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
 }
 
 class _WorkoutCard extends StatelessWidget {
-  const _WorkoutCard({required this.workout, this.onEdit});
+  const _WorkoutCard({
+    required this.workout,
+    required this.canSubmitWhiteboard,
+    this.onEdit,
+    this.onSubmitWhiteboard,
+  });
 
   final DailyWorkout workout;
+  final bool canSubmitWhiteboard;
   final VoidCallback? onEdit;
+  final VoidCallback? onSubmitWhiteboard;
 
   @override
   Widget build(BuildContext context) {
@@ -205,10 +223,116 @@ class _WorkoutCard extends StatelessWidget {
               const SizedBox(height: 12),
               _WorkoutSection(label: 'Notes', value: workout.notesText),
             ],
+            const SizedBox(height: 16),
+            _WhiteboardSection(
+              workout: workout,
+              canSubmit: canSubmitWhiteboard,
+              onSubmit: onSubmitWhiteboard,
+            ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _WhiteboardSection extends StatelessWidget {
+  const _WhiteboardSection({
+    required this.workout,
+    required this.canSubmit,
+    this.onSubmit,
+  });
+
+  final DailyWorkout workout;
+  final bool canSubmit;
+  final VoidCallback? onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Whiteboard',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            if (canSubmit && onSubmit != null)
+              OutlinedButton.icon(
+                onPressed: onSubmit,
+                icon: const Icon(Icons.emoji_events_outlined),
+                label: Text(
+                  workout.myWhiteboardResult == null ? 'Submit Result' : 'Update Result',
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (workout.myWhiteboardResult != null) ...[
+          Card(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'My result: ${workout.myWhiteboardResult!.scoreLabel} (${_scoreTypeLabel(workout.myWhiteboardResult!.scoreType)})',
+                  ),
+                  if (workout.myWhiteboardResult!.notesText.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(workout.myWhiteboardResult!.notesText),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (workout.whiteboardResults.isEmpty)
+          const Text('No whiteboard results yet.')
+        else
+          Column(
+            children: [
+              for (final result in workout.whiteboardResults) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    child: Text('${result.rank}'),
+                  ),
+                  title: Text(result.athleteName),
+                  subtitle: result.notesText.isEmpty
+                      ? Text(_scoreTypeLabel(result.scoreType))
+                      : Text(
+                          '${_scoreTypeLabel(result.scoreType)} • ${result.notesText}',
+                        ),
+                  trailing: Text(
+                    result.scoreLabel,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                const Divider(height: 1),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+String _scoreTypeLabel(String value) {
+  switch (value) {
+    case 'time':
+      return 'For time';
+    case 'reps':
+      return 'Reps';
+    case 'load':
+      return 'Load';
+    default:
+      return value;
   }
 }
 
@@ -371,6 +495,154 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
                   decoration: const InputDecoration(labelText: 'MetCon'),
                   minLines: 3,
                   maxLines: 5,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _submit,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _WhiteboardResultDialog extends ConsumerStatefulWidget {
+  const _WhiteboardResultDialog({required this.workout});
+
+  final DailyWorkout workout;
+
+  @override
+  ConsumerState<_WhiteboardResultDialog> createState() =>
+      _WhiteboardResultDialogState();
+}
+
+class _WhiteboardResultDialogState extends ConsumerState<_WhiteboardResultDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late String _scoreType;
+  late TextEditingController _scoreValueController;
+  late TextEditingController _notesController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scoreType = widget.workout.myWhiteboardResult?.scoreType ?? 'time';
+    _scoreValueController = TextEditingController(
+      text: widget.workout.myWhiteboardResult?.scoreLabel ?? '',
+    );
+    _notesController = TextEditingController(
+      text: widget.workout.myWhiteboardResult?.notesText ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _scoreValueController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(programmingRepositoryProvider).submitWhiteboardResult(
+            workoutId: widget.workout.id,
+            scoreType: _scoreType,
+            scoreValue: _scoreValueController.text.trim(),
+            notesText: _notesController.text.trim(),
+          );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to save whiteboard result'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Submit Whiteboard Result'),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _scoreType,
+                  decoration: const InputDecoration(labelText: 'Score Type'),
+                  items: const [
+                    DropdownMenuItem(value: 'time', child: Text('For time')),
+                    DropdownMenuItem(value: 'reps', child: Text('Reps')),
+                    DropdownMenuItem(value: 'load', child: Text('Load')),
+                  ],
+                  onChanged: _isSaving
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() => _scoreType = value);
+                          }
+                        },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _scoreValueController,
+                  decoration: InputDecoration(
+                    labelText: _scoreType == 'time'
+                        ? 'Score (mm:ss or hh:mm:ss)'
+                        : _scoreType == 'reps'
+                            ? 'Score (reps)'
+                            : 'Score (load)',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Enter a score';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

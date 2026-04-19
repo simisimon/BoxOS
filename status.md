@@ -1,6 +1,6 @@
 # BoxOS Project Status
 
-Last updated: 2026-04-18
+Last updated: 2026-04-19
 
 ## Current Snapshot
 - Repository: `C:\GitHub\BoxOS`
@@ -77,11 +77,16 @@ Last updated: 2026-04-18
   - workouts support title, strength, MetCon, and coach notes sections
   - active gym members can view upcoming workouts by date in the Flutter app
   - added a dedicated Programming screen and navigation entry from the home surface
+- Closed US-D1-03 digital whiteboard:
+  - added whiteboard result submission for active gym members on workout day or later
+  - one whiteboard result per member per workout can be created and updated
+  - programming payloads now include ranked whiteboard results plus each member's own result
+  - the Flutter programming screen now shows a live whiteboard and result submission flow
 
 ## Validation State
 - `cd app && dart analyze`: passed
 - `cd app && flutter test`: hangs in the current environment
-- `python3 -m unittest backend.test_server`: passed (29 tests)
+- `python3 -m unittest backend.test_server`: passed (31 tests)
 
 ## Story Status (Epic A)
 - US-A1-01 Sign up: Complete
@@ -111,19 +116,18 @@ Last updated: 2026-04-18
 - B3 Attendance Tracking: Partial
 - D1 Daily WOD Creation: Complete
 - D2 Programming Calendar: Complete
-- D3 Digital Whiteboard: Not Started
+- D3 Digital Whiteboard: Complete
 - A5: Not Started
 
 ## Current Risks / Gaps
 1. Verification and password-reset tokens are printed to the backend terminal for local development instead of being emailed.
 2. Profile photo upload is still out of scope for the current A2 slice; only display name and nickname are implemented.
-3. Digital whiteboard submission and leaderboard workflows are still not implemented.
-4. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
+3. Memberships, billing, logging, and analytics are still documented as core product modules but are not implemented yet.
 
 ## Recommended Next Steps
-1. Implement Epic D3 digital whiteboard submission and ranking for the active workout.
-2. Add A5 audit logging for role changes, join-request decisions, scheduling mutations, and programming updates.
-3. Define the first production slice of memberships and payments before expanding secondary modules.
+1. Add A5 audit logging for role changes, join-request decisions, scheduling mutations, programming updates, and whiteboard submissions.
+2. Define the first production slice of memberships and payments before expanding secondary modules.
+3. Decide whether workout logging should extend the whiteboard model or remain a separate athlete history flow.
 
 ## Notes
 - Supabase is no longer the active backend for the Flutter app.

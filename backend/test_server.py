@@ -1426,6 +1426,192 @@ class BackendServerTests(unittest.TestCase):
 
         self.assertEqual(error_context.exception.code, 403)
 
+    def test_active_gym_member_can_submit_whiteboard_result(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Whiteboard Gym",
+                "logo_url": "https://example.com/whiteboard.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        scheduled_date = server.now_utc().date().isoformat()
+        created_workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": scheduled_date,
+                "title": "Friday Sprint",
+                "strength_text": "",
+                "metcon_text": "For time: 30-20-10 wall balls and burpees",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {
+                "request_id": pending_requests["requests"][0]["id"],
+                "decision": "approve",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        updated = self.post_json_with_auth(
+            "/programming/whiteboard-results",
+            {
+                "workout_id": created_workout["workout"]["id"],
+                "score_type": "time",
+                "score_value": "08:41",
+                "notes_text": "Unbroken burpees until the final round.",
+            },
+            access_token=athlete_login["access_token"],
+        )
+
+        self.assertEqual(updated["workout"]["my_whiteboard_result"]["score_label"], "08:41")
+        self.assertEqual(len(updated["workout"]["whiteboard_results"]), 1)
+        self.assertEqual(updated["workout"]["whiteboard_results"][0]["athlete_name"], "Demo Athlete")
+
+    def test_whiteboard_results_are_ranked_for_gym_members(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Leaderboard Gym",
+                "logo_url": "https://example.com/leaderboard.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        scheduled_date = server.now_utc().date().isoformat()
+        created_workout = self.post_json_with_auth(
+            "/programming/workouts",
+            {
+                "scheduled_date": scheduled_date,
+                "title": "Saturday Chipper",
+                "strength_text": "",
+                "metcon_text": "Max reps in 12 minutes",
+                "notes_text": "",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        self.post_json(
+            "/auth/signup",
+            {
+                "email": "whiteboard2@boxos.app",
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        self._verify_user_email("whiteboard2@boxos.app")
+        second_athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": "whiteboard2@boxos.app",
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+
+        for login in (self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        ), second_athlete_login):
+            self.post_json_with_auth(
+                "/gyms/join-requests",
+                {"gym_id": created_gym["gym"]["id"]},
+                access_token=login["access_token"],
+            )
+
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        for request in pending_requests["requests"]:
+            self.patch_json(
+                "/gyms/join-requests",
+                {"request_id": request["id"], "decision": "approve"},
+                access_token=admin_login["access_token"],
+            )
+
+        demo_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        for login in (demo_login, second_athlete_login):
+            self.patch_json(
+                "/profile/active-gym",
+                {"gym_id": created_gym["gym"]["id"]},
+                access_token=login["access_token"],
+            )
+
+        self.post_json_with_auth(
+            "/programming/whiteboard-results",
+            {
+                "workout_id": created_workout["workout"]["id"],
+                "score_type": "reps",
+                "score_value": 120,
+                "notes_text": "",
+            },
+            access_token=demo_login["access_token"],
+        )
+        listed = self.post_json_with_auth(
+            "/programming/whiteboard-results",
+            {
+                "workout_id": created_workout["workout"]["id"],
+                "score_type": "reps",
+                "score_value": 132,
+                "notes_text": "Strong finish.",
+            },
+            access_token=second_athlete_login["access_token"],
+        )
+
+        self.assertEqual(len(listed["workout"]["whiteboard_results"]), 2)
+        self.assertEqual(listed["workout"]["whiteboard_results"][0]["score_label"], "132")
+        self.assertEqual(listed["workout"]["whiteboard_results"][0]["rank"], 1)
+        self.assertEqual(listed["workout"]["whiteboard_results"][1]["score_label"], "120")
+        self.assertEqual(listed["workout"]["whiteboard_results"][1]["rank"], 2)
+
     def test_athlete_cannot_manage_schedule(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

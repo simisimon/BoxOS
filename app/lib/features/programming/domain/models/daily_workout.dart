@@ -8,6 +8,8 @@ class DailyWorkout {
     required this.metconText,
     required this.notesText,
     required this.canEdit,
+    required this.whiteboardResults,
+    required this.myWhiteboardResult,
   });
 
   final int id;
@@ -18,4 +20,28 @@ class DailyWorkout {
   final String metconText;
   final String notesText;
   final bool canEdit;
+  final List<WhiteboardResult> whiteboardResults;
+  final WhiteboardResult? myWhiteboardResult;
+}
+
+class WhiteboardResult {
+  const WhiteboardResult({
+    required this.id,
+    required this.userId,
+    required this.athleteName,
+    required this.scoreType,
+    required this.scoreValue,
+    required this.scoreLabel,
+    required this.notesText,
+    required this.rank,
+  });
+
+  final int id;
+  final int userId;
+  final String athleteName;
+  final String scoreType;
+  final double scoreValue;
+  final String scoreLabel;
+  final String notesText;
+  final int rank;
 }
