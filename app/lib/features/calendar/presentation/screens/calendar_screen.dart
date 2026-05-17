@@ -130,6 +130,39 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     }
   }
 
+  Future<void> _toggleWaitlist(ScheduleClass item) async {
+    try {
+      final repository = ref.read(scheduleRepositoryProvider);
+      if (item.isWaitlisted) {
+        await repository.leaveWaitlist(classId: item.id);
+      } else {
+        await repository.joinWaitlist(classId: item.id);
+      }
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            item.isWaitlisted ? 'Removed from waitlist.' : 'Added to waitlist.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to update waitlist'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _updateAttendance({
     required ScheduleClass item,
     required ScheduleBooking booking,
@@ -267,6 +300,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                           item: item,
                           canManage: canManage,
                           onToggleBooking: () => _toggleBooking(item),
+                          onToggleWaitlist: () => _toggleWaitlist(item),
                           onUpdateAttendance: (booking, status) =>
                               _updateAttendance(
                                 item: item,
@@ -787,6 +821,7 @@ class _ScheduleClassCard extends StatelessWidget {
     required this.item,
     required this.canManage,
     required this.onToggleBooking,
+    required this.onToggleWaitlist,
     required this.onUpdateAttendance,
     required this.onEdit,
     required this.onDelete,
@@ -795,6 +830,7 @@ class _ScheduleClassCard extends StatelessWidget {
   final ScheduleClass item;
   final bool canManage;
   final VoidCallback onToggleBooking;
+  final VoidCallback onToggleWaitlist;
   final Future<void> Function(ScheduleBooking booking, String attendanceStatus)
   onUpdateAttendance;
   final VoidCallback onEdit;
@@ -836,11 +872,13 @@ class _ScheduleClassCard extends StatelessWidget {
               Text('Trainer: ${item.assignedTrainer!.label}'),
             Text('Bookings: ${item.bookedCount}/${item.capacity}'),
             Text('Remaining spots: ${item.remainingSpots}'),
+            if (item.waitlistCount > 0) Text('Waitlist: ${item.waitlistCount}'),
             if (item.wodDescription.isNotEmpty) Text('WOD: ${item.wodDescription}'),
             if (item.attendanceStatus != null)
               Text(
                 'Your attendance: ${_attendanceLabel(item.attendanceStatus!)}',
               ),
+            if (item.isWaitlisted) const Text('Your status: Waitlisted'),
             if (isFuture) ...[
               const SizedBox(height: 12),
               Row(
@@ -850,10 +888,15 @@ class _ScheduleClassCard extends StatelessWidget {
                       onPressed: onToggleBooking,
                       child: const Text('Cancel Booking'),
                     )
+                  else if (item.isWaitlisted)
+                    OutlinedButton(
+                      onPressed: onToggleWaitlist,
+                      child: const Text('Leave Waitlist'),
+                    )
                   else
                     FilledButton(
-                      onPressed: item.isFull ? null : onToggleBooking,
-                      child: Text(item.isFull ? 'Full' : 'Book Class'),
+                      onPressed: item.isFull ? onToggleWaitlist : onToggleBooking,
+                      child: Text(item.isFull ? 'Join Waitlist' : 'Book Class'),
                     ),
                   if (canManage) ...[
                     const SizedBox(width: 8),

@@ -200,6 +200,14 @@ def init_db() -> None:
             unique(class_schedule_id, user_id)
           );
 
+          create table if not exists class_waitlist_entries (
+            id integer primary key autoincrement,
+            class_schedule_id integer not null references class_schedules(id) on delete cascade,
+            user_id integer not null references users(id) on delete cascade,
+            created_at text not null,
+            unique(class_schedule_id, user_id)
+          );
+
           create table if not exists daily_workouts (
             id integer primary key autoincrement,
             gym_id integer not null references gyms(id) on delete cascade,
@@ -275,6 +283,7 @@ def init_db() -> None:
       ensure_user_columns(connection)
       ensure_class_schedule_columns(connection)
       ensure_class_booking_columns(connection)
+      ensure_class_waitlist_tables(connection)
       ensure_workout_log_columns(connection)
       migrate_legacy_auth_terms(connection)
       purge_deleted_users(connection)
@@ -413,6 +422,20 @@ def ensure_class_schedule_columns(connection: sqlite3.Connection) -> None:
         connection.execute(
             "alter table class_schedules add column assigned_trainer_user_id integer references users(id) on delete set null"
         )
+
+
+def ensure_class_waitlist_tables(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        create table if not exists class_waitlist_entries (
+          id integer primary key autoincrement,
+          class_schedule_id integer not null references class_schedules(id) on delete cascade,
+          user_id integer not null references users(id) on delete cascade,
+          created_at text not null,
+          unique(class_schedule_id, user_id)
+        )
+        """
+    )
 
 
 def ensure_workout_log_columns(connection: sqlite3.Connection) -> None:
@@ -822,6 +845,19 @@ def schedule_class_payload(
         (booking for booking in booking_rows if booking["user_id"] == current_user_id),
         None,
     )
+    waitlist_rows = connection.execute(
+        """
+        select user_id
+        from class_waitlist_entries
+        where class_schedule_id = ?
+        order by created_at asc, id asc
+        """,
+        (row["id"],),
+    ).fetchall()
+    current_user_waitlist = next(
+        (entry for entry in waitlist_rows if entry["user_id"] == current_user_id),
+        None,
+    )
     capacity = row["capacity"]
     return {
         "id": row["id"],
@@ -844,7 +880,9 @@ def schedule_class_payload(
         "wod_description": row["wod_description"],
         "booked_count": booked_count,
         "remaining_spots": max(capacity - booked_count, 0),
+        "waitlist_count": len(waitlist_rows),
         "is_booked": current_user_booking is not None,
+        "is_waitlisted": current_user_waitlist is not None,
         "attendance_status": (
             current_user_booking["attendance_status"]
             if current_user_booking is not None
@@ -1040,6 +1078,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/schedule/bookings":
                 self.handle_create_class_booking(body)
                 return
+            if path == "/schedule/waitlist":
+                self.handle_create_class_waitlist(body)
+                return
             if path == "/programming/workouts":
                 self.handle_create_daily_workout(body)
                 return
@@ -1072,6 +1113,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/schedule/bookings":
                 self.handle_delete_class_booking(body)
+                return
+            if path == "/schedule/waitlist":
+                self.handle_delete_class_waitlist(body)
                 return
             raise ApiError(HTTPStatus.NOT_FOUND, "Route not found.")
         except ApiError as error:
@@ -1748,6 +1792,18 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if assigned_trainer is None:
                 connection.close()
                 raise ApiError(HTTPStatus.BAD_REQUEST, "Selected trainer is not active in this gym.")
+        affected_user_rows = connection.execute(
+            """
+            select user_id
+            from class_bookings
+            where class_schedule_id = ?
+            union
+            select user_id
+            from class_waitlist_entries
+            where class_schedule_id = ?
+            """,
+            (schedule_id, schedule_id),
+        ).fetchall()
         with connection:
             connection.execute(
                 """
@@ -1822,6 +1878,16 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     "capacity": capacity,
                     "trainer_user_id": trainer_user_id,
                 },
+            )
+            create_schedule_update_notifications(
+                connection,
+                gym_id=session["active_gym_id"],
+                class_schedule_id=schedule_id,
+                user_ids=[
+                    int(user["user_id"])
+                    for user in affected_user_rows
+                    if int(user["user_id"]) != session["user_id"]
+                ],
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"class": payload})
@@ -1925,6 +1991,12 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 """,
                 (schedule_id, session["user_id"], isoformat(now_utc())),
             )
+            create_booking_confirmation_notification(
+                connection,
+                user_id=session["user_id"],
+                gym_id=schedule_row["gym_id"],
+                class_schedule_id=schedule_id,
+            )
         connection.close()
         self.send_json(HTTPStatus.CREATED, {"message": "Class booked."})
 
@@ -1971,8 +2043,138 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 """,
                 (schedule_id, session["user_id"]),
             )
+            promoted_user_id = promote_next_waitlisted_user(
+                connection,
+                class_schedule_id=schedule_id,
+            )
+            if promoted_user_id is not None:
+                create_waitlist_promotion_notification(
+                    connection,
+                    user_id=promoted_user_id,
+                    gym_id=schedule_row["gym_id"],
+                    class_schedule_id=schedule_id,
+                )
         connection.close()
         self.send_json(HTTPStatus.OK, {"message": "Booking cancelled."})
+
+    def handle_create_class_waitlist(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        schedule_id = require_user_id(body.get("class_id"))
+        connection = get_connection()
+        schedule_row = connection.execute(
+            """
+            select id, gym_id, start_time, capacity
+            from class_schedules
+            where id = ? and gym_id = ?
+            """,
+            (schedule_id, session["active_gym_id"]),
+        ).fetchone()
+        if schedule_row is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Schedule class not found.")
+        if parse_iso(schedule_row["start_time"]) <= now_utc():
+            connection.close()
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "Only future classes can be waitlisted.",
+            )
+        existing_booking = connection.execute(
+            """
+            select id
+            from class_bookings
+            where class_schedule_id = ? and user_id = ?
+            """,
+            (schedule_id, session["user_id"]),
+        ).fetchone()
+        if existing_booking is not None:
+            connection.close()
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "You have already booked this class.",
+            )
+        existing_waitlist = connection.execute(
+            """
+            select id
+            from class_waitlist_entries
+            where class_schedule_id = ? and user_id = ?
+            """,
+            (schedule_id, session["user_id"]),
+        ).fetchone()
+        if existing_waitlist is not None:
+            connection.close()
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "You are already on the waitlist for this class.",
+            )
+        booking_count_row = connection.execute(
+            """
+            select count(*) as booked_count
+            from class_bookings
+            where class_schedule_id = ?
+            """,
+            (schedule_id,),
+        ).fetchone()
+        booked_count = (
+            int(booking_count_row["booked_count"]) if booking_count_row is not None else 0
+        )
+        if booked_count < schedule_row["capacity"]:
+            connection.close()
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "This class still has open spots.",
+            )
+        with connection:
+            connection.execute(
+                """
+                insert into class_waitlist_entries (
+                  class_schedule_id, user_id, created_at
+                )
+                values (?, ?, ?)
+                """,
+                (schedule_id, session["user_id"], isoformat(now_utc())),
+            )
+        connection.close()
+        self.send_json(HTTPStatus.CREATED, {"message": "Added to waitlist."})
+
+    def handle_delete_class_waitlist(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        schedule_id = require_user_id(body.get("class_id"))
+        connection = get_connection()
+        schedule_row = connection.execute(
+            """
+            select id, gym_id, start_time
+            from class_schedules
+            where id = ? and gym_id = ?
+            """,
+            (schedule_id, session["active_gym_id"]),
+        ).fetchone()
+        if schedule_row is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Schedule class not found.")
+        existing_waitlist = connection.execute(
+            """
+            select id
+            from class_waitlist_entries
+            where class_schedule_id = ? and user_id = ?
+            """,
+            (schedule_id, session["user_id"]),
+        ).fetchone()
+        if existing_waitlist is None:
+            connection.close()
+            raise ApiError(
+                HTTPStatus.NOT_FOUND,
+                "You are not on the waitlist for this class.",
+            )
+        with connection:
+            connection.execute(
+                """
+                delete from class_waitlist_entries
+                where class_schedule_id = ? and user_id = ?
+                """,
+                (schedule_id, session["user_id"]),
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"message": "Removed from waitlist."})
 
     def handle_update_class_attendance(self, body: dict[str, Any]) -> None:
         session = self.require_schedule_manager_session()
@@ -3372,6 +3574,152 @@ def create_notification(
         """,
         (user_id, gym_id, type, title, body, entity_type, entity_id, isoformat(now_utc())),
     )
+
+
+def class_schedule_summary(
+    connection: sqlite3.Connection,
+    *,
+    class_schedule_id: int,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        select id, gym_id, title, start_time
+        from class_schedules
+        where id = ?
+        """,
+        (class_schedule_id,),
+    ).fetchone()
+
+
+def create_booking_confirmation_notification(
+    connection: sqlite3.Connection,
+    *,
+    user_id: int,
+    gym_id: int,
+    class_schedule_id: int,
+) -> None:
+    user = connection.execute(
+        "select notify_booking_confirmations from users where id = ? and deleted_at is null",
+        (user_id,),
+    ).fetchone()
+    schedule_row = class_schedule_summary(
+        connection,
+        class_schedule_id=class_schedule_id,
+    )
+    if user is None or schedule_row is None or not bool(user["notify_booking_confirmations"]):
+        return
+    create_notification(
+        connection,
+        user_id=user_id,
+        gym_id=gym_id,
+        type="booking_confirmed",
+        title="Booking confirmed",
+        body=f"{schedule_row['title']} at {schedule_row['start_time']}",
+        entity_type="schedule_class",
+        entity_id=class_schedule_id,
+    )
+
+
+def promote_next_waitlisted_user(
+    connection: sqlite3.Connection,
+    *,
+    class_schedule_id: int,
+) -> int | None:
+    next_waitlist_entry = connection.execute(
+        """
+        select id, user_id
+        from class_waitlist_entries
+        where class_schedule_id = ?
+        order by created_at asc, id asc
+        limit 1
+        """,
+        (class_schedule_id,),
+    ).fetchone()
+    if next_waitlist_entry is None:
+        return None
+    connection.execute(
+        "delete from class_waitlist_entries where id = ?",
+        (next_waitlist_entry["id"],),
+    )
+    connection.execute(
+        """
+        insert into class_bookings (
+          class_schedule_id, user_id, attendance_status, created_at
+        )
+        values (?, ?, 'booked', ?)
+        """,
+        (
+            class_schedule_id,
+            next_waitlist_entry["user_id"],
+            isoformat(now_utc()),
+        ),
+    )
+    return int(next_waitlist_entry["user_id"])
+
+
+def create_waitlist_promotion_notification(
+    connection: sqlite3.Connection,
+    *,
+    user_id: int,
+    gym_id: int,
+    class_schedule_id: int,
+) -> None:
+    user = connection.execute(
+        "select notify_waitlist_promotions from users where id = ? and deleted_at is null",
+        (user_id,),
+    ).fetchone()
+    schedule_row = class_schedule_summary(
+        connection,
+        class_schedule_id=class_schedule_id,
+    )
+    if user is None or schedule_row is None or not bool(user["notify_waitlist_promotions"]):
+        return
+    create_notification(
+        connection,
+        user_id=user_id,
+        gym_id=gym_id,
+        type="waitlist_promoted",
+        title="You are in the class",
+        body=f"{schedule_row['title']} at {schedule_row['start_time']}",
+        entity_type="schedule_class",
+        entity_id=class_schedule_id,
+    )
+
+
+def create_schedule_update_notifications(
+    connection: sqlite3.Connection,
+    *,
+    gym_id: int,
+    class_schedule_id: int,
+    user_ids: list[int],
+) -> None:
+    schedule_row = class_schedule_summary(
+        connection,
+        class_schedule_id=class_schedule_id,
+    )
+    if schedule_row is None:
+        return
+    seen_user_ids: set[int] = set()
+    for user_id in user_ids:
+        if user_id in seen_user_ids:
+            continue
+        seen_user_ids.add(user_id)
+        user = connection.execute(
+            "select notify_booking_confirmations from users where id = ? and deleted_at is null",
+            (user_id,),
+        ).fetchone()
+        if user is None or not bool(user["notify_booking_confirmations"]):
+            continue
+        create_notification(
+            connection,
+            user_id=user_id,
+            gym_id=gym_id,
+            type="schedule_updated",
+            title="Class updated",
+            body=f"{schedule_row['title']} now starts at {schedule_row['start_time']}",
+            entity_type="schedule_class",
+            entity_id=class_schedule_id,
+        )
 
 
 def create_wod_notifications(

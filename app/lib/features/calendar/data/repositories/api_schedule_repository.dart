@@ -132,6 +132,24 @@ class ApiScheduleRepository implements ScheduleRepository {
   }
 
   @override
+  Future<void> joinWaitlist({required int classId}) async {
+    await _dio.post<void>(
+      '/schedule/waitlist',
+      data: {'class_id': classId},
+      options: Options(headers: await _authHeaders()),
+    );
+  }
+
+  @override
+  Future<void> leaveWaitlist({required int classId}) async {
+    await _dio.delete<void>(
+      '/schedule/waitlist',
+      data: {'class_id': classId},
+      options: Options(headers: await _authHeaders()),
+    );
+  }
+
+  @override
   Future<ScheduleClass> updateAttendance({
     required int classId,
     required int userId,
@@ -175,7 +193,9 @@ class ApiScheduleRepository implements ScheduleRepository {
       wodDescription: data['wod_description'] as String? ?? '',
       bookedCount: data['booked_count'] as int? ?? 0,
       remainingSpots: data['remaining_spots'] as int? ?? 0,
+      waitlistCount: data['waitlist_count'] as int? ?? 0,
       isBooked: data['is_booked'] as bool? ?? false,
+      isWaitlisted: data['is_waitlisted'] as bool? ?? false,
       attendanceStatus: data['attendance_status'] as String?,
       bookings: ((data['bookings'] as List<dynamic>?) ?? const [])
           .map((item) => _bookingFromJson(item as Map<String, dynamic>?))

@@ -112,13 +112,16 @@ class _HeroCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Chip(label: Text('Role: $roleLabel')),
-              Chip(label: Text('Gym: $activeGymName')),
-            ],
+          Material(
+            color: Colors.transparent,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(label: Text('Role: $roleLabel')),
+                Chip(label: Text('Gym: $activeGymName')),
+              ],
+            ),
           ),
         ],
       ),
@@ -144,7 +147,7 @@ class _TodaySnapshot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Wrap(
+    return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: [
@@ -163,7 +166,7 @@ class _TodaySnapshot extends StatelessWidget {
         _SnapshotCard(
           icon: Icons.notifications_active_outlined,
           title: 'Reminders',
-          value: '$unreadNotifications',
+          value: unreadNotifications.toString(),
           subtitle: 'Workout and PR alerts now appear in your notification inbox.',
         ),
       ],

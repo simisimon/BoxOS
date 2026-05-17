@@ -213,48 +213,9 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 
 ---
 
-## 11. Module Status Snapshot
-
-**Status baseline:** 2026-04-14
+## 11. Detailed Module Requirements
 
 ### 11.1 Accounts, Roles & Authentication
-- Authentication and account lifecycle: largely implemented in the current local backend/client flow
-- Profile, notification preferences, and device registration: implemented
-- Role-based access: in progress
-- Gym association flows: implemented
-- Short-lived access tokens, refresh rotation, and session revocation: implemented in the local backend
-- Audit logging for critical gym operations: implemented in the local backend
-- Additional production security hardening beyond the local backend baseline: still incomplete
-
-### 11.2 Scheduling & Bookings
-- Schedule management: partial
-- Athlete booking: implemented
-- Attendance tracking: partial
-
-### 11.3 Memberships & Payments
-- Not started
-
-### 11.4 Workout Programming & Whiteboard
-- Daily WOD creation and date-based programming management: implemented
-- Whiteboard workflows: implemented for in-app result submission and ranked viewing
-
-### 11.5 Workout Logging & PR Tracking
-- Workout result logging and chronological workout history: implemented
-- Basic PR detection for repeated benchmark-style workout logs: implemented
-
-### 11.6 Notifications
-- Preferences and device registration are implemented
-- In-app notifications for WOD publication/update and PR achievements are implemented
-- Booking, waitlist, and external push delivery remain incomplete
-
-### 11.7 Admin Analytics
-- Not started
-
----
-
-## 12. Detailed Module Requirements
-
-### 12.1 Accounts, Roles & Authentication
 - Email/password authentication
 - Verification and recovery flows
 - Secure session handling
@@ -262,46 +223,46 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 - Trainer assignment by admins
 - Role-specific home and navigation experience
 
-### 12.2 Scheduling & Bookings
+### 11.2 Scheduling & Bookings
 - Admin/trainer class management
 - Athlete booking and cancellation
 - Capacity-aware booking enforcement
 - Attendance lifecycle
-- Future waitlist support
+- Waitlist support with promotion on seat availability
 
-### 12.3 Memberships & Payments
+### 11.3 Memberships & Payments
 - Membership plans
 - Billing provider integration
 - Payment status management
 - Booking eligibility tied to active membership
 
-### 12.4 Workout Programming & Whiteboard
+### 11.4 Workout Programming & Whiteboard
 - Daily workout authoring
 - Programming calendar
 - Track variants
 - Whiteboard result display
 
-### 12.5 Workout Logging & Performance
+### 11.5 Workout Logging & Performance
 - Structured result logging
 - Notes and context capture
 - History timeline
 - Basic PR detection
 
-### 12.6 Notifications & Communication
-- Booking and waitlist events
+### 11.6 Notifications & Communication
+- Booking confirmations, waitlist promotions, and schedule-change alerts
 - WOD publication alerts
 - Billing issue alerts
 - PR and milestone alerts
 - User-level preference controls
 
-### 12.7 Admin Analytics
+### 11.7 Admin Analytics
 - Attendance overview
 - Membership activity
 - Revenue snapshot
 
 ---
 
-## 13. Success Metrics
+## 12. Success Metrics
 
 - Weekly active athletes
 - Booking completion rate
@@ -312,7 +273,7 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 
 ---
 
-## 14. Risks & Mitigations
+## 13. Risks & Mitigations
 
 - **Feature sprawl:** Keep the product framed as a production core platform with phased modules.
 - **Admin complexity:** Keep core admin workflows available in mobile, but reserve heavy operations for a dedicated backoffice surface.
@@ -321,6 +282,6 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 
 ---
 
-## 15. Summary
+## 14. Summary
 
 BoxOS is being positioned as a production-ready core platform for one CrossFit box, with a mobile-first athlete experience, admin backoffice direction, and a phased modular roadmap instead of an MVP framing.

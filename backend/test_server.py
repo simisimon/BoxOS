@@ -923,6 +923,442 @@ class BackendServerTests(unittest.TestCase):
             urllib.request.urlopen(full_request)
         self.assertEqual(full_error.exception.code, 409)
 
+    def test_waitlist_join_for_full_class(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Waitlist Gym",
+                "logo_url": "https://example.com/waitlist.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Crowded Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "end_time": server.isoformat(end_time),
+                "capacity": 1,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.TRAINER_EMAIL,
+                "password": server.TRAINER_PASSWORD,
+            },
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        joined = self.post_json_with_auth(
+            "/schedule/waitlist",
+            {"class_id": created_class["class"]["id"]},
+            access_token=trainer_login["access_token"],
+        )
+        self.assertEqual(joined["message"], "Added to waitlist.")
+
+        listed = self.get_json_with_auth(
+            "/schedule/classes",
+            access_token=trainer_login["access_token"],
+        )
+        self.assertEqual(listed["classes"][0]["waitlist_count"], 1)
+        self.assertTrue(listed["classes"][0]["is_waitlisted"])
+
+        duplicate_request = urllib.request.Request(
+            f"{self.base_url}/schedule/waitlist",
+            data=json_bytes({"class_id": created_class["class"]["id"]}),
+            headers={
+                "Authorization": f"Bearer {trainer_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as duplicate_error:
+            urllib.request.urlopen(duplicate_request)
+        self.assertEqual(duplicate_error.exception.code, 409)
+
+    def test_schedule_payload_includes_waitlist_state(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Waitlist Payload Gym",
+                "logo_url": "https://example.com/waitlist-payload.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Payload Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "end_time": server.isoformat(end_time),
+                "capacity": 1,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.TRAINER_EMAIL,
+                "password": server.TRAINER_PASSWORD,
+            },
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/waitlist",
+            {"class_id": created_class["class"]["id"]},
+            access_token=trainer_login["access_token"],
+        )
+
+        trainer_schedule = self.get_json_with_auth(
+            "/schedule/classes",
+            access_token=trainer_login["access_token"],
+        )
+        athlete_schedule = self.get_json_with_auth(
+            "/schedule/classes",
+            access_token=athlete_login["access_token"],
+        )
+
+        self.assertEqual(trainer_schedule["classes"][0]["waitlist_count"], 1)
+        self.assertTrue(trainer_schedule["classes"][0]["is_waitlisted"])
+        self.assertFalse(trainer_schedule["classes"][0]["is_booked"])
+        self.assertEqual(athlete_schedule["classes"][0]["waitlist_count"], 1)
+        self.assertFalse(athlete_schedule["classes"][0]["is_waitlisted"])
+        self.assertTrue(athlete_schedule["classes"][0]["is_booked"])
+
+    def test_cancelling_booking_promotes_next_waitlisted_athlete(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Promotion Gym",
+                "logo_url": "https://example.com/promotion.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Promotion Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "end_time": server.isoformat(end_time),
+                "capacity": 1,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.DEMO_EMAIL,
+                "password": server.DEMO_PASSWORD,
+            },
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {
+                "email": server.TRAINER_EMAIL,
+                "password": server.TRAINER_PASSWORD,
+            },
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/waitlist",
+            {"class_id": created_class["class"]["id"]},
+            access_token=trainer_login["access_token"],
+        )
+
+        cancelled = self.delete_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(cancelled["message"], "Booking cancelled.")
+
+        trainer_schedule = self.get_json_with_auth(
+            "/schedule/classes",
+            access_token=trainer_login["access_token"],
+        )
+        self.assertTrue(trainer_schedule["classes"][0]["is_booked"])
+        self.assertFalse(trainer_schedule["classes"][0]["is_waitlisted"])
+        self.assertEqual(trainer_schedule["classes"][0]["waitlist_count"], 0)
+        self.assertEqual(trainer_schedule["classes"][0]["booked_count"], 1)
+
+    def test_booking_confirmation_notification(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Booking Notification Gym",
+                "logo_url": "https://example.com/booking-notify.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Notify Me Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "end_time": server.isoformat(end_time),
+                "capacity": 12,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        notifications = self.get_json_with_auth(
+            "/notifications",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(notifications["notifications"][0]["type"], "booking_confirmed")
+        self.assertIn("Notify Me Class", notifications["notifications"][0]["body"])
+
+    def test_waitlist_promotion_notification(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Promotion Notification Gym",
+                "logo_url": "https://example.com/promotion-notify.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Promote Me Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "end_time": server.isoformat(end_time),
+                "capacity": 1,
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/waitlist",
+            {"class_id": created_class["class"]["id"]},
+            access_token=trainer_login["access_token"],
+        )
+
+        self.delete_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        notifications = self.get_json_with_auth(
+            "/notifications",
+            access_token=trainer_login["access_token"],
+        )
+        self.assertEqual(notifications["notifications"][0]["type"], "waitlist_promoted")
+        self.assertIn("Promote Me Class", notifications["notifications"][0]["body"])
+
+    def test_schedule_update_notifies_affected_athletes(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Schedule Update Notification Gym",
+                "logo_url": "https://example.com/schedule-update.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        end_time = start_time + timedelta(hours=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Changing Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "end_time": server.isoformat(end_time),
+                "capacity": 10,
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        self.patch_json(
+            "/schedule/classes",
+            {
+                "id": created_class["class"]["id"],
+                "title": "Changed Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time + timedelta(hours=2)),
+                "end_time": server.isoformat(end_time + timedelta(hours=2)),
+                "capacity": 10,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        notifications = self.get_json_with_auth(
+            "/notifications",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(notifications["notifications"][0]["type"], "schedule_updated")
+        self.assertIn("Changed Class", notifications["notifications"][0]["body"])
+
     def test_schedule_capacity_cannot_drop_below_existing_bookings(self) -> None:
         admin_login = self.post_json(
             "/auth/login",
@@ -2408,6 +2844,66 @@ class BackendServerTests(unittest.TestCase):
         connection.close()
         verified = self.post_json("/auth/verify-email", {"token": token})
         self.assertEqual(verified["message"], "Email verified.")
+
+    def _approve_demo_user_for_gym(
+        self, *, admin_token: str, athlete_token: str, gym_id: int
+    ) -> None:
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": gym_id},
+            access_token=athlete_token,
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_token,
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {
+                "request_id": pending_requests["requests"][0]["id"],
+                "decision": "approve",
+            },
+            access_token=admin_token,
+        )
+        self.patch_json(
+            "/profile/active-gym",
+            {"gym_id": gym_id},
+            access_token=athlete_token,
+        )
+
+    def _add_active_gym_membership(
+        self, *, email: str, gym_id: int, roles: list[str], active_role: str = "athlete"
+    ) -> None:
+        connection = server.get_connection()
+        user = connection.execute(
+            "select id from users where email = ?",
+            (email,),
+        ).fetchone()
+        self.assertIsNotNone(user)
+        now = server.now_utc()
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                )
+                values (?, ?, ?, ?, 'active', ?, ?)
+                """,
+                (
+                    user["id"],
+                    gym_id,
+                    active_role,
+                    server.encode_roles(roles),
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            connection.execute(
+                "update users set active_gym_id = ? where id = ?",
+                (gym_id, user["id"]),
+            )
+            server.sync_user_context(connection, user["id"])
+        connection.close()
 
     def patch_json(
         self,

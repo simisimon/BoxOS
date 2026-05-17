@@ -33,7 +33,8 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(currentProfileProvider).valueOrNull;
+    final profileAsync = ref.watch(currentProfileProvider);
+    final profile = profileAsync.hasValue ? profileAsync.value : null;
 
     return RefreshIndicator(
       onRefresh: _refresh,

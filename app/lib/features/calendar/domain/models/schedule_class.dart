@@ -14,7 +14,9 @@ class ScheduleClass {
     this.wodDescription = '',
     this.bookedCount = 0,
     this.remainingSpots = 0,
+    this.waitlistCount = 0,
     this.isBooked = false,
+    this.isWaitlisted = false,
     this.attendanceStatus,
     this.bookings = const [],
   });
@@ -30,7 +32,9 @@ class ScheduleClass {
   final String wodDescription;
   final int bookedCount;
   final int remainingSpots;
+  final int waitlistCount;
   final bool isBooked;
+  final bool isWaitlisted;
   final String? attendanceStatus;
   final List<ScheduleBooking> bookings;
 

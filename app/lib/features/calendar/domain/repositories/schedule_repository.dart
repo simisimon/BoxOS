@@ -32,6 +32,10 @@ abstract class ScheduleRepository {
 
   Future<void> cancelBooking({required int classId});
 
+  Future<void> joinWaitlist({required int classId});
+
+  Future<void> leaveWaitlist({required int classId});
+
   Future<ScheduleClass> updateAttendance({
     required int classId,
     required int userId,

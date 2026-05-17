@@ -9,6 +9,42 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Admin workflows must also remain accessible inside the mobile app
 - Additional modules may be added later, but this file prioritizes the production core platform first
 
+## Delivery dashboard
+
+Last updated: 2026-05-17
+
+### Current phase
+- Production-core build for a single gym
+- Current focus: finish recurring scheduling and remaining role-permission hardening
+- Active backend: local REST backend in `backend/server.py`
+
+### Completed modules
+- Accounts and authentication
+- Profile, notification preferences, and device registration
+- Gym creation, discovery, join requests, approvals, and active-gym switching
+- Schedule booking, waitlists, attendance tracking, and booking notifications
+- Workout programming calendar and digital whiteboard
+- Workout logging, workout history, and basic PR detection
+- In-app WOD and PR notifications
+
+### In-progress stories
+- `US-A3-03` Role-based access
+- `US-B1-03` Recurring class schedule management
+
+### Not-started modules
+- Epic C Memberships and Payments
+- Epic G Admin Analytics
+
+### Roadmap
+- Now: finish role-based access hardening and recurring scheduling
+- Next: build memberships and payments so booking rules can depend on active plan state
+- Later: add analytics and complete production hardening such as real email delivery, push infrastructure, and deployment/security posture
+
+### Validation snapshot
+- `app` static analysis via Dart tooling on changed files: passed
+- `cd app && flutter test`: hangs in the current environment
+- `python3 -m unittest backend.test_server`: passed (44 tests)
+
 ---
 
 ## Epic A - Accounts, Roles & Authentication
@@ -152,6 +188,10 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Admin-only endpoints are protected.
 - Trainers can manage delegated gym workflows.
 - Athletes cannot access admin-only operations.
+
+**Delivery Notes**
+- Admin-only role management is enforced.
+- Remaining work is to verify that all delegated trainer flows and all athlete restrictions are consistently enforced across the backend and app surfaces.
 
 #### US-A3-04 - Multi-role switching
 **Status:** Complete
@@ -301,8 +341,12 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Capacity and timing can be managed safely.
 - Recurring schedule support is available or explicitly phased.
 
+**Delivery Notes**
+- Live schedule create, edit, and delete flows already exist for future classes.
+- True recurring schedule support still needs to be implemented or explicitly deferred as a scoped production decision.
+
 #### US-B1-04 - Waitlist handling
-**Status:** Not Started
+**Status:** Complete
 
 **As an athlete**, I want to join a waitlist when a class is full.
 
@@ -310,6 +354,11 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Athlete can join a waitlist for a full class.
 - Promotion rules are applied consistently.
 - Notifications are sent on promotion.
+
+**Delivery Notes**
+- Full future classes now expose waitlist join and leave flows.
+- Cancelling a booking automatically promotes the oldest waitlisted athlete into the class.
+- Waitlist promotions generate in-app notifications when the member preference is enabled.
 
 ---
 
@@ -411,7 +460,7 @@ This file tracks the delivery status of the production core platform for BoxOS.
 ## Epic F - Notifications & Communication
 
 #### US-F1-01 - Booking and schedule notifications
-**Status:** In Progress
+**Status:** Complete
 
 **As a user**, I want important booking and schedule events to trigger notifications.
 
@@ -419,6 +468,11 @@ This file tracks the delivery status of the production core platform for BoxOS.
 - Booking confirmation can trigger a notification.
 - Schedule changes can trigger a notification where appropriate.
 - User preferences are respected.
+
+**Delivery Notes**
+- Booking confirmations now generate in-app notifications when enabled.
+- Waitlist promotions now generate in-app notifications when enabled.
+- Schedule updates now notify affected booked or waitlisted athletes through the in-app inbox.
 
 #### US-F1-02 - WOD and performance notifications
 **Status:** Complete

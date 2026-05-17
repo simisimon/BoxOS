@@ -24,6 +24,7 @@ import 'package:app/features/gyms/presentation/screens/gym_directory_screen.dart
 import 'package:app/features/gyms/presentation/screens/join_requests_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
+import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
@@ -229,6 +230,16 @@ class RecordingProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<NotificationInbox> fetchNotifications() async {
+    return const NotificationInbox(unreadCount: 0, notifications: []);
+  }
+
+  @override
+  Future<NotificationInbox> markAllNotificationsRead() async {
+    return const NotificationInbox(unreadCount: 0, notifications: []);
+  }
+
+  @override
   Future<List<RoleManagedUser>> fetchRoleManagedUsers() async {
     return managedUsers;
   }
@@ -406,7 +417,9 @@ class RecordingScheduleRepository implements ScheduleRepository {
       wodDescription: '18.1',
       bookedCount: 3,
       remainingSpots: 9,
+      waitlistCount: 0,
       isBooked: false,
+      isWaitlisted: false,
       attendanceStatus: null,
       bookings: const [],
     ),
@@ -416,6 +429,8 @@ class RecordingScheduleRepository implements ScheduleRepository {
   int? lastDeletedClassId;
   int? lastBookedClassId;
   int? lastCancelledClassId;
+  int? lastWaitlistedClassId;
+  int? lastLeftWaitlistClassId;
   int? lastAttendanceClassId;
   int? lastAttendanceUserId;
   String? lastAttendanceStatus;
@@ -443,7 +458,9 @@ class RecordingScheduleRepository implements ScheduleRepository {
       wodDescription: wodDescription,
       bookedCount: 0,
       remainingSpots: capacity,
+      waitlistCount: 0,
       isBooked: false,
+      isWaitlisted: false,
       attendanceStatus: null,
       bookings: const [],
     );
@@ -479,7 +496,9 @@ class RecordingScheduleRepository implements ScheduleRepository {
             wodDescription: item.wodDescription,
             bookedCount: item.bookedCount + 1,
             remainingSpots: item.remainingSpots - 1,
+            waitlistCount: item.waitlistCount,
             isBooked: true,
+            isWaitlisted: false,
           )
         else
           item,
@@ -504,7 +523,67 @@ class RecordingScheduleRepository implements ScheduleRepository {
             wodDescription: item.wodDescription,
             bookedCount: item.bookedCount - 1,
             remainingSpots: item.remainingSpots + 1,
+            waitlistCount: item.waitlistCount,
             isBooked: false,
+            isWaitlisted: false,
+          )
+        else
+          item,
+    ];
+  }
+
+  @override
+  Future<void> joinWaitlist({required int classId}) async {
+    lastWaitlistedClassId = classId;
+    classes = [
+      for (final item in classes)
+        if (item.id == classId)
+          ScheduleClass(
+            id: item.id,
+            gymId: item.gymId,
+            title: item.title,
+            classType: item.classType,
+            startTime: item.startTime,
+            durationMinutes: item.durationMinutes,
+            capacity: item.capacity,
+            assignedTrainer: item.assignedTrainer,
+            wodDescription: item.wodDescription,
+            bookedCount: item.bookedCount,
+            remainingSpots: item.remainingSpots,
+            waitlistCount: item.waitlistCount + 1,
+            isBooked: false,
+            isWaitlisted: true,
+            attendanceStatus: item.attendanceStatus,
+            bookings: item.bookings,
+          )
+        else
+          item,
+    ];
+  }
+
+  @override
+  Future<void> leaveWaitlist({required int classId}) async {
+    lastLeftWaitlistClassId = classId;
+    classes = [
+      for (final item in classes)
+        if (item.id == classId)
+          ScheduleClass(
+            id: item.id,
+            gymId: item.gymId,
+            title: item.title,
+            classType: item.classType,
+            startTime: item.startTime,
+            durationMinutes: item.durationMinutes,
+            capacity: item.capacity,
+            assignedTrainer: item.assignedTrainer,
+            wodDescription: item.wodDescription,
+            bookedCount: item.bookedCount,
+            remainingSpots: item.remainingSpots,
+            waitlistCount: item.waitlistCount > 0 ? item.waitlistCount - 1 : 0,
+            isBooked: false,
+            isWaitlisted: false,
+            attendanceStatus: item.attendanceStatus,
+            bookings: item.bookings,
           )
         else
           item,
@@ -536,7 +615,9 @@ class RecordingScheduleRepository implements ScheduleRepository {
             wodDescription: item.wodDescription,
             bookedCount: item.bookedCount,
             remainingSpots: item.remainingSpots,
+            waitlistCount: item.waitlistCount,
             isBooked: item.isBooked,
+            isWaitlisted: item.isWaitlisted,
             attendanceStatus: item.attendanceStatus,
             bookings: [
               for (final booking in item.bookings)
@@ -585,7 +666,9 @@ class RecordingScheduleRepository implements ScheduleRepository {
       wodDescription: wodDescription,
       bookedCount: 0,
       remainingSpots: capacity,
+      waitlistCount: 0,
       isBooked: false,
+      isWaitlisted: false,
       attendanceStatus: null,
       bookings: const [],
     );
@@ -1314,6 +1397,96 @@ void main() {
 
     expect(scheduleRepository.lastCancelledClassId, 1);
     expect(find.widgetWithText(FilledButton, 'Book Class'), findsOneWidget);
+  });
+
+  testWidgets('Athlete can join and leave waitlist from full class', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository()
+      ..profile = const UserProfile(
+        email: 'demo@boxos.app',
+        accountType: AccountType.athlete,
+        role: UserRole.athlete,
+        availableRoles: [UserRole.athlete],
+        displayName: 'Demo Athlete',
+        nickname: 'demo',
+        notificationPreferences: NotificationPreferences(
+          bookingConfirmations: true,
+          waitlistPromotions: true,
+          paymentIssues: true,
+          wodPosted: true,
+          prAchievements: true,
+        ),
+        activeGym: GymSummary(
+          id: 1,
+          name: 'CrossFit Mitte',
+          slug: 'crossfit-mitte',
+          logoUrl: 'https://example.com/m.png',
+          timezone: 'Europe/Berlin',
+        ),
+        memberships: [
+          GymMembership(
+            gym: GymSummary(
+              id: 1,
+              name: 'CrossFit Mitte',
+              slug: 'crossfit-mitte',
+              logoUrl: 'https://example.com/m.png',
+              timezone: 'Europe/Berlin',
+            ),
+            role: UserRole.athlete,
+            availableRoles: [UserRole.athlete],
+            status: 'active',
+          ),
+        ],
+      );
+    final scheduleRepository = RecordingScheduleRepository()
+      ..classes = [
+        ScheduleClass(
+          id: 1,
+          gymId: 1,
+          title: 'Packed WOD',
+          classType: 'WOD',
+          startTime: DateTime(2026, 4, 16, 18),
+          durationMinutes: 60,
+          capacity: 12,
+          assignedTrainer: ScheduleTrainer(
+            id: 2,
+            displayName: 'Demo Trainer',
+            nickname: 'trainer',
+          ),
+          wodDescription: '18.1',
+          bookedCount: 12,
+          remainingSpots: 0,
+          waitlistCount: 0,
+          isBooked: false,
+          isWaitlisted: false,
+          attendanceStatus: null,
+          bookings: const [],
+        ),
+      ];
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/my-box',
+      scheduleRepository: scheduleRepository,
+    );
+
+    expect(find.widgetWithText(FilledButton, 'Join Waitlist'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Join Waitlist'));
+    await _settleApp(tester);
+
+    expect(scheduleRepository.lastWaitlistedClassId, 1);
+    expect(find.widgetWithText(OutlinedButton, 'Leave Waitlist'), findsOneWidget);
+    expect(find.text('Waitlist: 1'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Leave Waitlist'));
+    await _settleApp(tester);
+
+    expect(scheduleRepository.lastLeftWaitlistClassId, 1);
+    expect(find.widgetWithText(FilledButton, 'Join Waitlist'), findsOneWidget);
   });
 
   testWidgets('Admin without gym sees create gym setup on home', (

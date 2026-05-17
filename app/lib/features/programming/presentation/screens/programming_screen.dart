@@ -47,7 +47,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
-    final profile = profileAsync.valueOrNull;
+    final profile = profileAsync.hasValue ? profileAsync.value : null;
     final canManage =
         profile?.activeGym != null &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);

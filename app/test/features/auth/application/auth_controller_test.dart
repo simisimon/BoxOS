@@ -8,6 +8,7 @@ import 'package:app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:app/features/auth/domain/models/auth_tokens.dart';
 import 'package:app/features/devices/data/device_registration_service.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
+import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/notification_preferences.dart';
@@ -202,6 +203,16 @@ class FakeProfileRepository implements ProfileRepository {
     required NotificationPreferences preferences,
   }) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<NotificationInbox> fetchNotifications() async {
+    return const NotificationInbox(unreadCount: 0, notifications: []);
+  }
+
+  @override
+  Future<NotificationInbox> markAllNotificationsRead() async {
+    return const NotificationInbox(unreadCount: 0, notifications: []);
   }
 
   @override

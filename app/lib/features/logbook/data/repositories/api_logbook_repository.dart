@@ -1,4 +1,5 @@
 import 'package:app/core/network/dio_client.dart';
+import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
 import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
 import 'package:app/features/logbook/domain/repositories/logbook_repository.dart';
