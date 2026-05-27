@@ -13,7 +13,6 @@ class HomeScreen extends ConsumerWidget {
     final profileAsync = ref.watch(currentProfileProvider);
     final notificationInboxAsync = ref.watch(notificationInboxProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
-    final activeGymName = profile?.activeGym?.name ?? 'No gym selected';
     final unreadNotifications = notificationInboxAsync.hasValue
         ? notificationInboxAsync.value!.unreadCount
         : 0;
@@ -21,20 +20,13 @@ class HomeScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _HeroCard(
-          roleLabel: profile?.role.label ?? 'Athlete',
-          displayName: profile?.displayName ?? '',
-          nickname: profile?.nickname ?? '',
-          activeGymName: activeGymName,
-        ),
+        const _SectionTitle('News'),
+        const SizedBox(height: 8),
+        const _HighlightList(),
         const SizedBox(height: 16),
         const _SectionTitle('Today'),
         const SizedBox(height: 8),
         _TodaySnapshot(unreadNotifications: unreadNotifications),
-        const SizedBox(height: 16),
-        const _SectionTitle('Highlights'),
-        const SizedBox(height: 8),
-        const _HighlightList(),
         const SizedBox(height: 16),
         const _SectionTitle('Quick Access'),
         const SizedBox(height: 8),
@@ -61,74 +53,6 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.roleLabel,
-    required this.displayName,
-    required this.nickname,
-    required this.activeGymName,
-  });
-
-  final String roleLabel;
-  final String displayName;
-  final String nickname;
-  final String activeGymName;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1D4ED8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Today at a glance',
-            style: theme.textTheme.labelLarge?.copyWith(color: Colors.white70),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            displayName.isEmpty ? 'Athlete' : displayName,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (nickname.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              '@$nickname',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: Colors.white70,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Material(
-            color: Colors.transparent,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Chip(label: Text('Role: $roleLabel')),
-                Chip(label: Text('Gym: $activeGymName')),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.title);
 
@@ -136,7 +60,11 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(title, style: Theme.of(context).textTheme.titleLarge);
+    final theme = Theme.of(context);
+    return Text(
+      title,
+      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+    );
   }
 }
 
@@ -147,9 +75,8 @@ class _TodaySnapshot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SnapshotCard(
           icon: Icons.calendar_today_outlined,
@@ -157,17 +84,20 @@ class _TodaySnapshot extends StatelessWidget {
           value: 'No booking yet',
           subtitle: 'Your next reserved class will appear here.',
         ),
+        const SizedBox(height: 12),
         _SnapshotCard(
           icon: Icons.fitness_center_outlined,
           title: 'Today\'s WOD',
           value: 'Not posted yet',
           subtitle: 'Programming for the active gym will surface here.',
         ),
+        const SizedBox(height: 12),
         _SnapshotCard(
           icon: Icons.notifications_active_outlined,
           title: 'Reminders',
           value: unreadNotifications.toString(),
-          subtitle: 'Workout and PR alerts now appear in your notification inbox.',
+          subtitle:
+              'Workout and PR alerts now appear in your notification inbox.',
         ),
       ],
     );
@@ -189,21 +119,124 @@ class _SnapshotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 212,
-      child: Card(
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _IconBadge(icon: icon),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(subtitle),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon),
+    );
+  }
+}
+
+class _HomeAction {
+  const _HomeAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.route,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String route;
+}
+
+class _ActionList extends StatelessWidget {
+  const _ActionList({required this.actions});
+
+  final List<_HomeAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (index, action) in actions.indexed) ...[
+          _ActionTile(action: action),
+          if (index < actions.length - 1) const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({required this.action});
+
+  final _HomeAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.go(action.route),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon),
-              const SizedBox(height: 12),
-              Text(title, style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 6),
-              Text(value, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              Text(subtitle),
+              _IconBadge(icon: action.icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      action.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(action.subtitle),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
             ],
           ),
         ),
@@ -218,6 +251,7 @@ class _HighlightList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: const [
         _InfoCard(
           icon: Icons.event_available_outlined,
@@ -248,53 +282,25 @@ class _QuickAccessRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _ActionCard(
-          icon: Icons.store_mall_directory_outlined,
-          title: 'Open MyBox',
-          subtitle:
-              'Go to schedules, class booking, WOD planning, and gym-specific activity.',
-          actionLabel: 'Go to MyBox',
-          onTap: () => context.go('/my-box'),
+    final actions = [
+      if (profileAccountType == AccountType.admin &&
+          profileRole == UserRole.admin)
+        const _HomeAction(
+          icon: Icons.group_outlined,
+          title: 'Review Join Requests',
+          subtitle: 'Approve or reject athletes requesting access to your gym.',
+          route: '/gym-requests',
+        )
+      else
+        const _HomeAction(
+          icon: Icons.search_outlined,
+          title: 'Find a Gym',
+          subtitle: 'Browse gyms and request access from the athlete flow.',
+          route: '/gyms',
         ),
-        _ActionCard(
-          icon: Icons.event_note_outlined,
-          title: 'Open Programming',
-          subtitle:
-              'Review the daily workout plan and upcoming gym programming.',
-          actionLabel: 'Open Programming',
-          onTap: () => context.go('/programming'),
-        ),
-        _ActionCard(
-          icon: Icons.menu_book_outlined,
-          title: 'Open Logbook',
-          subtitle:
-              'See workout history, benchmarks, and PR tracking as these features land.',
-          actionLabel: 'Go to Logbook',
-          onTap: () => context.go('/logbook'),
-        ),
-        if (profileAccountType == AccountType.admin &&
-            profileRole == UserRole.admin)
-          _ActionCard(
-            icon: Icons.group_outlined,
-            title: 'Review Join Requests',
-            subtitle: 'Approve or reject athletes requesting access to your gym.',
-            actionLabel: 'Open Requests',
-            onTap: () => context.go('/gym-requests'),
-          )
-        else
-          _ActionCard(
-            icon: Icons.search_outlined,
-            title: 'Find a Gym',
-            subtitle: 'Browse gyms and request access from the athlete flow.',
-            actionLabel: 'Browse Gyms',
-            onTap: () => context.go('/gyms'),
-          ),
-      ],
-    );
+    ];
+
+    return _ActionList(actions: actions);
   }
 }
 
@@ -315,24 +321,29 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 212,
-      child: Card(
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon),
-              const SizedBox(height: 12),
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(subtitle),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: onTap,
-                child: Text(actionLabel),
+              _IconBadge(icon: icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(subtitle),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
+              TextButton(onPressed: onTap, child: Text(actionLabel)),
             ],
           ),
         ),
@@ -360,15 +371,7 @@ class _InfoCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon),
-            ),
+            _IconBadge(icon: icon),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

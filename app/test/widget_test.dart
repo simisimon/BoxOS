@@ -35,6 +35,7 @@ import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/features/profile/domain/repositories/profile_repository.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
+import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/role_management_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -765,6 +766,10 @@ Future<GoRouter> _pumpAuthenticatedRouter(
         builder: (context, state) => const NotificationSettingsScreen(),
       ),
       GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
         path: '/role-management',
         builder: (context, state) => const RoleManagementScreen(),
       ),
@@ -1062,7 +1067,7 @@ void main() {
     expect(repository.changeCurrentPassword, 'oldpassword');
     expect(repository.changeNewPassword, 'newpassword123');
     expect(repository.changeLogoutOtherSessions, isTrue);
-    expect(find.text('BoxOS'), findsOneWidget);
+    expect(find.text('News'), findsOneWidget);
   });
 
   testWidgets('Delete account flow opens confirmation dialog', (
@@ -1103,8 +1108,76 @@ void main() {
 
     expect(profileRepository.updatedDisplayName, 'Basti Athlete');
     expect(profileRepository.updatedNickname, 'basti');
-    expect(find.text('Basti Athlete'), findsWidgets);
-    expect(find.text('@basti'), findsOneWidget);
+    expect(find.text('News'), findsOneWidget);
+  });
+
+  testWidgets('Home screen uses stacked full-width sections', (
+    WidgetTester tester,
+  ) async {
+    final profileRepository = RecordingProfileRepository();
+    final container = ProviderContainer(
+      overrides: [
+        profileRepositoryProvider.overrideWith((ref) => profileRepository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await _settleApp(tester);
+
+    expect(find.text('Today at a glance'), findsNothing);
+    expect(find.text('News'), findsOneWidget);
+    expect(find.text('Booking State'), findsOneWidget);
+    expect(find.text('Workout Highlights'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('Next Class'), findsOneWidget);
+    expect(find.text('Today\'s WOD'), findsOneWidget);
+    expect(find.text('Reminders'), findsOneWidget);
+
+    final newsTop = tester.getTopLeft(find.text('News')).dy;
+    final todayTop = tester.getTopLeft(find.text('Today')).dy;
+    final bookingTop = tester.getTopLeft(find.text('Booking State')).dy;
+    final workoutTop = tester.getTopLeft(find.text('Workout Highlights')).dy;
+    final nextClassTop = tester.getTopLeft(find.text('Next Class')).dy;
+    final wodTop = tester.getTopLeft(find.text('Today\'s WOD')).dy;
+    expect(newsTop, lessThan(todayTop));
+    expect(bookingTop, lessThan(workoutTop));
+    expect(nextClassTop, lessThan(wodTop));
+
+    final firstNewsCard = find.ancestor(
+      of: find.text('Booking State'),
+      matching: find.byType(Card),
+    );
+    final firstTodayCard = find.ancestor(
+      of: find.text('Next Class'),
+      matching: find.byType(Card),
+    );
+    expect(tester.getSize(firstNewsCard).width, greaterThan(720));
+    expect(tester.getSize(firstTodayCard).width, greaterThan(720));
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await _settleApp(tester);
+
+    expect(find.text('Quick Access'), findsOneWidget);
+    expect(find.text('Open MyBox'), findsNothing);
+    expect(find.text('Open Programming'), findsNothing);
+    expect(find.text('Open Logbook'), findsNothing);
+    expect(find.text('Find a Gym'), findsOneWidget);
+
+    final quickAccessTop = tester.getTopLeft(find.text('Quick Access')).dy;
+    final findGymTop = tester.getTopLeft(find.text('Find a Gym')).dy;
+    expect(quickAccessTop, lessThan(findGymTop));
+
+    final firstQuickAccessCard = find.ancestor(
+      of: find.text('Find a Gym'),
+      matching: find.byType(Card),
+    );
+    expect(tester.getSize(firstQuickAccessCard).width, greaterThan(720));
   });
 
   testWidgets('Notification settings flow updates preferences', (
@@ -1132,6 +1205,47 @@ void main() {
     expect(updated!.wodPosted, isFalse);
     expect(updated.prAchievements, isFalse);
     expect(find.text('Account Settings'), findsOneWidget);
+  });
+
+  testWidgets('Notifications screen shows empty placeholder', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      RecordingProfileRepository(),
+      initialLocation: '/notifications',
+    );
+
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.text('You are all caught up'), findsOneWidget);
+    expect(
+      find.textContaining('Booking updates, WOD posts, waitlist changes'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(OutlinedButton, 'Notification Settings'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(TextButton, 'Mark all read'), findsOneWidget);
+    final markAllRead = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Mark all read'),
+    );
+    expect(markAllRead.onPressed, isNull);
+
+    final placeholderCard = find.ancestor(
+      of: find.text('You are all caught up'),
+      matching: find.byType(Card),
+    );
+    final placeholderCardWidth = tester.getSize(placeholderCard).width;
+    expect(placeholderCardWidth, greaterThan(400));
+    expect(placeholderCardWidth, lessThanOrEqualTo(480));
+
+    final backButtonLeft = tester.getTopLeft(find.byTooltip('Back')).dx;
+    final titleLeft = tester.getTopLeft(find.text('Notifications')).dx;
+    expect(backButtonLeft, greaterThanOrEqualTo(150));
+    expect(titleLeft, greaterThan(backButtonLeft));
   });
 
   testWidgets('Footer routes between home profile and calendar pages', (
@@ -1899,7 +2013,7 @@ void main() {
     expect(switchButton, findsOneWidget);
   });
 
-  testWidgets('Role labels render for trainer accounts', (
+  testWidgets('Trainer home starts with news instead of the role hero', (
     WidgetTester tester,
   ) async {
     final repository = RecordingAuthRepository()..isSignedIn = true;
@@ -1929,8 +2043,9 @@ void main() {
       initialLocation: '/home',
     );
 
-    expect(find.text('Role: Trainer'), findsOneWidget);
-    expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
+    expect(find.text('News'), findsOneWidget);
+    expect(find.text('Today at a glance'), findsNothing);
+    expect(find.text('Role: Trainer'), findsNothing);
   });
 
   testWidgets('Admin users can access role management from profile', (
