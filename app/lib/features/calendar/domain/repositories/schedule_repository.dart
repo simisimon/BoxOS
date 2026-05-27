@@ -13,6 +13,8 @@ abstract class ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    String recurrenceFrequency = 'none',
+    int occurrenceCount = 1,
   });
 
   Future<ScheduleClass> updateClass({

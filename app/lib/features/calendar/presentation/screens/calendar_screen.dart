@@ -244,10 +244,14 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                   );
                 }
                 final items = snapshot.data ?? const <ScheduleClass>[];
-                final selectedItems = items
-                    .where((item) => _isSameDay(item.startTime, _selectedWorkoutDate))
-                    .toList()
-                  ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                final selectedItems =
+                    items
+                        .where(
+                          (item) =>
+                              _isSameDay(item.startTime, _selectedWorkoutDate),
+                        )
+                        .toList()
+                      ..sort((a, b) => a.startTime.compareTo(b.startTime));
                 final selectedDateLabel = MaterialLocalizations.of(
                   context,
                 ).formatFullDate(_selectedWorkoutDate);
@@ -261,8 +265,9 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                       createClassMode: _createClassMode,
                       onSelectCreateMode: (mode) {
                         setState(() {
-                          _createClassMode =
-                              _createClassMode == mode ? null : mode;
+                          _createClassMode = _createClassMode == mode
+                              ? null
+                              : mode;
                         });
                       },
                       onCreateSuccess: () async {
@@ -307,10 +312,8 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                                 booking: booking,
                                 attendanceStatus: status,
                               ),
-                          onEdit: () => _openEditor(
-                            existing: item,
-                            canManage: canManage,
-                          ),
+                          onEdit: () =>
+                              _openEditor(existing: item, canManage: canManage),
                           onDelete: () => _deleteClass(item, canManage),
                         ),
                         const SizedBox(height: 12),
@@ -456,18 +459,32 @@ class _InlineCreateClassForm extends ConsumerStatefulWidget {
       _InlineCreateClassFormState();
 }
 
-class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> {
+class _InlineCreateClassFormState
+    extends ConsumerState<_InlineCreateClassForm> {
   static const _durationOptions = [30, 45, 60, 75, 90];
   static const _minuteOptions = [0, 15, 30, 45];
+  static const _recurrenceOptions = {
+    'none': 'Does not repeat',
+    'daily': 'Daily',
+    'weekly': 'Weekly',
+    'monthly': 'Monthly (every 4 weeks)',
+  };
+  static const _recurrenceOccurrenceCaps = {
+    'daily': 365,
+    'weekly': 53,
+    'monthly': 14,
+  };
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _capacityController;
+  late final TextEditingController _occurrenceCountController;
   late final TextEditingController _wodDescriptionController;
   late Future<List<ScheduleTrainer>> _trainersFuture;
   int? _selectedPreviousClassId;
   int? _selectedTrainerId;
   late _CreateClassMode _mode;
+  late String _selectedRecurrenceFrequency;
   late int _selectedHour;
   late int _selectedMinute;
   late int _selectedDuration;
@@ -488,9 +505,11 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
     _selectedMinute = defaultStart.minute;
     _selectedDuration = 60;
     _mode = widget.initialMode;
+    _selectedRecurrenceFrequency = 'none';
     _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
     _titleController = TextEditingController(text: 'WOD');
     _capacityController = TextEditingController(text: '12');
+    _occurrenceCountController = TextEditingController(text: '4');
     _wodDescriptionController = TextEditingController();
   }
 
@@ -499,6 +518,18 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
     if (minute < 23) return 15;
     if (minute < 38) return 30;
     return 45;
+  }
+
+  int? _occurrenceCapFor(String recurrenceFrequency) {
+    return _recurrenceOccurrenceCaps[recurrenceFrequency];
+  }
+
+  String? _occurrenceValidationMessage(String recurrenceFrequency, int parsed) {
+    final cap = _occurrenceCapFor(recurrenceFrequency);
+    if (cap == null || parsed <= cap) {
+      return null;
+    }
+    return 'Enter $cap or fewer occurrences for $recurrenceFrequency repeats';
   }
 
   static int _normalizeDuration(int value) {
@@ -559,6 +590,7 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
   void dispose() {
     _titleController.dispose();
     _capacityController.dispose();
+    _occurrenceCountController.dispose();
     _wodDescriptionController.dispose();
     super.dispose();
   }
@@ -576,7 +608,9 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
       _selectedMinute,
     );
     try {
-      await ref.read(scheduleRepositoryProvider).createClass(
+      await ref
+          .read(scheduleRepositoryProvider)
+          .createClass(
             title: _titleController.text.trim(),
             classType: 'WOD',
             startTime: startTime,
@@ -584,6 +618,10 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
             capacity: int.parse(_capacityController.text.trim()),
             trainerUserId: _selectedTrainerId ?? 0,
             wodDescription: _wodDescriptionController.text.trim(),
+            recurrenceFrequency: _selectedRecurrenceFrequency,
+            occurrenceCount: _selectedRecurrenceFrequency == 'none'
+                ? 1
+                : int.parse(_occurrenceCountController.text.trim()),
           );
       if (!mounted) {
         return;
@@ -764,7 +802,9 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
             DropdownButtonFormField<int>(
               key: ValueKey('duration-$_selectedDuration'),
               initialValue: _selectedDuration,
-              decoration: const InputDecoration(labelText: 'Duration (minutes)'),
+              decoration: const InputDecoration(
+                labelText: 'Duration (minutes)',
+              ),
               items: [
                 for (final duration in _durationOptions)
                   DropdownMenuItem(
@@ -798,6 +838,45 @@ class _InlineCreateClassFormState extends ConsumerState<_InlineCreateClassForm> 
               minLines: 3,
               maxLines: 5,
             ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedRecurrenceFrequency,
+              decoration: const InputDecoration(labelText: 'Repeat'),
+              items: [
+                for (final entry in _recurrenceOptions.entries)
+                  DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedRecurrenceFrequency = value);
+                }
+              },
+            ),
+            if (_selectedRecurrenceFrequency != 'none') ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _occurrenceCountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Occurrences'),
+                validator: (value) {
+                  final parsed = int.tryParse((value ?? '').trim());
+                  if (parsed == null || parsed <= 0) {
+                    return 'Enter a valid occurrence count';
+                  }
+                  final capError = _occurrenceValidationMessage(
+                    _selectedRecurrenceFrequency,
+                    parsed,
+                  );
+                  if (capError != null) {
+                    return capError;
+                  }
+                  return null;
+                },
+              ),
+            ],
             const SizedBox(height: 12),
             FilledButton(
               onPressed: _isSaving ? null : _submit,
@@ -873,7 +952,8 @@ class _ScheduleClassCard extends StatelessWidget {
             Text('Bookings: ${item.bookedCount}/${item.capacity}'),
             Text('Remaining spots: ${item.remainingSpots}'),
             if (item.waitlistCount > 0) Text('Waitlist: ${item.waitlistCount}'),
-            if (item.wodDescription.isNotEmpty) Text('WOD: ${item.wodDescription}'),
+            if (item.wodDescription.isNotEmpty)
+              Text('WOD: ${item.wodDescription}'),
             if (item.attendanceStatus != null)
               Text(
                 'Your attendance: ${_attendanceLabel(item.attendanceStatus!)}',
@@ -895,7 +975,9 @@ class _ScheduleClassCard extends StatelessWidget {
                     )
                   else
                     FilledButton(
-                      onPressed: item.isFull ? onToggleWaitlist : onToggleBooking,
+                      onPressed: item.isFull
+                          ? onToggleWaitlist
+                          : onToggleBooking,
                       child: Text(item.isFull ? 'Join Waitlist' : 'Book Class'),
                     ),
                   if (canManage) ...[
@@ -948,7 +1030,8 @@ class _ScheduleClassCard extends StatelessWidget {
   }
 }
 
-DateTime _dateOnly(DateTime value) => DateTime(value.year, value.month, value.day);
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
 
 bool _isSameDay(DateTime left, DateTime right) {
   return left.year == right.year &&
@@ -1061,8 +1144,9 @@ class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
       now.hour + 1,
       _nearestMinuteStep(now.minute),
     );
-    _startTime =
-        _normalizeStartTime(widget.existing?.startTime ?? defaultStart);
+    _startTime = _normalizeStartTime(
+      widget.existing?.startTime ?? defaultStart,
+    );
     _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
     _selectedTrainerId = widget.existing?.assignedTrainer?.id;
     _titleController = TextEditingController(
@@ -1074,7 +1158,9 @@ class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
     _wodDescriptionController = TextEditingController(
       text: widget.existing?.wodDescription ?? '',
     );
-    _selectedDuration = _normalizeDuration(widget.existing?.durationMinutes ?? 60);
+    _selectedDuration = _normalizeDuration(
+      widget.existing?.durationMinutes ?? 60,
+    );
   }
 
   static DateTime _normalizeStartTime(DateTime value) {
@@ -1299,7 +1385,9 @@ class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
                           child: CalendarDatePicker(
                             initialDate: selectedDay,
                             firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 365),
+                            ),
                             currentDate: DateTime.now(),
                             onDateChanged: _updateStartDate,
                           ),

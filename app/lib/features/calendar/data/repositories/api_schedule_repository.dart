@@ -55,6 +55,8 @@ class ApiScheduleRepository implements ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    String recurrenceFrequency = 'none',
+    int occurrenceCount = 1,
   }) async {
     final endTime = startTime.add(Duration(minutes: durationMinutes));
     final response = await _dio.post<Map<String, dynamic>>(
@@ -68,6 +70,8 @@ class ApiScheduleRepository implements ScheduleRepository {
         'capacity': capacity,
         'trainer_user_id': trainerUserId,
         'wod_description': wodDescription,
+        'recurrence_frequency': recurrenceFrequency,
+        'occurrence_count': occurrenceCount,
       },
       options: Options(headers: await _authHeaders()),
     );

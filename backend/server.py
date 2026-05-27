@@ -5,19 +5,36 @@ import hmac
 import json
 import secrets
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+try:
+    from dateutil import tz as dateutil_tz
+except ImportError:  # pragma: no cover - optional runtime fallback
+    dateutil_tz = None
+
+try:
+    import pytz
+except ImportError:  # pragma: no cover - optional runtime fallback
+    pytz = None
 
 DB_PATH = Path(__file__).with_name("boxos_dev.db")
 HOST = "127.0.0.1"
 PORT = 8080
 DELETE_RETENTION_DAYS = 30
+MAX_RECURRENCE_OCCURRENCES = 365
 ALLOWED_ROLES = {"athlete", "trainer", "admin"}
 ALLOWED_ACCOUNT_TYPES = {"athlete", "admin"}
+RECURRENCE_OCCURRENCE_LIMITS = {
+    "daily": 365,
+    "weekly": 53,
+    "monthly": 14,
+}
 
 DEMO_EMAIL = "demo@boxos.app"
 DEMO_PASSWORD = "BoxOS123!"
@@ -1634,9 +1651,40 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         capacity = require_capacity(body.get("capacity"))
         trainer_user_id = require_optional_user_id(body.get("trainer_user_id"))
         wod_description = require_wod_description(body.get("wod_description"))
-        end_time = start_time + timedelta(minutes=duration_minutes)
+        recurrence_frequency = require_recurrence_frequency(
+            body.get("recurrence_frequency")
+        )
+        occurrence_count = require_occurrence_count(
+            body.get("occurrence_count"),
+            recurrence_frequency=recurrence_frequency,
+        )
         timestamp = isoformat(now_utc())
         connection = get_connection()
+        gym_row = connection.execute(
+            "select timezone from gyms where id = ?",
+            (session["active_gym_id"],),
+        ).fetchone()
+        if gym_row is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Active gym not found.")
+        try:
+            start_times = build_recurrence_start_times(
+                start_time,
+                recurrence_frequency=recurrence_frequency,
+                occurrence_count=occurrence_count,
+                gym_timezone=gym_row["timezone"],
+            )
+        except ApiError:
+            connection.close()
+            raise
+        if recurrence_frequency != "none":
+            for generated_start_time in start_times:
+                if generated_start_time <= now_utc():
+                    connection.close()
+                    raise ApiError(
+                        HTTPStatus.BAD_REQUEST,
+                        "Recurring classes must all be scheduled in the future.",
+                    )
         if trainer_user_id is not None:
             assigned_trainer = connection.execute(
             """
@@ -1655,81 +1703,84 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 connection.close()
                 raise ApiError(HTTPStatus.BAD_REQUEST, "Selected trainer is not active in this gym.")
         with connection:
-            cursor = connection.execute(
-                """
-                insert into class_schedules (
-                  gym_id, title, class_type, start_time, end_time, duration_minutes, capacity, assigned_trainer_user_id, wod_description,
-                  created_by_user_id, updated_by_user_id, created_at, updated_at
+            schedule_ids: list[int] = []
+            for generated_start_time in start_times:
+                generated_end_time = generated_start_time + timedelta(
+                    minutes=duration_minutes
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    session["active_gym_id"],
-                    title,
-                    class_type,
-                    isoformat(start_time),
-                    isoformat(end_time),
-                    duration_minutes,
-                    capacity,
-                    trainer_user_id,
-                    wod_description,
-                    session["user_id"],
-                    session["user_id"],
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            schedule_id = int(cursor.lastrowid)
-            row = connection.execute(
-                """
-                select
-                  class_schedules.id,
-                  class_schedules.gym_id,
-                  class_schedules.title,
-                  class_schedules.class_type,
-                  class_schedules.start_time,
-                  class_schedules.end_time,
-                  class_schedules.duration_minutes,
-                  class_schedules.capacity,
-                  class_schedules.assigned_trainer_user_id,
-                  trainer.display_name as assigned_trainer_display_name,
-                  trainer.nickname as assigned_trainer_nickname,
-                  class_schedules.wod_description
-                from class_schedules
-                left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
-                where class_schedules.id = ?
-                """,
-                (schedule_id,),
-            ).fetchone()
-            if row is None:
-                raise ApiError(
-                    HTTPStatus.INTERNAL_SERVER_ERROR,
-                    "Schedule class creation failed.",
+                cursor = connection.execute(
+                    """
+                    insert into class_schedules (
+                      gym_id, title, class_type, start_time, end_time, duration_minutes, capacity, assigned_trainer_user_id, wod_description,
+                      created_by_user_id, updated_by_user_id, created_at, updated_at
+                    )
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session["active_gym_id"],
+                        title,
+                        class_type,
+                        isoformat(generated_start_time),
+                        isoformat(generated_end_time),
+                        duration_minutes,
+                        capacity,
+                        trainer_user_id,
+                        wod_description,
+                        session["user_id"],
+                        session["user_id"],
+                        timestamp,
+                        timestamp,
+                    ),
                 )
-            payload = schedule_class_payload(
+                schedule_ids.append(int(cursor.lastrowid))
+
+            payloads: list[dict[str, Any]] = []
+            for schedule_id in schedule_ids:
+                row = get_schedule_class_row(connection, schedule_id)
+                if row is None:
+                    raise ApiError(
+                        HTTPStatus.INTERNAL_SERVER_ERROR,
+                        "Schedule class creation failed.",
+                    )
+                payloads.append(
+                    schedule_class_payload(
+                        connection,
+                        row,
+                        current_user_id=session["user_id"],
+                        include_bookings=session["role"] in {"admin", "trainer"},
+                    )
+                )
+            payload = payloads[0]
+            for schedule_id, generated_start_time in zip(
+                schedule_ids, start_times, strict=True
+            ):
+                write_audit_log(
                     connection,
-                    row,
-                    current_user_id=session["user_id"],
-                    include_bookings=session["role"] in {"admin", "trainer"},
+                    gym_id=session["active_gym_id"],
+                    actor_user_id=session["user_id"],
+                    action="schedule_class_created",
+                    entity_type="schedule_class",
+                    entity_id=schedule_id,
+                    details={
+                        "title": title,
+                        "class_type": class_type,
+                        "start_time": isoformat(generated_start_time),
+                        "duration_minutes": duration_minutes,
+                        "capacity": capacity,
+                        "trainer_user_id": trainer_user_id,
+                        "recurrence_frequency": recurrence_frequency,
+                        "occurrence_count": occurrence_count,
+                    },
                 )
-            write_audit_log(
-                connection,
-                gym_id=session["active_gym_id"],
-                actor_user_id=session["user_id"],
-                action="schedule_class_created",
-                entity_type="schedule_class",
-                entity_id=schedule_id,
-                details={
-                    "title": title,
-                    "class_type": class_type,
-                    "start_time": isoformat(start_time),
-                    "duration_minutes": duration_minutes,
-                    "capacity": capacity,
-                    "trainer_user_id": trainer_user_id,
-                },
-            )
         connection.close()
-        self.send_json(HTTPStatus.CREATED, {"class": payload})
+        self.send_json(
+            HTTPStatus.CREATED,
+            {
+                "class": payload,
+                "classes": payloads,
+                "created_count": len(payloads),
+            },
+        )
 
     def handle_update_schedule_class(self, body: dict[str, Any]) -> None:
         session = self.require_schedule_manager_session()
@@ -4022,6 +4073,172 @@ def require_duration_minutes(value: Any) -> int:
     return duration_minutes
 
 
+def require_recurrence_frequency(value: Any) -> str:
+    frequency = str(value or "none").strip().lower()
+    allowed = {"none", "daily", "weekly", "monthly"}
+    if frequency not in allowed:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Invalid recurrence frequency.")
+    return frequency
+
+
+def require_occurrence_count(value: Any, *, recurrence_frequency: str) -> int:
+    if recurrence_frequency == "none":
+        return 1
+    try:
+        occurrence_count = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Occurrence count must be a whole number.",
+        )
+    if occurrence_count < 1:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Occurrence count must be at least 1.",
+        )
+    max_occurrence_count = recurrence_occurrence_limit_for(recurrence_frequency)
+    if occurrence_count > max_occurrence_count:
+        if recurrence_frequency == "daily":
+            message = (
+                f"Occurrence count must be {max_occurrence_count} or fewer."
+            )
+        else:
+            message = (
+                "Occurrence count must be "
+                f"{max_occurrence_count} or fewer for {recurrence_frequency} recurrence."
+            )
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            message,
+        )
+    return occurrence_count
+
+
+def recurrence_delta_for(frequency: str) -> timedelta:
+    if frequency == "daily":
+        return timedelta(days=1)
+    if frequency == "weekly":
+        return timedelta(days=7)
+    if frequency == "monthly":
+        return timedelta(days=28)
+    return timedelta(days=0)
+
+
+def recurrence_occurrence_limit_for(frequency: str) -> int:
+    if frequency == "none":
+        return 1
+    return RECURRENCE_OCCURRENCE_LIMITS.get(frequency, MAX_RECURRENCE_OCCURRENCES)
+
+
+def build_recurrence_start_times(
+    start_time: datetime,
+    *,
+    recurrence_frequency: str,
+    occurrence_count: int,
+    gym_timezone: str,
+) -> list[datetime]:
+    if recurrence_frequency == "none":
+        return [start_time]
+    recurrence_delta = recurrence_delta_for(recurrence_frequency)
+    timezone = timezone_for_name(gym_timezone)
+    if timezone is not None:
+        local_start_time = start_time.astimezone(timezone)
+        local_start_naive = local_start_time.replace(tzinfo=None)
+        return [
+            (local_start_naive + (recurrence_delta * index))
+            .replace(tzinfo=timezone)
+            .astimezone(UTC)
+            for index in range(occurrence_count)
+        ]
+    local_start_naive = manual_local_datetime_for_utc(start_time, gym_timezone)
+    return [
+        manual_utc_datetime_for_local(
+            local_start_naive + (recurrence_delta * index),
+            gym_timezone,
+        )
+        for index in range(occurrence_count)
+    ]
+
+
+def timezone_for_name(gym_timezone: str) -> Any | None:
+    try:
+        return ZoneInfo(gym_timezone)
+    except ZoneInfoNotFoundError:
+        if dateutil_tz is not None:
+            timezone = dateutil_tz.gettz(gym_timezone)
+            if timezone is not None:
+                return timezone
+        if pytz is not None:
+            try:
+                return pytz.timezone(gym_timezone)
+            except pytz.UnknownTimeZoneError:
+                pass
+        if gym_timezone in {"UTC", "Europe/Berlin", "America/New_York"}:
+            return None
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Gym timezone is invalid.")
+
+
+def manual_local_datetime_for_utc(utc_datetime: datetime, gym_timezone: str) -> datetime:
+    utc_naive = utc_datetime.astimezone(UTC).replace(tzinfo=None)
+    return utc_naive + manual_utc_offset_for_utc_datetime(utc_naive, gym_timezone)
+
+
+def manual_utc_datetime_for_local(local_datetime: datetime, gym_timezone: str) -> datetime:
+    offset = manual_utc_offset_for_local_datetime(local_datetime, gym_timezone)
+    return (local_datetime - offset).replace(tzinfo=UTC)
+
+
+def manual_utc_offset_for_utc_datetime(
+    utc_datetime: datetime,
+    gym_timezone: str,
+) -> timedelta:
+    if gym_timezone == "UTC":
+        return timedelta(0)
+    if gym_timezone == "Europe/Berlin":
+        dst_start = datetime.combine(last_weekday_of_month(utc_datetime.year, 3, 6), datetime.min.time()) + timedelta(hours=1)
+        dst_end = datetime.combine(last_weekday_of_month(utc_datetime.year, 10, 6), datetime.min.time()) + timedelta(hours=1)
+        return timedelta(hours=2 if dst_start <= utc_datetime < dst_end else 1)
+    if gym_timezone == "America/New_York":
+        dst_start = datetime.combine(nth_weekday_of_month(utc_datetime.year, 3, 6, 2), datetime.min.time()) + timedelta(hours=7)
+        dst_end = datetime.combine(nth_weekday_of_month(utc_datetime.year, 11, 6, 1), datetime.min.time()) + timedelta(hours=6)
+        return timedelta(hours=-4 if dst_start <= utc_datetime < dst_end else -5)
+    raise ApiError(HTTPStatus.BAD_REQUEST, "Gym timezone is invalid.")
+
+
+def manual_utc_offset_for_local_datetime(
+    local_datetime: datetime,
+    gym_timezone: str,
+) -> timedelta:
+    if gym_timezone == "UTC":
+        return timedelta(0)
+    if gym_timezone == "Europe/Berlin":
+        dst_start = datetime.combine(last_weekday_of_month(local_datetime.year, 3, 6), datetime.min.time()) + timedelta(hours=2)
+        dst_end = datetime.combine(last_weekday_of_month(local_datetime.year, 10, 6), datetime.min.time()) + timedelta(hours=3)
+        return timedelta(hours=2 if dst_start <= local_datetime < dst_end else 1)
+    if gym_timezone == "America/New_York":
+        dst_start = datetime.combine(nth_weekday_of_month(local_datetime.year, 3, 6, 2), datetime.min.time()) + timedelta(hours=2)
+        dst_end = datetime.combine(nth_weekday_of_month(local_datetime.year, 11, 6, 1), datetime.min.time()) + timedelta(hours=2)
+        return timedelta(hours=-4 if dst_start <= local_datetime < dst_end else -5)
+    raise ApiError(HTTPStatus.BAD_REQUEST, "Gym timezone is invalid.")
+
+
+def nth_weekday_of_month(year: int, month: int, weekday: int, occurrence: int) -> date:
+    current = date(year, month, 1)
+    while current.weekday() != weekday:
+        current += timedelta(days=1)
+    return current + timedelta(days=(occurrence - 1) * 7)
+
+
+def last_weekday_of_month(year: int, month: int, weekday: int) -> date:
+    if month == 12:
+        current = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        current = date(year, month + 1, 1) - timedelta(days=1)
+    while current.weekday() != weekday:
+        current -= timedelta(days=1)
+    return current
+
+
 def require_schedule_duration_minutes(body: dict[str, Any]) -> int:
     if body.get("duration_minutes") not in (None, ""):
         return require_duration_minutes(body.get("duration_minutes"))
@@ -4077,6 +4294,33 @@ def require_future_datetime(value: Any, *, label: str) -> datetime:
             f"{label} must be in the future.",
         )
     return parsed
+
+
+def get_schedule_class_row(
+    connection: sqlite3.Connection,
+    schedule_id: int,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        select
+          class_schedules.id,
+          class_schedules.gym_id,
+          class_schedules.title,
+          class_schedules.class_type,
+          class_schedules.start_time,
+          class_schedules.end_time,
+          class_schedules.duration_minutes,
+          class_schedules.capacity,
+          class_schedules.assigned_trainer_user_id,
+          trainer.display_name as assigned_trainer_display_name,
+          trainer.nickname as assigned_trainer_nickname,
+          class_schedules.wod_description
+        from class_schedules
+        left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
+        where class_schedules.id = ?
+        """,
+        (schedule_id,),
+    ).fetchone()
 
 
 def daily_workout_payload(

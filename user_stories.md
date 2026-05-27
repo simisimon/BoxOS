@@ -11,11 +11,11 @@ This file tracks the delivery status of the production core platform for BoxOS.
 
 ## Delivery dashboard
 
-Last updated: 2026-05-17
+Last updated: 2026-05-27
 
 ### Current phase
 - Production-core build for a single gym
-- Current focus: finish recurring scheduling and remaining role-permission hardening
+- Current focus: finish remaining role-permission hardening
 - Active backend: local REST backend in `backend/server.py`
 
 ### Completed modules
@@ -29,21 +29,20 @@ Last updated: 2026-05-17
 
 ### In-progress stories
 - `US-A3-03` Role-based access
-- `US-B1-03` Recurring class schedule management
 
 ### Not-started modules
 - Epic C Memberships and Payments
 - Epic G Admin Analytics
 
 ### Roadmap
-- Now: finish role-based access hardening and recurring scheduling
+- Now: finish role-based access hardening
 - Next: build memberships and payments so booking rules can depend on active plan state
 - Later: add analytics and complete production hardening such as real email delivery, push infrastructure, and deployment/security posture
 
 ### Validation snapshot
-- `app` static analysis via Dart tooling on changed files: passed
-- `cd app && flutter test`: hangs in the current environment
-- `python3 -m unittest backend.test_server`: passed (44 tests)
+- `python -m unittest backend.test_server`: passed (57 tests)
+- `cd app && flutter test test/widget_test.dart --plain-name "Trainer can create a recurring class from schedule screen"`: passed
+- `flutter analyze`: passed with no issues found
 
 ---
 
@@ -332,18 +331,21 @@ Last updated: 2026-05-17
 - Athletes cannot update attendance for themselves or others.
 
 #### US-B1-03 - Recurring class schedule management
-**Status:** In Progress
+**Status:** Complete
 
 **As an admin or trainer**, I want to manage the class schedule so recurring operations are easy to maintain.
 
 **Acceptance Criteria**
 - Future classes can be created and updated.
 - Capacity and timing can be managed safely.
-- Recurring schedule support is available or explicitly phased.
+- Recurring schedule support is available.
 
 **Delivery Notes**
-- Live schedule create, edit, and delete flows already exist for future classes.
-- True recurring schedule support still needs to be implemented or explicitly deferred as a scoped production decision.
+- Live schedule create, edit, and delete flows exist for future classes.
+- Recurring class creation now supports daily, weekly, and monthly schedules.
+- Monthly recurrence is implemented as every 4 weeks on the same weekday and time.
+- Recurring creation requires an explicit occurrence count.
+- Edit and delete behavior remains instance-based for this slice.
 
 #### US-B1-04 - Waitlist handling
 **Status:** Complete

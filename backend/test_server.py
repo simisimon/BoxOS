@@ -702,6 +702,660 @@ class BackendServerTests(unittest.TestCase):
         actions = [entry["action"] for entry in audit_logs["logs"][:2]]
         self.assertEqual(actions, ["schedule_class_updated", "schedule_class_created"])
 
+    def test_admin_can_create_daily_recurring_schedule_classes(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Daily Gym",
+                "logo_url": "https://example.com/recurring-daily.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Daily WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "daily",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(created["created_count"], 3)
+        self.assertEqual(len(created["classes"]), 3)
+        self.assertEqual(created["class"]["title"], "Daily WOD")
+        self.assertEqual(
+            created["classes"][1]["start_time"],
+            server.isoformat(start_time + timedelta(days=1)),
+        )
+        self.assertEqual(
+            created["classes"][2]["start_time"],
+            server.isoformat(start_time + timedelta(days=2)),
+        )
+
+    def test_admin_can_create_weekly_recurring_schedule_classes(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Weekly Gym",
+                "logo_url": "https://example.com/recurring-weekly.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Weekly WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "weekly",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(created["created_count"], 3)
+        self.assertEqual(
+            created["classes"][1]["start_time"],
+            server.isoformat(start_time + timedelta(days=7)),
+        )
+        self.assertEqual(
+            created["classes"][2]["start_time"],
+            server.isoformat(start_time + timedelta(days=14)),
+        )
+
+    def test_weekly_recurring_schedule_preserves_local_start_time_across_dst(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring DST Weekly Gym",
+                "logo_url": "https://example.com/recurring-dst-weekly.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "DST Weekly WOD",
+                "class_type": "WOD",
+                "start_time": "2026-10-19T07:00:00+00:00",
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "weekly",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(
+            [schedule_class["start_time"] for schedule_class in created["classes"]],
+            [
+                "2026-10-19T07:00:00+00:00",
+                "2026-10-26T08:00:00+00:00",
+                "2026-11-02T08:00:00+00:00",
+            ],
+        )
+
+    def test_admin_can_create_monthly_recurring_schedule_classes(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Monthly Gym",
+                "logo_url": "https://example.com/recurring-monthly.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Monthly WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "monthly",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(created["created_count"], 3)
+        self.assertEqual(
+            created["classes"][1]["start_time"],
+            server.isoformat(start_time + timedelta(days=28)),
+        )
+        self.assertEqual(
+            created["classes"][2]["start_time"],
+            server.isoformat(start_time + timedelta(days=56)),
+        )
+
+    def test_monthly_recurring_schedule_preserves_local_start_time_across_dst(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring DST Monthly Gym",
+                "logo_url": "https://example.com/recurring-dst-monthly.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "DST Monthly WOD",
+                "class_type": "WOD",
+                "start_time": "2026-10-05T07:00:00+00:00",
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "monthly",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(
+            [schedule_class["start_time"] for schedule_class in created["classes"]],
+            [
+                "2026-10-05T07:00:00+00:00",
+                "2026-11-02T08:00:00+00:00",
+                "2026-11-30T08:00:00+00:00",
+            ],
+        )
+
+    def test_schedule_creation_rejects_invalid_recurrence_inputs(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Validation Gym",
+                "logo_url": "https://example.com/recurring-validation.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+
+        invalid_frequency_request = urllib.request.Request(
+            f"{self.base_url}/schedule/classes",
+            data=json_bytes(
+                {
+                    "title": "Broken Recurrence",
+                    "class_type": "WOD",
+                    "start_time": server.isoformat(start_time),
+                    "capacity": 12,
+                    "duration_minutes": 60,
+                    "recurrence_frequency": "hourly",
+                    "occurrence_count": 2,
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {login_response['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as invalid_frequency_error:
+            urllib.request.urlopen(invalid_frequency_request)
+
+        self.assertEqual(invalid_frequency_error.exception.code, 400)
+        self.assertIn(
+            "Invalid recurrence frequency.",
+            json_loads(invalid_frequency_error.exception.read())["message"],
+        )
+
+        invalid_count_request = urllib.request.Request(
+            f"{self.base_url}/schedule/classes",
+            data=json_bytes(
+                {
+                    "title": "Broken Count",
+                    "class_type": "WOD",
+                    "start_time": server.isoformat(start_time),
+                    "capacity": 12,
+                    "duration_minutes": 60,
+                    "recurrence_frequency": "weekly",
+                    "occurrence_count": 0,
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {login_response['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as invalid_count_error:
+            urllib.request.urlopen(invalid_count_request)
+
+        self.assertEqual(invalid_count_error.exception.code, 400)
+        self.assertIn(
+            "Occurrence count must be at least 1.",
+            json_loads(invalid_count_error.exception.read())["message"],
+        )
+
+    def test_schedule_creation_rejects_excessive_occurrence_count(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Limit Gym",
+                "logo_url": "https://example.com/recurring-limit.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/schedule/classes",
+            data=json_bytes(
+                {
+                    "title": "Too Many Classes",
+                    "class_type": "WOD",
+                    "start_time": server.isoformat(server.now_utc() + timedelta(days=1)),
+                    "capacity": 12,
+                    "duration_minutes": 60,
+                    "recurrence_frequency": "daily",
+                    "occurrence_count": 366,
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {login_response['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 400)
+        self.assertIn(
+            "Occurrence count must be 365 or fewer.",
+            json_loads(error_context.exception.read())["message"],
+        )
+
+    def test_schedule_creation_rejects_excessive_weekly_occurrence_count(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Weekly Limit Gym",
+                "logo_url": "https://example.com/recurring-weekly-limit.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/schedule/classes",
+            data=json_bytes(
+                {
+                    "title": "Too Many Weekly Classes",
+                    "class_type": "WOD",
+                    "start_time": server.isoformat(server.now_utc() + timedelta(days=1)),
+                    "capacity": 12,
+                    "duration_minutes": 60,
+                    "recurrence_frequency": "weekly",
+                    "occurrence_count": 54,
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {login_response['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 400)
+        self.assertIn(
+            "Occurrence count must be 53 or fewer for weekly recurrence.",
+            json_loads(error_context.exception.read())["message"],
+        )
+
+    def test_schedule_creation_rejects_excessive_monthly_occurrence_count(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Monthly Limit Gym",
+                "logo_url": "https://example.com/recurring-monthly-limit.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/schedule/classes",
+            data=json_bytes(
+                {
+                    "title": "Too Many Monthly Classes",
+                    "class_type": "WOD",
+                    "start_time": server.isoformat(server.now_utc() + timedelta(days=1)),
+                    "capacity": 12,
+                    "duration_minutes": 60,
+                    "recurrence_frequency": "monthly",
+                    "occurrence_count": 15,
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {login_response['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 400)
+        self.assertIn(
+            "Occurrence count must be 14 or fewer for monthly recurrence.",
+            json_loads(error_context.exception.read())["message"],
+        )
+
+    def test_recurring_schedule_creation_writes_audit_log_for_each_created_class(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Audit Gym",
+                "logo_url": "https://example.com/recurring-audit.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        start_time = server.now_utc() + timedelta(days=1)
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Audit WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(start_time),
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "daily",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        audit_logs = self.get_json_with_auth(
+            "/audit-logs",
+            access_token=login_response["access_token"],
+        )
+        created_logs = [
+            entry
+            for entry in audit_logs["logs"]
+            if entry["action"] == "schedule_class_created"
+        ]
+
+        self.assertEqual(len(created_logs), 3)
+        self.assertEqual(
+            {entry["entity_id"] for entry in created_logs},
+            {schedule_class["id"] for schedule_class in created["classes"]},
+        )
+        self.assertEqual(
+            {entry["details"]["start_time"] for entry in created_logs},
+            {
+                server.isoformat(start_time + timedelta(days=offset))
+                for offset in range(3)
+            },
+        )
+        self.assertTrue(
+            all(
+                entry["details"]["recurrence_frequency"] == "daily"
+                for entry in created_logs
+            )
+        )
+        self.assertTrue(
+            all(entry["details"]["occurrence_count"] == 3 for entry in created_logs)
+        )
+
+    def test_admin_can_create_single_schedule_class_without_recurrence_fields(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Single Create Gym",
+                "logo_url": "https://example.com/single-create.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        base_time = server.now_utc()
+        start_time = base_time + timedelta(seconds=1)
+        original_now_utc = server.now_utc
+        original_require_future_datetime = server.require_future_datetime
+        call_count = 0
+
+        def fake_now_utc() -> object:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return base_time
+            return base_time + timedelta(seconds=2)
+
+        def fake_require_future_datetime(value: object, *, label: str) -> object:
+            return start_time
+
+        server.now_utc = fake_now_utc
+        server.require_future_datetime = fake_require_future_datetime
+        try:
+            created = self.post_json_with_auth(
+                "/schedule/classes",
+                {
+                    "title": "One-Off WOD",
+                    "class_type": "WOD",
+                    "start_time": server.isoformat(start_time),
+                    "capacity": 12,
+                    "duration_minutes": 60,
+                },
+                access_token=login_response["access_token"],
+            )
+        finally:
+            server.now_utc = original_now_utc
+            server.require_future_datetime = original_require_future_datetime
+
+        self.assertEqual(created["class"]["title"], "One-Off WOD")
+        self.assertEqual(created["created_count"], 1)
+        self.assertEqual(len(created["classes"]), 1)
+        self.assertEqual(created["classes"][0]["start_time"], server.isoformat(start_time))
+
+    def test_updating_generated_recurring_class_does_not_mutate_siblings(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Edit Safety Gym",
+                "logo_url": "https://example.com/recurring-edit-safety.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Edit Safety WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(server.now_utc() + timedelta(days=2)),
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "weekly",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        second_class = created["classes"][1]
+        second_start = server.parse_iso(second_class["start_time"])
+        second_end = server.parse_iso(second_class["end_time"])
+        updated = self.patch_json(
+            "/schedule/classes",
+            {
+                "id": second_class["id"],
+                "title": "Edited Instance Only",
+                "class_type": "Open Gym",
+                "start_time": server.isoformat(second_start + timedelta(hours=2)),
+                "end_time": server.isoformat(second_end + timedelta(hours=2)),
+                "capacity": 9,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        listed = self.get_json_with_auth(
+            "/schedule/classes",
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(updated["class"]["id"], second_class["id"])
+        self.assertEqual(updated["class"]["title"], "Edited Instance Only")
+        self.assertEqual(len(listed["classes"]), 3)
+        self.assertEqual(listed["classes"][0]["title"], "Edit Safety WOD")
+        self.assertEqual(listed["classes"][0]["class_type"], "WOD")
+        self.assertEqual(listed["classes"][1]["title"], "Edited Instance Only")
+        self.assertEqual(listed["classes"][1]["class_type"], "Open Gym")
+        self.assertEqual(listed["classes"][2]["title"], "Edit Safety WOD")
+        self.assertEqual(listed["classes"][2]["class_type"], "WOD")
+
+    def test_deleting_generated_recurring_class_does_not_remove_siblings(self) -> None:
+        login_response = self.post_json(
+            "/auth/login",
+            {
+                "email": server.ADMIN_EMAIL,
+                "password": server.ADMIN_PASSWORD,
+            },
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Recurring Delete Safety Gym",
+                "logo_url": "https://example.com/recurring-delete-safety.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=login_response["access_token"],
+        )
+        created = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Delete Safety WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(server.now_utc() + timedelta(days=2)),
+                "capacity": 12,
+                "duration_minutes": 60,
+                "recurrence_frequency": "weekly",
+                "occurrence_count": 3,
+            },
+            access_token=login_response["access_token"],
+        )
+
+        deleted = self.delete_json_with_auth(
+            "/schedule/classes",
+            {"id": created["classes"][1]["id"]},
+            access_token=login_response["access_token"],
+        )
+        listed = self.get_json_with_auth(
+            "/schedule/classes",
+            access_token=login_response["access_token"],
+        )
+
+        self.assertEqual(deleted["message"], "Schedule class deleted.")
+        self.assertEqual(len(listed["classes"]), 2)
+        self.assertEqual(
+            [schedule_class["id"] for schedule_class in listed["classes"]],
+            [created["classes"][0]["id"], created["classes"][2]["id"]],
+        )
+        self.assertTrue(
+            all(schedule_class["title"] == "Delete Safety WOD" for schedule_class in listed["classes"])
+        )
+
     def test_athlete_can_book_and_cancel_future_class(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

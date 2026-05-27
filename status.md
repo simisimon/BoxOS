@@ -1,6 +1,6 @@
 # BoxOS Project Status
 
-Last updated: 2026-05-17
+Last updated: 2026-05-27
 
 ## Current Snapshot
 - Repository: `C:\GitHub\BoxOS`
@@ -12,12 +12,11 @@ Last updated: 2026-05-17
 
 ## Current Focus
 - Finish `US-A3-03` role-based access hardening
-- Finish `US-B1-03` recurring class schedule management
 
 ## Validation State
-- `app` static analysis via Dart tooling on changed files: passed
-- `cd app && flutter test`: hangs in the current environment
-- `python3 -m unittest backend.test_server`: passed (44 tests)
+- `python -m unittest backend.test_server`: passed (57 tests)
+- `cd app && flutter test test/widget_test.dart --plain-name "Trainer can create a recurring class from schedule screen"`: passed
+- `flutter analyze`: passed with no issues found
 
 ## Current Risks / Gaps
 1. Verification and password-reset tokens are still printed to the backend terminal for local development instead of being emailed.
@@ -26,10 +25,9 @@ Last updated: 2026-05-17
 4. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
 
 ## Recommended Next Steps
-1. Complete the remaining scheduling loop with recurring schedule support.
-2. Lock down remaining role-based access gaps across backend endpoints and app surfaces.
-3. Define and implement the first production slice of memberships and payments.
-4. Tighten production hardening: real email delivery, secret management, push infrastructure, and deployment posture.
+1. Lock down remaining role-based access gaps across backend endpoints and app surfaces.
+2. Define and implement the first production slice of memberships and payments.
+3. Tighten production hardening: real email delivery, secret management, push infrastructure, and deployment posture.
 
 ## Local Development Notes
 - Supabase is no longer the active backend for the Flutter app.

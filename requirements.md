@@ -225,6 +225,7 @@ BoxOS is no longer documented as an MVP. The active goal is a **production-ready
 
 ### 11.2 Scheduling & Bookings
 - Admin/trainer class management
+- Future classes can be created individually or as recurring schedule instances
 - Athlete booking and cancellation
 - Capacity-aware booking enforcement
 - Attendance lifecycle
