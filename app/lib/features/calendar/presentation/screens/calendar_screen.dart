@@ -38,6 +38,15 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     });
   }
 
+  void _showSnackBar(String message) {
+    if (!mounted || Scaffold.maybeOf(context) == null) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _openEditor({
     ScheduleClass? existing,
     required bool canManage,
@@ -84,19 +93,13 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Class deleted.')));
+      _showSnackBar('Class deleted.');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to delete class'),
-          ),
-        ),
+      _showSnackBar(
+        errorMessageFrom(error, fallback: 'Failed to delete class'),
       );
     }
   }
@@ -113,21 +116,13 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(item.isBooked ? 'Booking cancelled.' : 'Class booked.'),
-        ),
-      );
+      _showSnackBar(item.isBooked ? 'Booking cancelled.' : 'Class booked.');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to update booking'),
-          ),
-        ),
+      _showSnackBar(
+        errorMessageFrom(error, fallback: 'Failed to update booking'),
       );
     }
   }
@@ -144,23 +139,15 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            item.isWaitlisted ? 'Removed from waitlist.' : 'Added to waitlist.',
-          ),
-        ),
+      _showSnackBar(
+        item.isWaitlisted ? 'Removed from waitlist.' : 'Added to waitlist.',
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to update waitlist'),
-          ),
-        ),
+      _showSnackBar(
+        errorMessageFrom(error, fallback: 'Failed to update waitlist'),
       );
     }
   }
@@ -182,23 +169,15 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${booking.displayName} marked as ${_attendanceLabel(attendanceStatus)}.',
-          ),
-        ),
+      _showSnackBar(
+        '${booking.displayName} marked as ${_attendanceLabel(attendanceStatus)}.',
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to update attendance'),
-          ),
-        ),
+      _showSnackBar(
+        errorMessageFrom(error, fallback: 'Failed to update attendance'),
       );
     }
   }
@@ -603,6 +582,7 @@ class _WorkoutCalendarCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -642,66 +622,69 @@ class _WorkoutCalendarCard extends StatelessWidget {
                 ),
               ),
             ),
-            child: CalendarDatePicker(
-              initialDate: selectedDate,
-              firstDate: DateTime.now().subtract(const Duration(days: 30)),
-              lastDate: DateTime.now().add(const Duration(days: 365)),
-              currentDate: DateTime.now(),
-              onDateChanged: onDateChanged,
+            child: Material(
+              color: Colors.transparent,
+              child: CalendarDatePicker(
+                initialDate: selectedDate,
+                firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                currentDate: DateTime.now(),
+                onDateChanged: onDateChanged,
+              ),
             ),
           ),
-            if (canManage) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () =>
-                          onSelectCreateMode(_CreateClassMode.fresh),
-                      icon: Icon(
-                        createClassMode == _CreateClassMode.fresh
-                            ? Icons.close
-                            : Icons.add,
-                      ),
-                      label: Text(
-                        createClassMode == _CreateClassMode.fresh
-                            ? 'Close New Class'
-                            : 'Add New Class',
-                      ),
+          if (canManage) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () =>
+                        onSelectCreateMode(_CreateClassMode.fresh),
+                    icon: Icon(
+                      createClassMode == _CreateClassMode.fresh
+                          ? Icons.close
+                          : Icons.add,
+                    ),
+                    label: Text(
+                      createClassMode == _CreateClassMode.fresh
+                          ? 'Close New Class'
+                          : 'Add New Class',
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: items.isEmpty
-                          ? null
-                          : () => onSelectCreateMode(_CreateClassMode.existing),
-                      icon: Icon(
-                        createClassMode == _CreateClassMode.existing
-                            ? Icons.close
-                            : Icons.history,
-                      ),
-                      label: Text(
-                        createClassMode == _CreateClassMode.existing
-                            ? 'Close Existing'
-                            : 'Add Existing Class',
-                      ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: items.isEmpty
+                        ? null
+                        : () =>
+                            onSelectCreateMode(_CreateClassMode.existing),
+                    icon: Icon(
+                      createClassMode == _CreateClassMode.existing
+                          ? Icons.close
+                          : Icons.history,
+                    ),
+                    label: Text(
+                      createClassMode == _CreateClassMode.existing
+                          ? 'Close Existing'
+                          : 'Add Existing Class',
                     ),
                   ),
-                ],
-              ),
-              if (createClassMode != null) ...[
-                const SizedBox(height: 12),
-                _InlineCreateClassForm(
-                  selectedDate: selectedDate,
-                  previousClasses: items,
-                  initialMode: createClassMode!,
-                  onSaved: onCreateSuccess,
                 ),
               ],
+            ),
+            if (createClassMode != null) ...[
+              const SizedBox(height: 12),
+              _InlineCreateClassForm(
+                selectedDate: selectedDate,
+                previousClasses: items,
+                initialMode: createClassMode!,
+                onSaved: onCreateSuccess,
+              ),
             ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -903,7 +886,7 @@ class _InlineCreateClassFormState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text(
             errorMessageFrom(error, fallback: 'Failed to save class'),
@@ -1618,7 +1601,10 @@ class _AttendanceRow extends StatelessWidget {
                     : booking.displayName,
               ),
             ),
-            Chip(label: Text(_labelFor(booking.attendanceStatus))),
+            Material(
+              color: Colors.transparent,
+              child: Chip(label: Text(_labelFor(booking.attendanceStatus))),
+            ),
           ],
         ),
         if (canManageAttendance)
@@ -1837,7 +1823,7 @@ class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text(
             errorMessageFrom(error, fallback: 'Failed to save class'),

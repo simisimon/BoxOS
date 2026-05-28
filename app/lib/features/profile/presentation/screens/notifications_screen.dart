@@ -195,16 +195,17 @@ class _NotificationsHero extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   _HeaderIconButton(
                     icon: Icons.arrow_back_rounded,
                     tooltip: 'Back',
                     onTap: onBack,
                   ),
-                  const SizedBox(width: 8),
                   const _HeroPill(label: 'Notifications', color: accentColor),
-                  const Spacer(),
                   FilledButton.tonal(
                     onPressed: isSubmitting ? null : onMarkAllRead,
                     child: Text(unreadCount == 0 ? 'Inbox clear' : 'Mark all read'),

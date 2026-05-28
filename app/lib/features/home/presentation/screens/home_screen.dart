@@ -725,43 +725,46 @@ class _ActionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withOpacity(0.07)),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: () => context.go(action.route),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              _AccentBadge(icon: action.icon, color: action.accentColor),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      action.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => context.go(action.route),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                _AccentBadge(icon: action.icon, color: action.accentColor),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        action.title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      action.subtitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFFB8C4D9),
-                        height: 1.45,
+                      const SizedBox(height: 4),
+                      Text(
+                        action.subtitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFFB8C4D9),
+                          height: 1.45,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.north_east_rounded,
-                color: action.accentColor,
-              ),
-            ],
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.north_east_rounded,
+                  color: action.accentColor,
+                ),
+              ],
+            ),
           ),
         ),
       ),

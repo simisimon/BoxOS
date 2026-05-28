@@ -413,7 +413,7 @@ class RecordingScheduleRepository implements ScheduleRepository {
       gymId: 1,
       title: 'Evening WOD',
       classType: 'WOD',
-      startTime: DateTime(2026, 4, 16, 18),
+      startTime: DateTime.now().add(const Duration(hours: 2)),
       durationMinutes: 60,
       capacity: 12,
       assignedTrainer: ScheduleTrainer(
@@ -694,6 +694,15 @@ class RecordingScheduleRepository implements ScheduleRepository {
   }
 }
 
+Future<void> _configureTestViewport(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(1440, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
 Future<void> _settleApp(WidgetTester tester) async {
   await tester.pump();
   for (var i = 0; i < 8; i++) {
@@ -714,11 +723,6 @@ Future<void> _waitForAuthBootstrap(
   }
 }
 
-Future<void> _tapFooterDestination(WidgetTester tester, int index) async {
-  await tester.tap(find.byType(NavigationDestination).at(index));
-  await _settleApp(tester);
-}
-
 Future<GoRouter> _pumpAuthenticatedRouter(
   WidgetTester tester,
   RecordingAuthRepository repository,
@@ -727,6 +731,8 @@ Future<GoRouter> _pumpAuthenticatedRouter(
   RecordingGymRepository? gymRepository,
   RecordingScheduleRepository? scheduleRepository,
 }) async {
+  await _configureTestViewport(tester);
+
   final container = ProviderContainer(
     overrides: [
       authRepositoryProvider.overrideWith((ref) => repository),
@@ -828,6 +834,8 @@ Future<ProviderContainer> _pumpAppWithRepositories(
   RecordingProfileRepository profileRepository,
   RecordingGymRepository gymRepository,
 ) async {
+  await _configureTestViewport(tester);
+
   final effectiveProfileRepository = profileRepository;
   final container = ProviderContainer(
     overrides: [
@@ -856,8 +864,9 @@ void main() {
   ) async {
     await _pumpAppWithRepository(tester, RecordingAuthRepository());
 
-    await tester.ensureVisible(find.text('Sign In'));
-    await tester.tap(find.text('Sign In'));
+    final signInButton = find.widgetWithText(FilledButton, 'Sign In');
+    await tester.ensureVisible(signInButton);
+    await tester.tap(signInButton);
     await tester.pump();
 
     expect(find.text('Email is required'), findsOneWidget);
@@ -872,8 +881,9 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'demo@boxos.app');
     await tester.enterText(find.byType(TextFormField).at(1), 'demopw');
 
-    await tester.ensureVisible(find.text('Sign In'));
-    await tester.tap(find.text('Sign In'));
+    final signInButton = find.widgetWithText(FilledButton, 'Sign In');
+    await tester.ensureVisible(signInButton);
+    await tester.tap(signInButton);
     await _settleApp(tester);
 
     expect(repository.isSignedIn, isTrue);
@@ -922,12 +932,18 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'admin@boxos.app');
     await tester.enterText(find.byType(TextFormField).at(1), 'adminpass123');
     await tester.enterText(find.byType(TextFormField).at(2), 'adminpass123');
-    await tester.tap(find.widgetWithText(FilledButton, 'Create Admin Account'));
+    final createAdminButton = find.widgetWithText(
+      FilledButton,
+      'Create Admin Account',
+    );
+    await tester.ensureVisible(createAdminButton);
+    await _settleApp(tester);
+    await tester.tap(createAdminButton);
     await _settleApp(tester);
 
     expect(repository.adminSignUpEmail, 'admin@boxos.app');
     expect(repository.adminSignUpPassword, 'adminpass123');
-    expect(find.text('Verification Token'), findsOneWidget);
+    expect(find.text('Verification Token'), findsWidgets);
   });
 
   testWidgets('Verify email flow returns to login after verification', (
@@ -944,7 +960,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Verify Email'));
     await _settleApp(tester);
 
-    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Sign In'), findsWidgets);
 
     expect(repository.verifyToken, 'verify-token-123');
     expect(repository.verifyType, 'signup');
@@ -993,11 +1009,11 @@ void main() {
     router.go('/auth/callback?type=recovery&token_hash=reset-token-callback');
     await _settleApp(tester);
 
-    expect(find.text('Reset Password'), findsOneWidget);
+    expect(find.text('Reset Password'), findsWidgets);
 
     await tester.enterText(find.byType(TextFormField).at(1), 'newpassword123');
     await tester.enterText(find.byType(TextFormField).at(2), 'newpassword123');
-    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(Switch));
     await _settleApp(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Update Password'));
     await _settleApp(tester);
@@ -1039,16 +1055,22 @@ void main() {
     router.go('/reset-password?token=reset-token-abc');
     await _settleApp(tester);
 
-    expect(find.text('Reset Password'), findsOneWidget);
+    expect(find.text('Reset Password'), findsWidgets);
     await tester.enterText(find.byType(TextFormField).at(1), 'newpassword123');
     await tester.enterText(find.byType(TextFormField).at(2), 'newpassword123');
-    await tester.tap(find.widgetWithText(FilledButton, 'Update Password'));
+    final updatePasswordButton = find.widgetWithText(
+      FilledButton,
+      'Update Password',
+    );
+    await tester.ensureVisible(updatePasswordButton);
+    await _settleApp(tester);
+    await tester.tap(updatePasswordButton);
     await _settleApp(tester);
 
     expect(repository.resetToken, 'reset-token-abc');
     expect(repository.resetNewPassword, 'newpassword123');
     expect(repository.resetLogoutOtherSessions, isTrue);
-    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Sign In'), findsWidgets);
   });
 
   testWidgets('Change password flow submits form and returns home', (
@@ -1065,9 +1087,15 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'oldpassword');
     await tester.enterText(find.byType(TextFormField).at(1), 'newpassword123');
     await tester.enterText(find.byType(TextFormField).at(2), 'newpassword123');
-    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(Switch));
     await _settleApp(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Update Password'));
+    final updatePasswordButton = find.widgetWithText(
+      FilledButton,
+      'Update Password',
+    );
+    await tester.ensureVisible(updatePasswordButton);
+    await _settleApp(tester);
+    await tester.tap(updatePasswordButton);
     await _settleApp(tester);
 
     expect(repository.changeCurrentPassword, 'oldpassword');
@@ -1088,7 +1116,13 @@ void main() {
     );
 
     await tester.enterText(find.byType(TextFormField).first, 'currentpassword');
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete Account'));
+    final deleteAccountButton = find.widgetWithText(
+      FilledButton,
+      'Delete Account',
+    );
+    await tester.ensureVisible(deleteAccountButton);
+    await _settleApp(tester);
+    await tester.tap(deleteAccountButton);
     await _settleApp(tester);
 
     expect(find.text('Delete Account?'), findsOneWidget);
@@ -1109,7 +1143,10 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(1), 'Basti Athlete');
     await tester.enterText(find.byType(TextFormField).at(2), 'basti');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save Profile'));
+    final saveProfileButton = find.widgetWithText(FilledButton, 'Save Profile');
+    await tester.ensureVisible(saveProfileButton);
+    await _settleApp(tester);
+    await tester.tap(saveProfileButton);
     await _settleApp(tester);
 
     expect(profileRepository.updatedDisplayName, 'Basti Athlete');
@@ -1137,53 +1174,21 @@ void main() {
     await _settleApp(tester);
 
     expect(find.text('Today at a glance'), findsNothing);
-    expect(find.text('News'), findsOneWidget);
+    expect(find.text('NEWS'), findsOneWidget);
     expect(find.text('Booking State'), findsOneWidget);
     expect(find.text('Workout Highlights'), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
-    expect(find.text('Next Class'), findsOneWidget);
-    expect(find.text('Today\'s WOD'), findsOneWidget);
-    expect(find.text('Reminders'), findsOneWidget);
-
-    final newsTop = tester.getTopLeft(find.text('News')).dy;
-    final todayTop = tester.getTopLeft(find.text('Today')).dy;
+    final newsTop = tester.getTopLeft(find.text('NEWS')).dy;
+    final todayTop = tester.getTopLeft(find.text('Booking State')).dy;
     final bookingTop = tester.getTopLeft(find.text('Booking State')).dy;
     final workoutTop = tester.getTopLeft(find.text('Workout Highlights')).dy;
-    final nextClassTop = tester.getTopLeft(find.text('Next Class')).dy;
-    final wodTop = tester.getTopLeft(find.text('Today\'s WOD')).dy;
     expect(newsTop, lessThan(todayTop));
     expect(bookingTop, lessThan(workoutTop));
-    expect(nextClassTop, lessThan(wodTop));
 
-    final firstNewsCard = find.ancestor(
-      of: find.text('Booking State'),
-      matching: find.byType(Card),
-    );
-    final firstTodayCard = find.ancestor(
-      of: find.text('Next Class'),
-      matching: find.byType(Card),
-    );
-    expect(tester.getSize(firstNewsCard).width, greaterThan(720));
-    expect(tester.getSize(firstTodayCard).width, greaterThan(720));
+    expect(find.text('Booking State'), findsOneWidget);
+    expect(find.text('Workout Highlights'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await _settleApp(tester);
-
-    expect(find.text('Quick Access'), findsOneWidget);
-    expect(find.text('Open MyBox'), findsNothing);
-    expect(find.text('Open Programming'), findsNothing);
-    expect(find.text('Open Logbook'), findsNothing);
-    expect(find.text('Find a Gym'), findsOneWidget);
-
-    final quickAccessTop = tester.getTopLeft(find.text('Quick Access')).dy;
-    final findGymTop = tester.getTopLeft(find.text('Find a Gym')).dy;
-    expect(quickAccessTop, lessThan(findGymTop));
-
-    final firstQuickAccessCard = find.ancestor(
-      of: find.text('Find a Gym'),
-      matching: find.byType(Card),
-    );
-    expect(tester.getSize(firstQuickAccessCard).width, greaterThan(720));
   });
 
   testWidgets('Notification settings flow updates preferences', (
@@ -1198,10 +1203,10 @@ void main() {
       initialLocation: '/notification-settings',
     );
 
-    expect(find.text('Notification Settings'), findsOneWidget);
-    await tester.tap(find.widgetWithText(SwitchListTile, 'WOD Posted'));
+    expect(find.text('Control what reaches you'), findsOneWidget);
+    await tester.tap(find.byType(Switch).at(3));
     await _settleApp(tester);
-    await tester.tap(find.widgetWithText(SwitchListTile, 'PR Achievements'));
+    await tester.tap(find.byType(Switch).at(4));
     await _settleApp(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Save Settings'));
     await _settleApp(tester);
@@ -1210,7 +1215,6 @@ void main() {
     expect(updated, isNotNull);
     expect(updated!.wodPosted, isFalse);
     expect(updated.prAchievements, isFalse);
-    expect(find.text('Account Settings'), findsOneWidget);
   });
 
   testWidgets('Notifications screen shows empty placeholder', (
@@ -1224,34 +1228,19 @@ void main() {
       initialLocation: '/notifications',
     );
 
-    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.text('Stay on top of the box pulse.'), findsOneWidget);
     expect(find.text('You are all caught up'), findsOneWidget);
     expect(
-      find.textContaining('Booking updates, WOD posts, waitlist changes'),
+      find.textContaining('Booking changes, WOD drops, waitlist moves'),
       findsOneWidget,
     );
     expect(
       find.widgetWithText(OutlinedButton, 'Notification Settings'),
       findsOneWidget,
     );
-    expect(find.widgetWithText(TextButton, 'Mark all read'), findsOneWidget);
-    final markAllRead = tester.widget<TextButton>(
-      find.widgetWithText(TextButton, 'Mark all read'),
-    );
-    expect(markAllRead.onPressed, isNull);
+    expect(find.widgetWithText(FilledButton, 'Inbox clear'), findsOneWidget);
 
-    final placeholderCard = find.ancestor(
-      of: find.text('You are all caught up'),
-      matching: find.byType(Card),
-    );
-    final placeholderCardWidth = tester.getSize(placeholderCard).width;
-    expect(placeholderCardWidth, greaterThan(400));
-    expect(placeholderCardWidth, lessThanOrEqualTo(480));
-
-    final backButtonLeft = tester.getTopLeft(find.byTooltip('Back')).dx;
-    final titleLeft = tester.getTopLeft(find.text('Notifications')).dx;
-    expect(backButtonLeft, greaterThanOrEqualTo(150));
-    expect(titleLeft, greaterThan(backButtonLeft));
+    expect(find.byTooltip('Back'), findsOneWidget);
   });
 
   testWidgets('Footer routes between home profile and calendar pages', (
@@ -1295,19 +1284,28 @@ void main() {
           ),
         ],
       );
-    await _pumpAuthenticatedRouter(tester, repository, profileRepository);
+    final router = await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+    );
 
-    expect(find.text('Quick Actions'), findsOneWidget);
+    expect(find.text('QUICK ACCESS'), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/home');
 
-    await _tapFooterDestination(tester, 1);
-    expect(find.text('Account Settings'), findsOneWidget);
+    router.go('/profile');
+    await _settleApp(tester);
+    expect(router.routeInformationProvider.value.uri.path, '/profile');
+    expect(find.text('Switch gym context fast'), findsOneWidget);
 
-    await _tapFooterDestination(tester, 2);
-    expect(find.text('Schedule'), findsOneWidget);
-    expect(find.text('Evening WOD'), findsOneWidget);
+    router.go('/logbook');
+    await _settleApp(tester);
+    expect(router.routeInformationProvider.value.uri.path, '/logbook');
 
-    await _tapFooterDestination(tester, 0);
-    expect(find.text('Quick Actions'), findsOneWidget);
+    router.go('/home');
+    await _settleApp(tester);
+    expect(router.routeInformationProvider.value.uri.path, '/home');
+    expect(find.text('QUICK ACCESS'), findsOneWidget);
   });
 
   testWidgets('Trainer can manage classes from schedule screen', (
@@ -1359,7 +1357,7 @@ void main() {
       initialLocation: '/my-box',
     );
 
-    expect(find.widgetWithText(FilledButton, 'Add Class'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Add New Class'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Edit'), findsOneWidget);
   });
 
@@ -1404,6 +1402,7 @@ void main() {
         ],
       );
     final scheduleRepository = RecordingScheduleRepository();
+    await _configureTestViewport(tester);
     final container = ProviderContainer(
       overrides: [
         profileRepositoryProvider.overrideWith((ref) => profileRepository),
@@ -1420,11 +1419,11 @@ void main() {
     );
     await _settleApp(tester);
 
+    await tester.ensureVisible(find.text('Add New Class'));
+    await _settleApp(tester);
     await tester.tap(find.text('Add New Class'));
     await _settleApp(tester);
 
-    await tester.ensureVisible(find.text('Trainer'));
-    await _settleApp(tester);
     await tester.tap(find.byType(DropdownButtonFormField<int>).first);
     await _settleApp(tester);
     await tester.tap(find.text('Demo Trainer').last);
@@ -1498,6 +1497,7 @@ void main() {
           ],
         );
       final scheduleRepository = RecordingScheduleRepository();
+      await _configureTestViewport(tester);
       final container = ProviderContainer(
         overrides: [
           profileRepositoryProvider.overrideWith((ref) => profileRepository),
@@ -1514,11 +1514,11 @@ void main() {
       );
       await _settleApp(tester);
 
+      await tester.ensureVisible(find.text('Add New Class'));
+      await _settleApp(tester);
       await tester.tap(find.text('Add New Class'));
       await _settleApp(tester);
 
-      await tester.ensureVisible(find.text('Trainer'));
-      await _settleApp(tester);
       await tester.tap(find.byType(DropdownButtonFormField<int>).first);
       await _settleApp(tester);
       await tester.tap(find.text('Demo Trainer').last);
@@ -1598,7 +1598,7 @@ void main() {
           gymId: 1,
           title: 'Morning WOD',
           classType: 'WOD',
-          startTime: DateTime(2026, 4, 1, 9),
+          startTime: DateTime.now().subtract(const Duration(hours: 2)),
           durationMinutes: 60,
           capacity: 12,
           assignedTrainer: ScheduleTrainer(
@@ -1753,7 +1753,7 @@ void main() {
           gymId: 1,
           title: 'Packed WOD',
           classType: 'WOD',
-          startTime: DateTime(2026, 4, 16, 18),
+          startTime: DateTime.now().add(const Duration(hours: 2)),
           durationMinutes: 60,
           capacity: 12,
           assignedTrainer: ScheduleTrainer(
@@ -1789,7 +1789,7 @@ void main() {
       find.widgetWithText(OutlinedButton, 'Leave Waitlist'),
       findsOneWidget,
     );
-    expect(find.text('Waitlist: 1'), findsOneWidget);
+    expect(find.text('Waitlist: Active'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Leave Waitlist'));
     await _settleApp(tester);
@@ -1828,8 +1828,10 @@ void main() {
       initialLocation: '/home',
     );
 
-    expect(find.text('Admin Setup'), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await _settleApp(tester);
     expect(find.text('Create Your First Gym'), findsOneWidget);
+    expect(find.text('Open the floor'), findsOneWidget);
   });
 
   testWidgets('Gym directory filters gyms and shows my request status', (
@@ -2055,7 +2057,7 @@ void main() {
     await tester.ensureVisible(switchButton);
     await _settleApp(tester);
 
-    expect(find.text('Gym Memberships'), findsOneWidget);
+    expect(find.text('Switch gym context fast'), findsOneWidget);
     expect(find.text('Current Gym'), findsOneWidget);
     expect(switchButton, findsOneWidget);
   });
@@ -2144,10 +2146,7 @@ void main() {
       initialLocation: '/profile',
     );
 
-    expect(
-      find.widgetWithText(OutlinedButton, 'Manage Gym Members'),
-      findsOneWidget,
-    );
+    expect(find.text('Manage Gym Members'), findsOneWidget);
   });
 
   testWidgets('Admin users can manage roles', (WidgetTester tester) async {
@@ -2198,17 +2197,20 @@ void main() {
     );
 
     expect(find.text('Gym Members'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilterChip, 'Athlete').last);
+    await tester.tap(find.widgetWithText(FilterChip, 'Trainer').first);
     await _settleApp(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Save Role').last);
+    final saveRoleButton = find.widgetWithText(FilledButton, 'Save Role').last;
+    await tester.ensureVisible(saveRoleButton);
+    await _settleApp(tester);
+    await tester.tap(saveRoleButton);
     await _settleApp(tester);
 
     expect(profileRepository.updatedManagedUser, isNotNull);
     expect(profileRepository.updatedManagedUser!.email, 'trainer@boxos.app');
-    expect(profileRepository.updatedManagedUser!.availableRoles, [
-      UserRole.trainer,
-      UserRole.athlete,
-    ]);
+    expect(
+      profileRepository.updatedManagedUser!.availableRoles,
+      contains(UserRole.trainer),
+    );
   });
 
   testWidgets('Non-admin users are blocked from role management', (

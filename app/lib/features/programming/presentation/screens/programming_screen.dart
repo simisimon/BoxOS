@@ -50,11 +50,13 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
+    final profileRole = profile?.role;
+    final activeGym = profile?.activeGym;
     final canManage =
-        profile?.activeGym != null &&
-        (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
-    final roleLabel = profile?.role?.label ?? 'Athlete';
-    final gymName = profile?.activeGym?.name;
+        activeGym != null &&
+        (profileRole == UserRole.admin || profileRole == UserRole.trainer);
+    final roleLabel = profileRole?.label ?? 'Athlete';
+    final gymName = activeGym?.name;
 
     return Scaffold(
       backgroundColor: const Color(0xFF09111E),

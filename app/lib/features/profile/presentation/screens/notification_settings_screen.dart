@@ -478,21 +478,19 @@ class _HeroPill extends StatelessWidget {
   const _HeroPill({
     required this.label,
     required this.color,
-    this.outlined = false,
   });
 
   final String label;
   final Color color;
-  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withOpacity(0.16),
+        color: color.withOpacity(0.16),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(outlined ? 0.55 : 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(
         label,

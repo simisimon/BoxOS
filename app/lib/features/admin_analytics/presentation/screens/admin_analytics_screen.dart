@@ -15,7 +15,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(currentProfileProvider);
     final analyticsAsync = ref.watch(adminAnalyticsOverviewProvider);
-    final profile = profileAsync.valueOrNull;
+    final profile = profileAsync.hasValue ? profileAsync.value : null;
     final hasAccess = profile?.role == UserRole.admin && profile?.activeGym != null;
 
     return Scaffold(

@@ -122,12 +122,15 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Log out other devices'),
-              subtitle: const Text('Recommended after recovering your password.'),
-              value: _logoutOtherSessions,
-              onChanged: _isSubmitting ? null : (value) => setState(() => _logoutOtherSessions = value),
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Log out other devices'),
+                subtitle: const Text('Recommended after recovering your password.'),
+                value: _logoutOtherSessions,
+                onChanged: _isSubmitting ? null : (value) => setState(() => _logoutOtherSessions = value),
+              ),
             ),
             const SizedBox(height: 16),
             FilledButton(
