@@ -11,10 +11,10 @@ Last updated: 2026-05-28
 - Active backend: local REST backend in `backend/server.py`
 
 ## Current Focus
-- Extend Admin Analytics through v3 class-quality drilldowns, then continue with community/performance product gaps, memberships/payments, real email delivery, push infrastructure, and backend deployment posture
+- Extend Admin Analytics through v4 membership health visibility, then re-evaluate whether the next highest-value slice is more analytics or a shift into community/performance product gaps
 
 ## Validation State
-- `python3 -m unittest backend.test_server`: passed (75 tests)
+- `python3 -m unittest backend.test_server`: passed (76 tests)
 - `cd app && flutter test test/widget_test.dart --reporter compact`: passed
 - Targeted Flutter analyze for admin analytics completed with only `deprecated_member_use` infos (`withOpacity`) in the analytics screen
 - Frontend polish slices committed across home, programming, calendar, profile, shell, logbook, notifications, edit profile, security, and auth flows
@@ -28,9 +28,9 @@ Last updated: 2026-05-28
 5. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
 
 ## Recommended Next Steps
-1. Extend Admin Analytics beyond v3 with membership-status visibility, export/drill-through depth, and revenue placeholders only once real billing exists.
+1. Re-evaluate whether further analytics slices are still the highest-value work before building more export/drill-through depth.
 2. Continue production hardening: real email delivery, push infrastructure, secret management, and deployment posture.
-3. Move into community/performance depth once the admin operating surfaces are strong enough.
+3. Likely shift into community/performance depth once the current admin operating surface is considered sufficient.
 
 ## Local Development Notes
 - Supabase is no longer the active backend for the Flutter app.

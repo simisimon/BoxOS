@@ -53,11 +53,24 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
     final daily = data['daily_attendance'] as List<dynamic>? ?? const [];
     final pressure = data['pressure_classes'] as List<dynamic>? ?? const [];
     final problems = data['problem_classes'] as List<dynamic>? ?? const [];
+    final recentMembers = data['recent_members'] as List<dynamic>? ?? const [];
+    final roleMix = data['overview']?['role_mix'] as Map<String, dynamic>? ?? const {};
     return AdminAnalyticsOverview(
       windowDays: overview['window_days'] as int? ?? 14,
       activeMembers: overview['active_members'] as int? ?? 0,
       activeTrainers: overview['active_trainers'] as int? ?? 0,
       pendingJoinRequests: overview['pending_join_requests'] as int? ?? 0,
+      newMembersInWindow: overview['new_members_in_window'] as int? ?? 0,
+      roleMix: AdminAnalyticsRoleMix(
+        athleteOnly: roleMix['athlete_only'] as int? ?? 0,
+        trainerCapable: roleMix['trainer_capable'] as int? ?? 0,
+        adminCapable: roleMix['admin_capable'] as int? ?? 0,
+      ),
+      recentMembers: recentMembers
+          .map(
+            (item) => _recentMemberFromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
       classesInWindow: overview['classes_in_window'] as int? ?? 0,
       bookingsInWindow: overview['bookings_in_window'] as int? ?? 0,
       attendedInWindow: overview['attended_in_window'] as int? ?? 0,
@@ -95,6 +108,20 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
             (item) => _problemClassFromJson(item as Map<String, dynamic>),
           )
           .toList(),
+    );
+  }
+
+  AdminAnalyticsRecentMember _recentMemberFromJson(
+    Map<String, dynamic> data,
+  ) {
+    return AdminAnalyticsRecentMember(
+      membershipId: data['membership_id'] as int? ?? 0,
+      userId: data['user_id'] as int? ?? 0,
+      email: data['email'] as String? ?? '',
+      displayName: data['display_name'] as String? ?? '',
+      nickname: data['nickname'] as String? ?? '',
+      activeRole: data['active_role'] as String? ?? 'athlete',
+      createdAt: DateTime.parse(data['created_at'] as String? ?? ''),
     );
   }
 

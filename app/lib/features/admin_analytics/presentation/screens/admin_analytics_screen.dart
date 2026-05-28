@@ -180,6 +180,77 @@ class _OverviewContent extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _Panel(
+          eyebrow: 'Membership health',
+          title: 'Who is joining and what mix is forming',
+          child: Column(
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _MetricCard(
+                    label: 'New members',
+                    value: '${overview.newMembersInWindow}',
+                    tone: const Color(0xFF7EE7C6),
+                    compact: true,
+                  ),
+                  _MetricCard(
+                    label: 'Athlete only',
+                    value: '${overview.roleMix.athleteOnly}',
+                    tone: const Color(0xFF5FB2FF),
+                    compact: true,
+                  ),
+                  _MetricCard(
+                    label: 'Trainer capable',
+                    value: '${overview.roleMix.trainerCapable}',
+                    tone: const Color(0xFFFFA94D),
+                    compact: true,
+                  ),
+                  _MetricCard(
+                    label: 'Admin capable',
+                    value: '${overview.roleMix.adminCapable}',
+                    tone: const Color(0xFFE6F14A),
+                    compact: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Recent members',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (overview.recentMembers.isEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'No recent memberships in this gym yet.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withOpacity(0.72),
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    for (var index = 0; index < overview.recentMembers.length; index++) ...[
+                      _RecentMemberRow(item: overview.recentMembers[index]),
+                      if (index < overview.recentMembers.length - 1)
+                        const Divider(color: Color(0x1FFFFFFF), height: 24),
+                    ],
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _Panel(
           eyebrow: 'Last ${overview.windowDays} days',
           title: 'Attendance health',
           child: Wrap(
@@ -468,6 +539,53 @@ class _ForwardStat extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white.withOpacity(0.7),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentMemberRow extends StatelessWidget {
+  const _RecentMemberRow({required this.item});
+
+  final AdminAnalyticsRecentMember item;
+
+  @override
+  Widget build(BuildContext context) {
+    final joined = item.createdAt;
+    final dateLabel =
+        '${joined.day.toString().padLeft(2, '0')}.${joined.month.toString().padLeft(2, '0')}';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.displayName,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${item.email} · ${item.activeRole}',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withOpacity(0.72),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          dateLabel,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: const Color(0xFF7EE7C6),
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],

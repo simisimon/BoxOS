@@ -3007,6 +3007,76 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(analytics["problem_classes"][1]["title"], "Quiet Noon WOD")
         self.assertLess(analytics["problem_classes"][1]["utilization_rate"], 50.0)
 
+    def test_admin_analytics_includes_membership_health_summary(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Membership Health Box",
+                "logo_url": "https://example.com/membership-health-box.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=gym["gym"]["id"],
+            roles=["athlete"],
+            active_role="athlete",
+        )
+
+        third_admin_email = "rolemix@boxos.app"
+        self.post_json(
+            "/auth/signup-admin",
+            {"email": third_admin_email, "password": "BoxOS123!"},
+        )
+        self._verify_user_email(third_admin_email)
+        connection = server.get_connection()
+        third_admin = connection.execute(
+            "select id from users where email = ?",
+            (third_admin_email,),
+        ).fetchone()
+        now = server.isoformat(server.now_utc())
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                ) values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    third_admin["id"],
+                    gym["gym"]["id"],
+                    "admin",
+                    server.encode_roles(["athlete", "admin"]),
+                    "active",
+                    now,
+                    now,
+                ),
+            )
+        connection.close()
+
+        analytics = self.get_json_with_auth(
+            "/admin/analytics?window_days=30",
+            access_token=admin_login["access_token"],
+        )
+
+        self.assertEqual(analytics["overview"]["new_members_in_window"], 4)
+        self.assertEqual(analytics["overview"]["role_mix"]["athlete_only"], 1)
+        self.assertEqual(analytics["overview"]["role_mix"]["trainer_capable"], 1)
+        self.assertEqual(analytics["overview"]["role_mix"]["admin_capable"], 2)
+        self.assertGreaterEqual(len(analytics["recent_members"]), 4)
+        self.assertEqual(analytics["recent_members"][0]["active_role"], "admin")
+
     def test_admin_analytics_rejects_invalid_window_filters(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

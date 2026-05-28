@@ -2989,24 +2989,30 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         window_start = today - timedelta(days=window_days - 1)
         upcoming_end = today + timedelta(days=6)
 
-        active_members_row = connection.execute(
+        active_memberships = connection.execute(
             """
-            select count(*) as count
+            select
+              gym_memberships.id,
+              gym_memberships.user_id,
+              gym_memberships.active_role,
+              gym_memberships.roles_json,
+              gym_memberships.status,
+              gym_memberships.created_at,
+              users.email,
+              users.display_name,
+              users.nickname
             from gym_memberships
-            where gym_id = ? and status = 'active'
+            join users on users.id = gym_memberships.user_id
+            where gym_memberships.gym_id = ?
+            order by gym_memberships.created_at desc, gym_memberships.id desc
             """,
             (gym_id,),
-        ).fetchone()
-        trainer_members_row = connection.execute(
-            """
-            select count(*) as count
-            from gym_memberships
-            where gym_id = ?
-              and status = 'active'
-              and active_role = 'trainer'
-            """,
-            (gym_id,),
-        ).fetchone()
+        ).fetchall()
+        active_members_rows = [row for row in active_memberships if row["status"] == "active"]
+        active_members_count = len(active_members_rows)
+        trainer_members_count = sum(
+            1 for row in active_members_rows if row["active_role"] == "trainer"
+        )
         pending_join_requests_row = connection.execute(
             """
             select count(*) as count
@@ -3015,6 +3021,33 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             """,
             (gym_id,),
         ).fetchone()
+
+        new_members_in_window = 0
+        role_mix = {"athlete_only": 0, "trainer_capable": 0, "admin_capable": 0}
+        recent_members = []
+        for row in active_members_rows:
+            created_at = datetime.fromisoformat(row["created_at"])
+            if created_at.date() >= window_start:
+                new_members_in_window += 1
+            available_roles = decode_roles(row["roles_json"])
+            if "admin" in available_roles:
+                role_mix["admin_capable"] += 1
+            elif "trainer" in available_roles:
+                role_mix["trainer_capable"] += 1
+            else:
+                role_mix["athlete_only"] += 1
+            if len(recent_members) < 5:
+                recent_members.append(
+                    {
+                        "membership_id": int(row["id"]),
+                        "user_id": int(row["user_id"]),
+                        "email": row["email"],
+                        "display_name": row["display_name"],
+                        "nickname": row["nickname"],
+                        "active_role": row["active_role"],
+                        "created_at": row["created_at"],
+                    }
+                )
 
         attendance_rows = connection.execute(
             """
@@ -3185,8 +3218,8 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             {
                 "overview": {
                     "window_days": window_days,
-                    "active_members": int(active_members_row["count"] if active_members_row else 0),
-                    "active_trainers": int(trainer_members_row["count"] if trainer_members_row else 0),
+                    "active_members": active_members_count,
+                    "active_trainers": trainer_members_count,
                     "pending_join_requests": int(
                         pending_join_requests_row["count"] if pending_join_requests_row else 0
                     ),
@@ -3203,7 +3236,10 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     "upcoming_waitlist_spots_next_7_days": int(upcoming_row["waitlist_spots"] if upcoming_row else 0),
                     "upcoming_classes_with_waitlist_next_7_days": int(upcoming_row["classes_with_waitlist"] if upcoming_row else 0),
                     "upcoming_full_classes_next_7_days": int(upcoming_row["full_classes"] if upcoming_row else 0),
+                    "new_members_in_window": new_members_in_window,
+                    "role_mix": role_mix,
                 },
+                "recent_members": recent_members,
                 "daily_attendance": daily,
                 "pressure_classes": [
                     {

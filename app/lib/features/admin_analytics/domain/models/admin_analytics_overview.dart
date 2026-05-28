@@ -4,6 +4,9 @@ class AdminAnalyticsOverview {
     required this.activeMembers,
     required this.activeTrainers,
     required this.pendingJoinRequests,
+    required this.newMembersInWindow,
+    required this.roleMix,
+    required this.recentMembers,
     required this.classesInWindow,
     required this.bookingsInWindow,
     required this.attendedInWindow,
@@ -26,6 +29,9 @@ class AdminAnalyticsOverview {
   final int activeMembers;
   final int activeTrainers;
   final int pendingJoinRequests;
+  final int newMembersInWindow;
+  final AdminAnalyticsRoleMix roleMix;
+  final List<AdminAnalyticsRecentMember> recentMembers;
   final int classesInWindow;
   final int bookingsInWindow;
   final int attendedInWindow;
@@ -42,6 +48,38 @@ class AdminAnalyticsOverview {
   final List<AdminAnalyticsDailyAttendance> dailyAttendance;
   final List<AdminAnalyticsPressureClass> pressureClasses;
   final List<AdminAnalyticsProblemClass> problemClasses;
+}
+
+class AdminAnalyticsRoleMix {
+  const AdminAnalyticsRoleMix({
+    required this.athleteOnly,
+    required this.trainerCapable,
+    required this.adminCapable,
+  });
+
+  final int athleteOnly;
+  final int trainerCapable;
+  final int adminCapable;
+}
+
+class AdminAnalyticsRecentMember {
+  const AdminAnalyticsRecentMember({
+    required this.membershipId,
+    required this.userId,
+    required this.email,
+    required this.displayName,
+    required this.nickname,
+    required this.activeRole,
+    required this.createdAt,
+  });
+
+  final int membershipId;
+  final int userId;
+  final String email;
+  final String displayName;
+  final String nickname;
+  final String activeRole;
+  final DateTime createdAt;
 }
 
 class AdminAnalyticsDailyAttendance {
