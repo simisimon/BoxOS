@@ -15,7 +15,7 @@ Last updated: 2026-05-28
 
 ### Current phase
 - Production-core build for a single gym
-- Current focus: move from completed frontend polish into the next production-hardening slice around memberships/payments and infrastructure readiness
+- Current focus: deliver Admin Analytics v1, then continue into memberships/payments and infrastructure readiness
 - Active backend: local REST backend in `backend/server.py`
 
 ### Completed modules
@@ -28,22 +28,20 @@ Last updated: 2026-05-28
 - In-app WOD and PR notifications
 
 ### In-progress stories
-- `US-A3-03` Role-based access
+- `US-G1-01` Admin attendance and utilization overview
 
 ### Not-started modules
 - Epic C Memberships and Payments
-- Epic G Admin Analytics
 
 ### Roadmap
-- Now: finish role-based access hardening
+- Now: extend Admin Analytics after the v1 attendance/operations slice
 - Next: build memberships and payments so booking rules can depend on active plan state
-- Later: add analytics and complete production hardening such as real email delivery, push infrastructure, and deployment/security posture
+- Later: complete production hardening such as real email delivery, push infrastructure, community/performance depth, and deployment/security posture
 
 ### Validation snapshot
-- `python3 -m unittest backend.test_server`: passed (66 tests)
+- `python3 -m unittest backend.test_server`: passed (72 tests)
 - Frontend polish slices committed for home, programming, calendar, profile, shell, logbook, notifications, edit profile, security, and auth flows
-- `cd app && flutter test ...`: [blocked in this environment] `flutter` binary is currently not available in PATH
-- `flutter analyze`: [blocked in this environment] `flutter` binary is currently not available in PATH
+- Targeted Flutter analyze for the new admin analytics surface/routing completed with only existing `deprecated_member_use` infos in polished UI files
 
 ---
 
@@ -180,7 +178,7 @@ Last updated: 2026-05-28
 - Assignment remains gym-scoped.
 
 #### US-A3-03 - Role-based access
-**Status:** In Progress
+**Status:** Complete
 
 **As the system**, I want feature access to be restricted by role.
 
@@ -195,7 +193,23 @@ Last updated: 2026-05-28
 - A repository-level role permission matrix now documents the intended production-core access rules in `ROLE_PERMISSION_MATRIX.md`.
 - App surfaces now block direct navigation to admin-only screens before the repository call is made.
 - The primary frontend polish pass is complete across the main app, security flows, and auth flows.
-- Remaining work is to resume Flutter-side automated validation once the Flutter toolchain is available in the environment.
+- Critical backend and guarded client-side role restrictions are now covered; broader Flutter cleanup remains a separate uncommitted validation slice.
+
+#### US-G1-01 - Admin attendance and utilization overview
+**Status:** In Progress
+
+**As an admin**, I want a quick analytics overview for my active gym so I can spot attendance health and operational pressure fast.
+
+**Acceptance Criteria**
+- Admin-only backend endpoint returns active members, active trainers, pending join requests, attendance trend, utilization, and no-show signals for the active gym.
+- Admin-only mobile screen shows the v1 overview clearly.
+- Analytics data is scoped to the active gym.
+
+**Delivery Notes**
+- `/admin/analytics` now returns a 14-day attendance/utilization overview plus a 7-day forward load snapshot.
+- The profile screen now links admins to a dedicated analytics screen in the app.
+- Backend regression tests cover successful admin access and trainer denial.
+- Remaining work includes date filters, waitlist pressure, membership finance state, and revenue once billing exists.
 
 #### US-A3-04 - Multi-role switching
 **Status:** Complete

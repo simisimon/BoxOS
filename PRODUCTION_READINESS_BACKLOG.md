@@ -202,18 +202,27 @@ Exit criteria:
 
 ### 6. Admin Analytics
 
-Current status: Epic G is not started.
+Current status: v1 started. Admin-only attendance/operations overview now exists in backend and mobile UI for the active gym.
 
-Required work:
+Delivered in v1:
 
-- Attendance overview.
-- Membership activity overview.
-- Revenue snapshot.
+- Admin-only `/admin/analytics` backend endpoint.
+- Active member count.
+- Active trainer count.
+- Pending join request count.
+- Last-14-days attendance snapshot: classes, bookings, attended check-ins, no-shows, attendance rate, utilization rate.
+- Next-7-days forward load snapshot: upcoming classes, booked spots, total capacity.
+- Daily attendance timeline for the last 14 days.
+- Admin-only mobile analytics screen linked from profile.
+
+Remaining work:
+
+- Membership activity overview beyond simple active-member counts.
+- Revenue snapshot (intentionally after real memberships/billing exist).
 - Basic date range filters.
 - Class fill-rate and waitlist pressure views.
-- No-show trend visibility.
 - Programming engagement and workout logging engagement views.
-- Admin-only backend endpoints and mobile/admin UI.
+- Drill-down views for low-attendance / high-no-show classes.
 
 Exit criteria:
 

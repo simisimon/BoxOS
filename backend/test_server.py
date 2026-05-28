@@ -2629,6 +2629,134 @@ class BackendServerTests(unittest.TestCase):
 
         self.assertEqual(error_context.exception.code, 403)
 
+    def test_admin_can_view_analytics_overview_for_active_gym(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Analytics Box",
+                "logo_url": "https://example.com/analytics-box.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=created_gym["gym"]["id"],
+        )
+
+        future_start = server.now_utc() + timedelta(days=1)
+        created_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Analytics Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(future_start),
+                "duration_minutes": 60,
+                "capacity": 10,
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": created_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        connection = server.get_connection()
+        with connection:
+            connection.execute(
+                "update class_schedules set start_time = ?, end_time = ? where id = ?",
+                (
+                    server.isoformat(server.now_utc() - timedelta(hours=2)),
+                    server.isoformat(server.now_utc() - timedelta(hours=1)),
+                    created_class["class"]["id"],
+                ),
+            )
+        connection.close()
+
+        connection = server.get_connection()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        connection.close()
+        self.assertIsNotNone(athlete_user)
+
+        self.patch_json(
+            "/schedule/bookings/attendance",
+            {
+                "class_id": created_class["class"]["id"],
+                "user_id": athlete_user["id"],
+                "attendance_status": "attended",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        analytics = self.get_json_with_auth(
+            "/admin/analytics",
+            access_token=admin_login["access_token"],
+        )
+
+        self.assertEqual(analytics["overview"]["window_days"], 14)
+        self.assertGreaterEqual(analytics["overview"]["active_members"], 2)
+        self.assertEqual(analytics["overview"]["active_trainers"], 1)
+        self.assertEqual(analytics["overview"]["classes_last_14_days"], 1)
+        self.assertEqual(analytics["overview"]["bookings_last_14_days"], 1)
+        self.assertEqual(analytics["overview"]["attended_last_14_days"], 1)
+        self.assertEqual(analytics["overview"]["attendance_rate_last_14_days"], 100.0)
+        self.assertEqual(len(analytics["daily_attendance"]), 14)
+        self.assertEqual(analytics["daily_attendance"][-1]["attended"], 1)
+
+    def test_trainer_cannot_view_admin_analytics(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Analytics Lock Gym",
+                "logo_url": "https://example.com/analytics-lock.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/admin/analytics",
+            headers={"Authorization": f"Bearer {trainer_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
     def test_trainer_cannot_list_role_management_users(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

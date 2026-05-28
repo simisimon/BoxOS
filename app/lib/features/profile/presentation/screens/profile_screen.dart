@@ -96,6 +96,14 @@ class ProfileScreen extends ConsumerWidget {
                     'Member management and join-request review stay available as dedicated admin controls.',
                 children: [
                   _SecondaryActionTile(
+                    icon: Icons.insights_outlined,
+                    title: 'Admin Analytics',
+                    subtitle: 'Read attendance, utilization, and pressure at a glance.',
+                    enabled: !isLoading,
+                    onTap: () => context.go('/admin-analytics'),
+                  ),
+                  const SizedBox(height: 12),
+                  _SecondaryActionTile(
                     icon: Icons.group_outlined,
                     title: 'Manage Gym Members',
                     subtitle: 'Review member roles inside the active gym.',

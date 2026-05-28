@@ -1035,6 +1035,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/audit-logs":
                 self.handle_list_audit_logs()
                 return
+            if path == "/admin/analytics":
+                self.handle_admin_analytics_overview()
+                return
             if path == "/gyms/my-requests":
                 self.handle_list_my_join_requests()
                 return
@@ -2973,6 +2976,170 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         self.send_json(
             HTTPStatus.OK,
             {"logs": [audit_log_payload(row) for row in rows]},
+        )
+
+    def handle_admin_analytics_overview(self) -> None:
+        session = self.require_admin_gym_session()
+        connection = get_connection()
+        gym_id = session["active_gym_id"]
+        today = today_utc_date()
+        window_start = today - timedelta(days=13)
+        upcoming_end = today + timedelta(days=6)
+
+        active_members_row = connection.execute(
+            """
+            select count(*) as count
+            from gym_memberships
+            where gym_id = ? and status = 'active'
+            """,
+            (gym_id,),
+        ).fetchone()
+        trainer_members_row = connection.execute(
+            """
+            select count(*) as count
+            from gym_memberships
+            where gym_id = ?
+              and status = 'active'
+              and active_role = 'trainer'
+            """,
+            (gym_id,),
+        ).fetchone()
+        pending_join_requests_row = connection.execute(
+            """
+            select count(*) as count
+            from gym_join_requests
+            where gym_id = ? and status = 'pending'
+            """,
+            (gym_id,),
+        ).fetchone()
+
+        attendance_rows = connection.execute(
+            """
+            select
+              classes_by_day.day,
+              count(*) as classes,
+              coalesce(sum(classes_by_day.capacity), 0) as capacity,
+              coalesce(sum(classes_by_day.bookings), 0) as bookings,
+              coalesce(sum(classes_by_day.attended), 0) as attended,
+              coalesce(sum(classes_by_day.no_shows), 0) as no_shows
+            from (
+              select
+                date(class_schedules.start_time) as day,
+                class_schedules.id,
+                class_schedules.capacity as capacity,
+                count(class_bookings.id) as bookings,
+                coalesce(sum(case when class_bookings.attendance_status = 'attended' then 1 else 0 end), 0) as attended,
+                coalesce(sum(case when class_bookings.attendance_status = 'no_show' then 1 else 0 end), 0) as no_shows
+              from class_schedules
+              left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+              where class_schedules.gym_id = ?
+                and date(class_schedules.start_time) between ? and ?
+              group by date(class_schedules.start_time), class_schedules.id, class_schedules.capacity
+            ) classes_by_day
+            group by classes_by_day.day
+            order by classes_by_day.day asc
+            """,
+            (gym_id, window_start.isoformat(), today.isoformat()),
+        ).fetchall()
+
+        upcoming_row = connection.execute(
+            """
+            select
+              count(*) as classes,
+              coalesce(sum(upcoming_classes.capacity), 0) as capacity,
+              coalesce(sum(upcoming_classes.bookings), 0) as bookings
+            from (
+              select
+                class_schedules.id,
+                class_schedules.capacity as capacity,
+                count(class_bookings.id) as bookings
+              from class_schedules
+              left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+              where class_schedules.gym_id = ?
+                and date(class_schedules.start_time) between ? and ?
+              group by class_schedules.id, class_schedules.capacity
+            ) upcoming_classes
+            """,
+            (gym_id, today.isoformat(), upcoming_end.isoformat()),
+        ).fetchone()
+
+        totals = {
+            "classes": 0,
+            "capacity": 0,
+            "bookings": 0,
+            "attended": 0,
+            "no_shows": 0,
+        }
+        daily: list[dict[str, Any]] = []
+        rows_by_day = {row["day"]: row for row in attendance_rows}
+        current_day = window_start
+        while current_day <= today:
+            key = current_day.isoformat()
+            row = rows_by_day.get(key)
+            classes = int(row["classes"]) if row is not None else 0
+            capacity = int(row["capacity"]) if row is not None else 0
+            bookings = int(row["bookings"]) if row is not None else 0
+            attended = int(row["attended"]) if row is not None else 0
+            no_shows = int(row["no_shows"]) if row is not None else 0
+            totals["classes"] += classes
+            totals["capacity"] += capacity
+            totals["bookings"] += bookings
+            totals["attended"] += attended
+            totals["no_shows"] += no_shows
+            daily.append(
+                {
+                    "date": key,
+                    "classes": classes,
+                    "capacity": capacity,
+                    "bookings": bookings,
+                    "attended": attended,
+                    "no_shows": no_shows,
+                    "utilization_rate": 0.0
+                    if capacity <= 0
+                    else round((bookings / capacity) * 100, 1),
+                }
+            )
+            current_day += timedelta(days=1)
+
+        attendance_rate = (
+            0.0
+            if totals["bookings"] <= 0
+            else round((totals["attended"] / totals["bookings"]) * 100, 1)
+        )
+        no_show_rate = (
+            0.0
+            if totals["bookings"] <= 0
+            else round((totals["no_shows"] / totals["bookings"]) * 100, 1)
+        )
+        utilization_rate = (
+            0.0
+            if totals["capacity"] <= 0
+            else round((totals["bookings"] / totals["capacity"]) * 100, 1)
+        )
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {
+                "overview": {
+                    "window_days": 14,
+                    "active_members": int(active_members_row["count"] if active_members_row else 0),
+                    "active_trainers": int(trainer_members_row["count"] if trainer_members_row else 0),
+                    "pending_join_requests": int(
+                        pending_join_requests_row["count"] if pending_join_requests_row else 0
+                    ),
+                    "classes_last_14_days": totals["classes"],
+                    "bookings_last_14_days": totals["bookings"],
+                    "attended_last_14_days": totals["attended"],
+                    "no_shows_last_14_days": totals["no_shows"],
+                    "attendance_rate_last_14_days": attendance_rate,
+                    "utilization_rate_last_14_days": utilization_rate,
+                    "no_show_rate_last_14_days": no_show_rate,
+                    "upcoming_classes_next_7_days": int(upcoming_row["classes"] if upcoming_row else 0),
+                    "upcoming_bookings_next_7_days": int(upcoming_row["bookings"] if upcoming_row else 0),
+                    "upcoming_capacity_next_7_days": int(upcoming_row["capacity"] if upcoming_row else 0),
+                },
+                "daily_attendance": daily,
+            },
         )
 
     def handle_list_my_join_requests(self) -> None:
