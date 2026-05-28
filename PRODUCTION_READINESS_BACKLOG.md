@@ -202,9 +202,9 @@ Exit criteria:
 
 ### 6. Admin Analytics
 
-Current status: v1 started. Admin-only attendance/operations overview now exists in backend and mobile UI for the active gym.
+Current status: v2 in progress. Admin-only attendance/operations overview now supports window selection plus upcoming waitlist/fill-pressure visibility for the active gym.
 
-Delivered in v1:
+Delivered in v1/v2:
 
 - Admin-only `/admin/analytics` backend endpoint.
 - Active member count.
@@ -214,13 +214,15 @@ Delivered in v1:
 - Next-7-days forward load snapshot: upcoming classes, booked spots, total capacity.
 - Daily attendance timeline for the last 14 days.
 - Admin-only mobile analytics screen linked from profile.
+- Preset review windows for 7, 14, and 30 days.
+- Pressure list for upcoming full/waitlisted classes.
+- Forward waitlist spot counts, classes-with-waitlist counts, and full-class counts.
 
 Remaining work:
 
 - Membership activity overview beyond simple active-member counts.
 - Revenue snapshot (intentionally after real memberships/billing exist).
-- Basic date range filters.
-- Class fill-rate and waitlist pressure views.
+- Custom date range filters beyond the preset windows.
 - Programming engagement and workout logging engagement views.
 - Drill-down views for low-attendance / high-no-show classes.
 

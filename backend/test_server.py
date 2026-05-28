@@ -2715,12 +2715,162 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(analytics["overview"]["window_days"], 14)
         self.assertGreaterEqual(analytics["overview"]["active_members"], 2)
         self.assertEqual(analytics["overview"]["active_trainers"], 1)
-        self.assertEqual(analytics["overview"]["classes_last_14_days"], 1)
-        self.assertEqual(analytics["overview"]["bookings_last_14_days"], 1)
-        self.assertEqual(analytics["overview"]["attended_last_14_days"], 1)
-        self.assertEqual(analytics["overview"]["attendance_rate_last_14_days"], 100.0)
+        self.assertEqual(analytics["overview"]["classes_in_window"], 1)
+        self.assertEqual(analytics["overview"]["bookings_in_window"], 1)
+        self.assertEqual(analytics["overview"]["attended_in_window"], 1)
+        self.assertEqual(analytics["overview"]["attendance_rate_in_window"], 100.0)
         self.assertEqual(len(analytics["daily_attendance"]), 14)
         self.assertEqual(analytics["daily_attendance"][-1]["attended"], 1)
+        self.assertEqual(analytics["overview"]["upcoming_waitlist_spots_next_7_days"], 0)
+        self.assertEqual(analytics["pressure_classes"], [])
+
+    def test_admin_analytics_supports_window_filters_and_pressure_classes(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Pressure Box",
+                "logo_url": "https://example.com/pressure-box.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+
+        second_athlete_email = "analytics2@boxos.app"
+        self.post_json(
+            "/auth/signup",
+            {"email": second_athlete_email, "password": "BoxOS123!"},
+        )
+        self._verify_user_email(second_athlete_email)
+        second_athlete_login = self.post_json(
+            "/auth/login",
+            {"email": second_athlete_email, "password": "BoxOS123!"},
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=gym["gym"]["id"],
+        )
+
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": gym["gym"]["id"]},
+            access_token=second_athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        second_request_id = next(
+            request["id"]
+            for request in pending_requests["requests"]
+            if request["email"] == second_athlete_email
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": second_request_id, "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+
+        old_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Old Window Class",
+                "class_type": "WOD",
+                "start_time": server.isoformat(server.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 10,
+            },
+            access_token=admin_login["access_token"],
+        )
+        hot_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Packed Evening Heat",
+                "class_type": "WOD",
+                "start_time": server.isoformat(server.now_utc() + timedelta(days=2)),
+                "duration_minutes": 60,
+                "capacity": 1,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": hot_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/waitlist",
+            {"class_id": hot_class["class"]["id"]},
+            access_token=second_athlete_login["access_token"],
+        )
+
+        connection = server.get_connection()
+        with connection:
+            connection.execute(
+                "update class_schedules set start_time = ?, end_time = ? where id = ?",
+                (
+                    server.isoformat(server.now_utc() - timedelta(days=20, hours=2)),
+                    server.isoformat(server.now_utc() - timedelta(days=20, hours=1)),
+                    old_class["class"]["id"],
+                ),
+            )
+        connection.close()
+
+        analytics = self.get_json_with_auth(
+            "/admin/analytics?window_days=30",
+            access_token=admin_login["access_token"],
+        )
+
+        self.assertEqual(analytics["overview"]["window_days"], 30)
+        self.assertEqual(analytics["overview"]["classes_in_window"], 1)
+        self.assertEqual(analytics["overview"]["upcoming_waitlist_spots_next_7_days"], 1)
+        self.assertEqual(analytics["overview"]["upcoming_classes_with_waitlist_next_7_days"], 1)
+        self.assertEqual(analytics["overview"]["upcoming_full_classes_next_7_days"], 1)
+        self.assertEqual(len(analytics["daily_attendance"]), 30)
+        self.assertEqual(len(analytics["pressure_classes"]), 1)
+        self.assertEqual(analytics["pressure_classes"][0]["title"], "Packed Evening Heat")
+        self.assertEqual(analytics["pressure_classes"][0]["waitlist_count"], 1)
+
+    def test_admin_analytics_rejects_invalid_window_filters(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Invalid Analytics Window Gym",
+                "logo_url": "https://example.com/invalid-analytics-window.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/admin/analytics?window_days=21",
+            headers={"Authorization": f"Bearer {admin_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 400)
 
     def test_trainer_cannot_view_admin_analytics(self) -> None:
         admin_login = self.post_json(

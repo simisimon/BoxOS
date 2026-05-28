@@ -10,7 +10,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 try:
@@ -1036,7 +1036,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 self.handle_list_audit_logs()
                 return
             if path == "/admin/analytics":
-                self.handle_admin_analytics_overview()
+                self.handle_admin_analytics_overview(urlparse(self.path))
                 return
             if path == "/gyms/my-requests":
                 self.handle_list_my_join_requests()
@@ -2978,12 +2978,15 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             {"logs": [audit_log_payload(row) for row in rows]},
         )
 
-    def handle_admin_analytics_overview(self) -> None:
+    def handle_admin_analytics_overview(self, parsed_url: Any) -> None:
         session = self.require_admin_gym_session()
         connection = get_connection()
         gym_id = session["active_gym_id"]
         today = today_utc_date()
-        window_start = today - timedelta(days=13)
+        window_days = require_admin_analytics_window_days(
+            parse_qs(parsed_url.query).get("window_days", ["14"])[0]
+        )
+        window_start = today - timedelta(days=window_days - 1)
         upcoming_end = today + timedelta(days=6)
 
         active_members_row = connection.execute(
@@ -3047,21 +3050,53 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             select
               count(*) as classes,
               coalesce(sum(upcoming_classes.capacity), 0) as capacity,
-              coalesce(sum(upcoming_classes.bookings), 0) as bookings
+              coalesce(sum(upcoming_classes.bookings), 0) as bookings,
+              coalesce(sum(upcoming_classes.waitlist_count), 0) as waitlist_spots,
+              coalesce(sum(case when upcoming_classes.waitlist_count > 0 then 1 else 0 end), 0) as classes_with_waitlist,
+              coalesce(sum(case when upcoming_classes.bookings >= upcoming_classes.capacity then 1 else 0 end), 0) as full_classes
             from (
               select
                 class_schedules.id,
+                class_schedules.title,
+                class_schedules.start_time,
                 class_schedules.capacity as capacity,
-                count(class_bookings.id) as bookings
+                count(distinct class_bookings.id) as bookings,
+                count(distinct class_waitlist_entries.id) as waitlist_count
               from class_schedules
               left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+              left join class_waitlist_entries on class_waitlist_entries.class_schedule_id = class_schedules.id
               where class_schedules.gym_id = ?
                 and date(class_schedules.start_time) between ? and ?
-              group by class_schedules.id, class_schedules.capacity
+              group by class_schedules.id, class_schedules.title, class_schedules.start_time, class_schedules.capacity
             ) upcoming_classes
             """,
             (gym_id, today.isoformat(), upcoming_end.isoformat()),
         ).fetchone()
+
+        pressure_rows = connection.execute(
+            """
+            select
+              class_schedules.id,
+              class_schedules.title,
+              class_schedules.start_time,
+              class_schedules.capacity,
+              count(distinct class_bookings.id) as bookings,
+              count(distinct class_waitlist_entries.id) as waitlist_count
+            from class_schedules
+            left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+            left join class_waitlist_entries on class_waitlist_entries.class_schedule_id = class_schedules.id
+            where class_schedules.gym_id = ?
+              and date(class_schedules.start_time) between ? and ?
+            group by class_schedules.id, class_schedules.title, class_schedules.start_time, class_schedules.capacity
+            having count(distinct class_waitlist_entries.id) > 0
+               or count(distinct class_bookings.id) >= class_schedules.capacity
+            order by count(distinct class_waitlist_entries.id) desc,
+                     (cast(count(distinct class_bookings.id) as real) / case when class_schedules.capacity <= 0 then 1 else class_schedules.capacity end) desc,
+                     class_schedules.start_time asc
+            limit 5
+            """,
+            (gym_id, today.isoformat(), upcoming_end.isoformat()),
+        ).fetchall()
 
         totals = {
             "classes": 0,
@@ -3121,24 +3156,41 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             HTTPStatus.OK,
             {
                 "overview": {
-                    "window_days": 14,
+                    "window_days": window_days,
                     "active_members": int(active_members_row["count"] if active_members_row else 0),
                     "active_trainers": int(trainer_members_row["count"] if trainer_members_row else 0),
                     "pending_join_requests": int(
                         pending_join_requests_row["count"] if pending_join_requests_row else 0
                     ),
-                    "classes_last_14_days": totals["classes"],
-                    "bookings_last_14_days": totals["bookings"],
-                    "attended_last_14_days": totals["attended"],
-                    "no_shows_last_14_days": totals["no_shows"],
-                    "attendance_rate_last_14_days": attendance_rate,
-                    "utilization_rate_last_14_days": utilization_rate,
-                    "no_show_rate_last_14_days": no_show_rate,
+                    "classes_in_window": totals["classes"],
+                    "bookings_in_window": totals["bookings"],
+                    "attended_in_window": totals["attended"],
+                    "no_shows_in_window": totals["no_shows"],
+                    "attendance_rate_in_window": attendance_rate,
+                    "utilization_rate_in_window": utilization_rate,
+                    "no_show_rate_in_window": no_show_rate,
                     "upcoming_classes_next_7_days": int(upcoming_row["classes"] if upcoming_row else 0),
                     "upcoming_bookings_next_7_days": int(upcoming_row["bookings"] if upcoming_row else 0),
                     "upcoming_capacity_next_7_days": int(upcoming_row["capacity"] if upcoming_row else 0),
+                    "upcoming_waitlist_spots_next_7_days": int(upcoming_row["waitlist_spots"] if upcoming_row else 0),
+                    "upcoming_classes_with_waitlist_next_7_days": int(upcoming_row["classes_with_waitlist"] if upcoming_row else 0),
+                    "upcoming_full_classes_next_7_days": int(upcoming_row["full_classes"] if upcoming_row else 0),
                 },
                 "daily_attendance": daily,
+                "pressure_classes": [
+                    {
+                        "id": int(row["id"]),
+                        "title": row["title"],
+                        "start_time": row["start_time"],
+                        "capacity": int(row["capacity"]),
+                        "bookings": int(row["bookings"]),
+                        "waitlist_count": int(row["waitlist_count"]),
+                        "utilization_rate": 0.0
+                        if int(row["capacity"]) <= 0
+                        else round((int(row["bookings"]) / int(row["capacity"])) * 100, 1),
+                    }
+                    for row in pressure_rows
+                ],
             },
         )
 
@@ -4669,6 +4721,16 @@ def get_whiteboard_result_for_user(
 
 def today_utc_date() -> datetime.date:
     return now_utc().date()
+
+
+def require_admin_analytics_window_days(value: Any) -> int:
+    try:
+        window_days = int(str(value or "").strip())
+    except ValueError as error:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Window days must be a valid integer.") from error
+    if window_days not in {7, 14, 30}:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Window days must be one of 7, 14, or 30.")
+    return window_days
 
 
 def parse_programming_date(value: str) -> datetime.date:

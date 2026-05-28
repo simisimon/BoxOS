@@ -25,9 +25,10 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
   final TokenStorage _tokenStorage;
 
   @override
-  Future<AdminAnalyticsOverview> fetchOverview() async {
+  Future<AdminAnalyticsOverview> fetchOverview({required int windowDays}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/analytics',
+      queryParameters: {'window_days': windowDays},
       options: Options(headers: await _authHeaders()),
     );
     return _overviewFromJson(response.data);
@@ -50,30 +51,42 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
       throw Exception('Missing admin analytics overview.');
     }
     final daily = data['daily_attendance'] as List<dynamic>? ?? const [];
+    final pressure = data['pressure_classes'] as List<dynamic>? ?? const [];
     return AdminAnalyticsOverview(
       windowDays: overview['window_days'] as int? ?? 14,
       activeMembers: overview['active_members'] as int? ?? 0,
       activeTrainers: overview['active_trainers'] as int? ?? 0,
       pendingJoinRequests: overview['pending_join_requests'] as int? ?? 0,
-      classesLast14Days: overview['classes_last_14_days'] as int? ?? 0,
-      bookingsLast14Days: overview['bookings_last_14_days'] as int? ?? 0,
-      attendedLast14Days: overview['attended_last_14_days'] as int? ?? 0,
-      noShowsLast14Days: overview['no_shows_last_14_days'] as int? ?? 0,
-      attendanceRateLast14Days:
-          (overview['attendance_rate_last_14_days'] as num? ?? 0).toDouble(),
-      utilizationRateLast14Days:
-          (overview['utilization_rate_last_14_days'] as num? ?? 0).toDouble(),
-      noShowRateLast14Days:
-          (overview['no_show_rate_last_14_days'] as num? ?? 0).toDouble(),
+      classesInWindow: overview['classes_in_window'] as int? ?? 0,
+      bookingsInWindow: overview['bookings_in_window'] as int? ?? 0,
+      attendedInWindow: overview['attended_in_window'] as int? ?? 0,
+      noShowsInWindow: overview['no_shows_in_window'] as int? ?? 0,
+      attendanceRateInWindow:
+          (overview['attendance_rate_in_window'] as num? ?? 0).toDouble(),
+      utilizationRateInWindow:
+          (overview['utilization_rate_in_window'] as num? ?? 0).toDouble(),
+      noShowRateInWindow:
+          (overview['no_show_rate_in_window'] as num? ?? 0).toDouble(),
       upcomingClassesNext7Days:
           overview['upcoming_classes_next_7_days'] as int? ?? 0,
       upcomingBookingsNext7Days:
           overview['upcoming_bookings_next_7_days'] as int? ?? 0,
       upcomingCapacityNext7Days:
           overview['upcoming_capacity_next_7_days'] as int? ?? 0,
+      upcomingWaitlistSpotsNext7Days:
+          overview['upcoming_waitlist_spots_next_7_days'] as int? ?? 0,
+      upcomingClassesWithWaitlistNext7Days:
+          overview['upcoming_classes_with_waitlist_next_7_days'] as int? ?? 0,
+      upcomingFullClassesNext7Days:
+          overview['upcoming_full_classes_next_7_days'] as int? ?? 0,
       dailyAttendance: daily
           .map(
             (item) => _dailyAttendanceFromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+      pressureClasses: pressure
+          .map(
+            (item) => _pressureClassFromJson(item as Map<String, dynamic>),
           )
           .toList(),
     );
@@ -89,6 +102,20 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
       bookings: data['bookings'] as int? ?? 0,
       attended: data['attended'] as int? ?? 0,
       noShows: data['no_shows'] as int? ?? 0,
+      utilizationRate: (data['utilization_rate'] as num? ?? 0).toDouble(),
+    );
+  }
+
+  AdminAnalyticsPressureClass _pressureClassFromJson(
+    Map<String, dynamic> data,
+  ) {
+    return AdminAnalyticsPressureClass(
+      id: data['id'] as int? ?? 0,
+      title: data['title'] as String? ?? '',
+      startTime: DateTime.parse(data['start_time'] as String? ?? ''),
+      capacity: data['capacity'] as int? ?? 0,
+      bookings: data['bookings'] as int? ?? 0,
+      waitlistCount: data['waitlist_count'] as int? ?? 0,
       utilizationRate: (data['utilization_rate'] as num? ?? 0).toDouble(),
     );
   }

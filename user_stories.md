@@ -39,9 +39,10 @@ Last updated: 2026-05-28
 - Later: complete production hardening such as real email delivery, push infrastructure, community/performance depth, and deployment/security posture
 
 ### Validation snapshot
-- `python3 -m unittest backend.test_server`: passed (72 tests)
+- `python3 -m unittest backend.test_server`: passed (74 tests)
+- `cd app && flutter test test/widget_test.dart --reporter compact`: passed
 - Frontend polish slices committed for home, programming, calendar, profile, shell, logbook, notifications, edit profile, security, and auth flows
-- Targeted Flutter analyze for the new admin analytics surface/routing completed with only existing `deprecated_member_use` infos in polished UI files
+- Targeted Flutter analyze for admin analytics completed with only `deprecated_member_use` infos in the analytics UI
 
 ---
 
@@ -206,10 +207,11 @@ Last updated: 2026-05-28
 - Analytics data is scoped to the active gym.
 
 **Delivery Notes**
-- `/admin/analytics` now returns a 14-day attendance/utilization overview plus a 7-day forward load snapshot.
-- The profile screen now links admins to a dedicated analytics screen in the app.
-- Backend regression tests cover successful admin access and trainer denial.
-- Remaining work includes date filters, waitlist pressure, membership finance state, and revenue once billing exists.
+- `/admin/analytics` now supports 7/14/30-day review windows.
+- The analytics screen now lets admins switch between review windows and highlights upcoming full/waitlisted classes.
+- `/admin/analytics` now returns a pressure list plus waitlist/full-class counts for the next 7 days.
+- Backend regression tests cover successful admin access, trainer denial, invalid filters, and pressure/window scenarios.
+- Remaining work includes membership finance state, deeper engagement views, and revenue once billing exists.
 
 #### US-A3-04 - Multi-role switching
 **Status:** Complete

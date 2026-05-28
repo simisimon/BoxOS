@@ -14,6 +14,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(currentProfileProvider);
+    final selectedWindowDays = ref.watch(adminAnalyticsWindowDaysProvider);
     final analyticsAsync = ref.watch(adminAnalyticsOverviewProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final hasAccess = profile?.role == UserRole.admin && profile?.activeGym != null;
@@ -59,7 +60,13 @@ class AdminAnalyticsScreen extends ConsumerWidget {
                 const _BlockedState()
               else
                 analyticsAsync.when(
-                  data: (overview) => _OverviewContent(overview: overview),
+                  data: (overview) => _OverviewContent(
+                    overview: overview,
+                    selectedWindowDays: selectedWindowDays,
+                    onWindowChanged: (windowDays) => ref
+                        .read(adminAnalyticsWindowDaysProvider.notifier)
+                        .setWindowDays(windowDays),
+                  ),
                   loading: () => const _LoadingState(),
                   error: (error, _) => _ErrorState(message: error.toString()),
                 ),
@@ -117,12 +124,19 @@ class _HeaderBlock extends StatelessWidget {
 }
 
 class _OverviewContent extends StatelessWidget {
-  const _OverviewContent({required this.overview});
+  const _OverviewContent({
+    required this.overview,
+    required this.selectedWindowDays,
+    required this.onWindowChanged,
+  });
 
   final AdminAnalyticsOverview overview;
+  final int selectedWindowDays;
+  final ValueChanged<int> onWindowChanged;
 
   @override
   Widget build(BuildContext context) {
+    final recentDays = overview.dailyAttendance.reversed.take(7).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -149,6 +163,23 @@ class _OverviewContent extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         _Panel(
+          eyebrow: 'Window control',
+          title: 'Choose the review horizon',
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final windowDays in const [7, 14, 30])
+                _WindowChip(
+                  label: '${windowDays}D',
+                  selected: selectedWindowDays == windowDays,
+                  onTap: () => onWindowChanged(windowDays),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _Panel(
           eyebrow: 'Last ${overview.windowDays} days',
           title: 'Attendance health',
           child: Wrap(
@@ -157,31 +188,31 @@ class _OverviewContent extends StatelessWidget {
             children: [
               _MetricCard(
                 label: 'Classes',
-                value: '${overview.classesLast14Days}',
+                value: '${overview.classesInWindow}',
                 tone: const Color(0xFFFF6B2C),
                 compact: true,
               ),
               _MetricCard(
                 label: 'Bookings',
-                value: '${overview.bookingsLast14Days}',
+                value: '${overview.bookingsInWindow}',
                 tone: const Color(0xFF5FB2FF),
                 compact: true,
               ),
               _MetricCard(
                 label: 'Attendance rate',
-                value: '${overview.attendanceRateLast14Days.toStringAsFixed(1)}%',
+                value: '${overview.attendanceRateInWindow.toStringAsFixed(1)}%',
                 tone: const Color(0xFF7EE7C6),
                 compact: true,
               ),
               _MetricCard(
                 label: 'Utilization',
-                value: '${overview.utilizationRateLast14Days.toStringAsFixed(1)}%',
+                value: '${overview.utilizationRateInWindow.toStringAsFixed(1)}%',
                 tone: const Color(0xFFE6F14A),
                 compact: true,
               ),
               _MetricCard(
                 label: 'No-show rate',
-                value: '${overview.noShowRateLast14Days.toStringAsFixed(1)}%',
+                value: '${overview.noShowRateInWindow.toStringAsFixed(1)}%',
                 tone: const Color(0xFFFF8A80),
                 compact: true,
               ),
@@ -192,28 +223,81 @@ class _OverviewContent extends StatelessWidget {
         _Panel(
           eyebrow: 'Next 7 days',
           title: 'Forward pressure',
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: _ForwardStat(
-                  label: 'Upcoming classes',
-                  value: '${overview.upcomingClassesNext7Days}',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ForwardStat(
+                      label: 'Upcoming classes',
+                      value: '${overview.upcomingClassesNext7Days}',
+                    ),
+                  ),
+                  Expanded(
+                    child: _ForwardStat(
+                      label: 'Booked spots',
+                      value: '${overview.upcomingBookingsNext7Days}',
+                    ),
+                  ),
+                  Expanded(
+                    child: _ForwardStat(
+                      label: 'Capacity',
+                      value: '${overview.upcomingCapacityNext7Days}',
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: _ForwardStat(
-                  label: 'Booked spots',
-                  value: '${overview.upcomingBookingsNext7Days}',
-                ),
-              ),
-              Expanded(
-                child: _ForwardStat(
-                  label: 'Capacity',
-                  value: '${overview.upcomingCapacityNext7Days}',
-                ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _MetricCard(
+                    label: 'Waitlist spots',
+                    value: '${overview.upcomingWaitlistSpotsNext7Days}',
+                    tone: const Color(0xFFB98CFF),
+                    compact: true,
+                  ),
+                  _MetricCard(
+                    label: 'Classes with waitlist',
+                    value: '${overview.upcomingClassesWithWaitlistNext7Days}',
+                    tone: const Color(0xFFFF8A80),
+                    compact: true,
+                  ),
+                  _MetricCard(
+                    label: 'Full classes',
+                    value: '${overview.upcomingFullClassesNext7Days}',
+                    tone: const Color(0xFFE6F14A),
+                    compact: true,
+                  ),
+                ],
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 16),
+        _Panel(
+          eyebrow: 'Pressure list',
+          title: 'Classes that need attention',
+          child: overview.pressureClasses.isEmpty
+              ? Text(
+                  'No waitlist-heavy or full classes are building pressure right now.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withOpacity(0.74),
+                    height: 1.5,
+                  ),
+                )
+              : Column(
+                  children: [
+                    for (var index = 0;
+                        index < overview.pressureClasses.length;
+                        index++) ...[
+                      _PressureClassRow(item: overview.pressureClasses[index]),
+                      if (index < overview.pressureClasses.length - 1)
+                        const Divider(color: Color(0x1FFFFFFF), height: 24),
+                    ],
+                  ],
+                ),
         ),
         const SizedBox(height: 16),
         _Panel(
@@ -221,9 +305,9 @@ class _OverviewContent extends StatelessWidget {
           title: 'Attendance timeline',
           child: Column(
             children: [
-              for (final day in overview.dailyAttendance.reversed.take(7)) ...[
-                _DailyRow(day: day),
-                if (day != overview.dailyAttendance.reversed.take(7).last)
+              for (var index = 0; index < recentDays.length; index++) ...[
+                _DailyRow(day: recentDays[index]),
+                if (index < recentDays.length - 1)
                   const Divider(color: Color(0x1FFFFFFF), height: 24),
               ],
             ],
@@ -367,6 +451,51 @@ class _ForwardStat extends StatelessWidget {
   }
 }
 
+class _WindowChip extends StatelessWidget {
+  const _WindowChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFF7EE7C6).withOpacity(0.16)
+                : Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF7EE7C6)
+                  : Colors.white.withOpacity(0.08),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: selected ? const Color(0xFF7EE7C6) : Colors.white,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DailyRow extends StatelessWidget {
   const _DailyRow({required this.day});
 
@@ -377,6 +506,7 @@ class _DailyRow extends StatelessWidget {
     final label =
         '${day.date.day.toString().padLeft(2, '0')}.${day.date.month.toString().padLeft(2, '0')}';
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
           width: 72,
@@ -403,6 +533,66 @@ class _DailyRow extends StatelessWidget {
             color: const Color(0xFF7EE7C6),
             fontWeight: FontWeight.w800,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PressureClassRow extends StatelessWidget {
+  const _PressureClassRow({required this.item});
+
+  final AdminAnalyticsPressureClass item;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = item.startTime;
+    final dateLabel =
+        '${start.day.toString().padLeft(2, '0')}.${start.month.toString().padLeft(2, '0')} · ${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$dateLabel · ${item.bookings}/${item.capacity} booked',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withOpacity(0.72),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${item.waitlistCount} WL',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: const Color(0xFFB98CFF),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${item.utilizationRate.toStringAsFixed(1)}%',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: const Color(0xFFE6F14A),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ],
     );
