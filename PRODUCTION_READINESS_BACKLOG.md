@@ -104,7 +104,7 @@ These must be completed before a real production launch.
 
 ### 1. Finish Role And Permission Hardening
 
-Current status: `US-A3-03` is still in progress.
+Current status: substantially completed in backend and client, with regression coverage in place for the most sensitive admin, trainer, athlete, no-gym, and wrong-gym paths.
 
 Required work:
 
@@ -116,11 +116,11 @@ Required work:
 
 Exit criteria:
 
-- A role-permission matrix exists.
-- Backend tests cover admin, trainer, athlete, no-gym, and wrong-gym access for critical endpoints.
-- The app has no visible unauthorized actions for each role.
+- A role-permission matrix exists. ✅
+- Backend tests cover admin, trainer, athlete, no-gym, and wrong-gym access for critical endpoints. ✅
+- The app has no visible unauthorized actions for each role. ✅ on the current guarded admin/schedule/programming/profile surfaces.
 
-Progress note: admin-only endpoint guards and initial no-gym/wrong-gym backend regression coverage are now in place; primary client-surface parity and the standalone frontend polish pass are complete, with Flutter-side validation still pending because the toolchain is unavailable in this environment.
+Progress note: admin-only endpoint guards, schedule/programming manager restrictions, and no-gym/wrong-gym backend regression coverage are now in place. Primary guarded client surfaces are aligned with backend authorization checks.
 
 ### 2. Implement Memberships And Payments
 
