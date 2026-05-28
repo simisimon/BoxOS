@@ -52,6 +52,7 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
     }
     final daily = data['daily_attendance'] as List<dynamic>? ?? const [];
     final pressure = data['pressure_classes'] as List<dynamic>? ?? const [];
+    final problems = data['problem_classes'] as List<dynamic>? ?? const [];
     return AdminAnalyticsOverview(
       windowDays: overview['window_days'] as int? ?? 14,
       activeMembers: overview['active_members'] as int? ?? 0,
@@ -89,6 +90,11 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
             (item) => _pressureClassFromJson(item as Map<String, dynamic>),
           )
           .toList(),
+      problemClasses: problems
+          .map(
+            (item) => _problemClassFromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
     );
   }
 
@@ -117,6 +123,23 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
       bookings: data['bookings'] as int? ?? 0,
       waitlistCount: data['waitlist_count'] as int? ?? 0,
       utilizationRate: (data['utilization_rate'] as num? ?? 0).toDouble(),
+    );
+  }
+
+  AdminAnalyticsProblemClass _problemClassFromJson(
+    Map<String, dynamic> data,
+  ) {
+    return AdminAnalyticsProblemClass(
+      id: data['id'] as int? ?? 0,
+      title: data['title'] as String? ?? '',
+      startTime: DateTime.parse(data['start_time'] as String? ?? ''),
+      capacity: data['capacity'] as int? ?? 0,
+      bookings: data['bookings'] as int? ?? 0,
+      attended: data['attended'] as int? ?? 0,
+      noShows: data['no_shows'] as int? ?? 0,
+      utilizationRate: (data['utilization_rate'] as num? ?? 0).toDouble(),
+      attendanceRate: (data['attendance_rate'] as num? ?? 0).toDouble(),
+      noShowRate: (data['no_show_rate'] as num? ?? 0).toDouble(),
     );
   }
 }

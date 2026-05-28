@@ -2847,6 +2847,166 @@ class BackendServerTests(unittest.TestCase):
         self.assertEqual(analytics["pressure_classes"][0]["title"], "Packed Evening Heat")
         self.assertEqual(analytics["pressure_classes"][0]["waitlist_count"], 1)
 
+    def test_admin_analytics_includes_problem_classes_for_low_attendance_and_no_shows(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Retention Box",
+                "logo_url": "https://example.com/retention-box.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self._approve_demo_user_for_gym(
+            admin_token=admin_login["access_token"],
+            athlete_token=athlete_login["access_token"],
+            gym_id=gym["gym"]["id"],
+        )
+
+        second_athlete_email = "noshow@boxos.app"
+        self.post_json(
+            "/auth/signup",
+            {"email": second_athlete_email, "password": "BoxOS123!"},
+        )
+        self._verify_user_email(second_athlete_email)
+        second_athlete_login = self.post_json(
+            "/auth/login",
+            {"email": second_athlete_email, "password": "BoxOS123!"},
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": gym["gym"]["id"]},
+            access_token=second_athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        second_request_id = next(
+            request["id"]
+            for request in pending_requests["requests"]
+            if request["email"] == second_athlete_email
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": second_request_id, "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+
+        weak_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Quiet Noon WOD",
+                "class_type": "WOD",
+                "start_time": server.isoformat(server.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 6,
+            },
+            access_token=admin_login["access_token"],
+        )
+        risky_class = self.post_json_with_auth(
+            "/schedule/classes",
+            {
+                "title": "Flaky Evening Crew",
+                "class_type": "WOD",
+                "start_time": server.isoformat(server.now_utc() + timedelta(days=2)),
+                "duration_minutes": 60,
+                "capacity": 4,
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": weak_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": risky_class["class"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/schedule/bookings",
+            {"class_id": risky_class["class"]["id"]},
+            access_token=second_athlete_login["access_token"],
+        )
+
+        connection = server.get_connection()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        second_athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (second_athlete_email,),
+        ).fetchone()
+        with connection:
+            connection.execute(
+                "update class_schedules set start_time = ?, end_time = ? where id = ?",
+                (
+                    server.isoformat(server.now_utc() - timedelta(days=1, hours=2)),
+                    server.isoformat(server.now_utc() - timedelta(days=1, hours=1)),
+                    weak_class["class"]["id"],
+                ),
+            )
+            connection.execute(
+                "update class_schedules set start_time = ?, end_time = ? where id = ?",
+                (
+                    server.isoformat(server.now_utc() - timedelta(days=2, hours=2)),
+                    server.isoformat(server.now_utc() - timedelta(days=2, hours=1)),
+                    risky_class["class"]["id"],
+                ),
+            )
+        connection.close()
+
+        self.patch_json(
+            "/schedule/bookings/attendance",
+            {
+                "class_id": weak_class["class"]["id"],
+                "user_id": athlete_user["id"],
+                "attendance_status": "attended",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/schedule/bookings/attendance",
+            {
+                "class_id": risky_class["class"]["id"],
+                "user_id": athlete_user["id"],
+                "attendance_status": "attended",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/schedule/bookings/attendance",
+            {
+                "class_id": risky_class["class"]["id"],
+                "user_id": second_athlete_user["id"],
+                "attendance_status": "no_show",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        analytics = self.get_json_with_auth(
+            "/admin/analytics?window_days=7",
+            access_token=admin_login["access_token"],
+        )
+
+        self.assertEqual(len(analytics["problem_classes"]), 2)
+        self.assertEqual(analytics["problem_classes"][0]["title"], "Flaky Evening Crew")
+        self.assertEqual(analytics["problem_classes"][0]["no_show_rate"], 50.0)
+        self.assertEqual(analytics["problem_classes"][1]["title"], "Quiet Noon WOD")
+        self.assertLess(analytics["problem_classes"][1]["utilization_rate"], 50.0)
+
     def test_admin_analytics_rejects_invalid_window_filters(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

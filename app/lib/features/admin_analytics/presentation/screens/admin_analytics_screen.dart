@@ -301,6 +301,30 @@ class _OverviewContent extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _Panel(
+          eyebrow: 'Retention risk',
+          title: 'Low-attendance and no-show drilldown',
+          child: overview.problemClasses.isEmpty
+              ? Text(
+                  'No completed classes crossed the low-attendance or high-no-show thresholds in this window.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withOpacity(0.74),
+                    height: 1.5,
+                  ),
+                )
+              : Column(
+                  children: [
+                    for (var index = 0;
+                        index < overview.problemClasses.length;
+                        index++) ...[
+                      _ProblemClassRow(item: overview.problemClasses[index]),
+                      if (index < overview.problemClasses.length - 1)
+                        const Divider(color: Color(0x1FFFFFFF), height: 24),
+                    ],
+                  ],
+                ),
+        ),
+        const SizedBox(height: 16),
+        _Panel(
           eyebrow: 'Daily view',
           title: 'Attendance timeline',
           child: Column(
@@ -589,6 +613,66 @@ class _PressureClassRow extends StatelessWidget {
               '${item.utilizationRate.toStringAsFixed(1)}%',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 color: const Color(0xFFE6F14A),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ProblemClassRow extends StatelessWidget {
+  const _ProblemClassRow({required this.item});
+
+  final AdminAnalyticsProblemClass item;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = item.startTime;
+    final dateLabel =
+        '${start.day.toString().padLeft(2, '0')}.${start.month.toString().padLeft(2, '0')} · ${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$dateLabel · ${item.bookings}/${item.capacity} booked · ${item.attended} attended · ${item.noShows} no-shows',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withOpacity(0.72),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${item.noShowRate.toStringAsFixed(1)}% NS',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: const Color(0xFFFF8A80),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${item.attendanceRate.toStringAsFixed(1)}% att.',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: const Color(0xFF7EE7C6),
                 fontWeight: FontWeight.w700,
               ),
             ),

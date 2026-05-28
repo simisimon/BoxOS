@@ -202,7 +202,7 @@ Exit criteria:
 
 ### 6. Admin Analytics
 
-Current status: v2 in progress. Admin-only attendance/operations overview now supports window selection plus upcoming waitlist/fill-pressure visibility for the active gym.
+Current status: v3 in progress. Admin-only attendance/operations overview now supports window selection, upcoming waitlist/fill-pressure visibility, and class-quality drilldowns for the active gym.
 
 Delivered in v1/v2:
 
@@ -217,6 +217,7 @@ Delivered in v1/v2:
 - Preset review windows for 7, 14, and 30 days.
 - Pressure list for upcoming full/waitlisted classes.
 - Forward waitlist spot counts, classes-with-waitlist counts, and full-class counts.
+- Drilldown list for completed classes with low fill or elevated no-show rates.
 
 Remaining work:
 
@@ -224,7 +225,7 @@ Remaining work:
 - Revenue snapshot (intentionally after real memberships/billing exist).
 - Custom date range filters beyond the preset windows.
 - Programming engagement and workout logging engagement views.
-- Drill-down views for low-attendance / high-no-show classes.
+- Export/drill-through depth from flagged classes into member-level follow-up.
 
 Exit criteria:
 

@@ -19,6 +19,7 @@ class AdminAnalyticsOverview {
     required this.upcomingFullClassesNext7Days,
     required this.dailyAttendance,
     required this.pressureClasses,
+    required this.problemClasses,
   });
 
   final int windowDays;
@@ -40,6 +41,7 @@ class AdminAnalyticsOverview {
   final int upcomingFullClassesNext7Days;
   final List<AdminAnalyticsDailyAttendance> dailyAttendance;
   final List<AdminAnalyticsPressureClass> pressureClasses;
+  final List<AdminAnalyticsProblemClass> problemClasses;
 }
 
 class AdminAnalyticsDailyAttendance {
@@ -80,4 +82,30 @@ class AdminAnalyticsPressureClass {
   final int bookings;
   final int waitlistCount;
   final double utilizationRate;
+}
+
+class AdminAnalyticsProblemClass {
+  const AdminAnalyticsProblemClass({
+    required this.id,
+    required this.title,
+    required this.startTime,
+    required this.capacity,
+    required this.bookings,
+    required this.attended,
+    required this.noShows,
+    required this.utilizationRate,
+    required this.attendanceRate,
+    required this.noShowRate,
+  });
+
+  final int id;
+  final String title;
+  final DateTime startTime;
+  final int capacity;
+  final int bookings;
+  final int attended;
+  final int noShows;
+  final double utilizationRate;
+  final double attendanceRate;
+  final double noShowRate;
 }

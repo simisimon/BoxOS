@@ -3098,6 +3098,34 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             (gym_id, today.isoformat(), upcoming_end.isoformat()),
         ).fetchall()
 
+        problem_rows = connection.execute(
+            """
+            select
+              class_schedules.id,
+              class_schedules.title,
+              class_schedules.start_time,
+              class_schedules.capacity,
+              count(class_bookings.id) as bookings,
+              coalesce(sum(case when class_bookings.attendance_status = 'attended' then 1 else 0 end), 0) as attended,
+              coalesce(sum(case when class_bookings.attendance_status = 'no_show' then 1 else 0 end), 0) as no_shows
+            from class_schedules
+            left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+            where class_schedules.gym_id = ?
+              and date(class_schedules.start_time) between ? and ?
+            group by class_schedules.id, class_schedules.title, class_schedules.start_time, class_schedules.capacity
+            having count(class_bookings.id) > 0 and (
+              cast(count(class_bookings.id) as real) / case when class_schedules.capacity <= 0 then 1 else class_schedules.capacity end < 0.5
+              or cast(coalesce(sum(case when class_bookings.attendance_status = 'no_show' then 1 else 0 end), 0) as real) / count(class_bookings.id) >= 0.25
+            )
+            order by
+              cast(coalesce(sum(case when class_bookings.attendance_status = 'no_show' then 1 else 0 end), 0) as real) / count(class_bookings.id) desc,
+              cast(count(class_bookings.id) as real) / case when class_schedules.capacity <= 0 then 1 else class_schedules.capacity end asc,
+              class_schedules.start_time desc
+            limit 5
+            """,
+            (gym_id, window_start.isoformat(), today.isoformat()),
+        ).fetchall()
+
         totals = {
             "classes": 0,
             "capacity": 0,
@@ -3190,6 +3218,27 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                         else round((int(row["bookings"]) / int(row["capacity"])) * 100, 1),
                     }
                     for row in pressure_rows
+                ],
+                "problem_classes": [
+                    {
+                        "id": int(row["id"]),
+                        "title": row["title"],
+                        "start_time": row["start_time"],
+                        "capacity": int(row["capacity"]),
+                        "bookings": int(row["bookings"]),
+                        "attended": int(row["attended"]),
+                        "no_shows": int(row["no_shows"]),
+                        "utilization_rate": 0.0
+                        if int(row["capacity"]) <= 0
+                        else round((int(row["bookings"]) / int(row["capacity"])) * 100, 1),
+                        "attendance_rate": 0.0
+                        if int(row["bookings"]) <= 0
+                        else round((int(row["attended"]) / int(row["bookings"])) * 100, 1),
+                        "no_show_rate": 0.0
+                        if int(row["bookings"]) <= 0
+                        else round((int(row["no_shows"]) / int(row["bookings"])) * 100, 1),
+                    }
+                    for row in problem_rows
                 ],
             },
         )

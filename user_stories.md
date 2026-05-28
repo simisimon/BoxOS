@@ -39,7 +39,7 @@ Last updated: 2026-05-28
 - Later: complete production hardening such as real email delivery, push infrastructure, community/performance depth, and deployment/security posture
 
 ### Validation snapshot
-- `python3 -m unittest backend.test_server`: passed (74 tests)
+- `python3 -m unittest backend.test_server`: passed (75 tests)
 - `cd app && flutter test test/widget_test.dart --reporter compact`: passed
 - Frontend polish slices committed for home, programming, calendar, profile, shell, logbook, notifications, edit profile, security, and auth flows
 - Targeted Flutter analyze for admin analytics completed with only `deprecated_member_use` infos in the analytics UI
@@ -208,9 +208,10 @@ Last updated: 2026-05-28
 
 **Delivery Notes**
 - `/admin/analytics` now supports 7/14/30-day review windows.
-- The analytics screen now lets admins switch between review windows and highlights upcoming full/waitlisted classes.
+- The analytics screen now lets admins switch between review windows, highlights upcoming full/waitlisted classes, and surfaces completed classes with poor attendance quality.
 - `/admin/analytics` now returns a pressure list plus waitlist/full-class counts for the next 7 days.
-- Backend regression tests cover successful admin access, trainer denial, invalid filters, and pressure/window scenarios.
+- `/admin/analytics` now also returns a drilldown list for low-fill or high-no-show completed classes in the selected window.
+- Backend regression tests cover successful admin access, trainer denial, invalid filters, pressure scenarios, and low-attendance/high-no-show drilldowns.
 - Remaining work includes membership finance state, deeper engagement views, and revenue once billing exists.
 
 #### US-A3-04 - Multi-role switching
