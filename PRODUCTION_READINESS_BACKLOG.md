@@ -384,18 +384,20 @@ Required before launch:
 
 ## Suggested Delivery Order
 
+The following order reflects a deliberate product choice: **Memberships & Payments** and **Push/Email Delivery** should be implemented last, after the core workout, community, analytics, and coaching product is stronger.
+
 1. Finish role-permission hardening.
 2. Stabilize test suite and fix known widget test fragility.
-3. Implement memberships and payment state because booking production-readiness depends on it.
-4. Implement transactional email.
-5. Implement real push notifications.
-6. Add admin analytics.
-7. Implement first community/engagement loop features: announcements, comments, and reactions.
-8. Implement deeper performance tracking: benchmark history, progress comparisons, and richer logbook analytics.
-9. Implement coach-grade programming templates and publishing workflow.
-10. Harden backend deployment, secrets, monitoring, backups, and production database.
-11. Validate the completed UI consistency pass using `docs/ui-guidelines.md` and Flutter/device QA.
-12. Run full iOS/Android release QA.
+3. Add admin analytics.
+4. Implement first community/engagement loop features: announcements, comments, and reactions.
+5. Implement deeper performance tracking: benchmark history, progress comparisons, and richer logbook analytics.
+6. Implement coach-grade programming templates and publishing workflow.
+7. Harden backend deployment, secrets, monitoring, backups, and production database.
+8. Validate the completed UI consistency pass using `docs/ui-guidelines.md` and Flutter/device QA.
+9. Run full iOS/Android release QA on the workout/community product.
+10. Implement memberships and payment state.
+11. Implement transactional email.
+12. Implement real push notifications.
 
 ## Launch Readiness Definition
 
