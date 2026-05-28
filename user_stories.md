@@ -11,11 +11,11 @@ This file tracks the delivery status of the production core platform for BoxOS.
 
 ## Delivery dashboard
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 ### Current phase
 - Production-core build for a single gym
-- Current focus: finish remaining role-permission hardening
+- Current focus: finish remaining role-permission hardening, especially explicit admin-only endpoint coverage
 - Active backend: local REST backend in `backend/server.py`
 
 ### Completed modules
@@ -190,7 +190,9 @@ Last updated: 2026-05-27
 
 **Delivery Notes**
 - Admin-only role management is enforced.
-- Remaining work is to verify that all delegated trainer flows and all athlete restrictions are consistently enforced across the backend and app surfaces.
+- Admin-only operational endpoints now share a dedicated active-admin-gym guard in the backend.
+- A repository-level role permission matrix now documents the intended production-core access rules in `ROLE_PERMISSION_MATRIX.md`.
+- Remaining work is to mirror the same restrictions across every app surface and complete broader regression coverage for wrong-gym and no-gym edge cases.
 
 #### US-A3-04 - Multi-role switching
 **Status:** Complete

@@ -1,6 +1,6 @@
 # BoxOS Project Status
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 ## Current Snapshot
 - Repository: `C:\GitHub\BoxOS`
@@ -11,10 +11,10 @@ Last updated: 2026-05-27
 - Active backend: local REST backend in `backend/server.py`
 
 ## Current Focus
-- Finish `US-A3-03` role-based access hardening
+- Finish `US-A3-03` role-based access hardening and document the production permission matrix
 
 ## Validation State
-- `python -m unittest backend.test_server`: passed (57 tests)
+- `python3 -m unittest backend.test_server`: passed (61 tests)
 - `cd app && flutter test test/widget_test.dart --plain-name "Trainer can create a recurring class from schedule screen"`: passed
 - `flutter analyze`: passed with no issues found
 
@@ -25,7 +25,7 @@ Last updated: 2026-05-27
 4. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
 
 ## Recommended Next Steps
-1. Lock down remaining role-based access gaps across backend endpoints and app surfaces.
+1. Finish backend role-hardening coverage for admin-only endpoints and mirror the same restrictions across app surfaces.
 2. Define and implement the first production slice of memberships and payments.
 3. Tighten production hardening: real email delivery, secret management, push infrastructure, and deployment posture.
 

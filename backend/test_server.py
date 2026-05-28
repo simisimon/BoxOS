@@ -2406,6 +2406,265 @@ class BackendServerTests(unittest.TestCase):
         )
         self.assertEqual(created["class"]["class_type"], "Specialty")
 
+    def test_trainer_cannot_list_join_requests(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Trainer Join Request Gym",
+                "logo_url": "https://example.com/trainer-join.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        connection = server.get_connection()
+        trainer_user = connection.execute(
+            "select id from users where email = ?",
+            (server.TRAINER_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(trainer_user)
+        now = server.now_utc()
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                )
+                values (?, ?, 'trainer', ?, 'active', ?, ?)
+                """,
+                (
+                    trainer_user["id"],
+                    created_gym["gym"]["id"],
+                    server.encode_roles(["athlete", "trainer"]),
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            connection.execute(
+                "update users set active_gym_id = ? where id = ?",
+                (created_gym["gym"]["id"], trainer_user["id"]),
+            )
+            server.sync_user_context(connection, trainer_user["id"])
+        connection.close()
+
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/gyms/join-requests",
+            headers={"Authorization": f"Bearer {trainer_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
+    def test_trainer_cannot_view_audit_logs(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Trainer Audit Gym",
+                "logo_url": "https://example.com/trainer-audit.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        connection = server.get_connection()
+        trainer_user = connection.execute(
+            "select id from users where email = ?",
+            (server.TRAINER_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(trainer_user)
+        now = server.now_utc()
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                )
+                values (?, ?, 'trainer', ?, 'active', ?, ?)
+                """,
+                (
+                    trainer_user["id"],
+                    created_gym["gym"]["id"],
+                    server.encode_roles(["athlete", "trainer"]),
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            connection.execute(
+                "update users set active_gym_id = ? where id = ?",
+                (created_gym["gym"]["id"], trainer_user["id"]),
+            )
+            server.sync_user_context(connection, trainer_user["id"])
+        connection.close()
+
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/audit-logs",
+            headers={"Authorization": f"Bearer {trainer_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
+    def test_trainer_cannot_list_role_management_users(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Trainer Role List Gym",
+                "logo_url": "https://example.com/trainer-role-list.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        connection = server.get_connection()
+        trainer_user = connection.execute(
+            "select id from users where email = ?",
+            (server.TRAINER_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(trainer_user)
+        now = server.now_utc()
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                )
+                values (?, ?, 'trainer', ?, 'active', ?, ?)
+                """,
+                (
+                    trainer_user["id"],
+                    created_gym["gym"]["id"],
+                    server.encode_roles(["athlete", "trainer"]),
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            connection.execute(
+                "update users set active_gym_id = ? where id = ?",
+                (created_gym["gym"]["id"], trainer_user["id"]),
+            )
+            server.sync_user_context(connection, trainer_user["id"])
+        connection.close()
+
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/roles/users",
+            headers={"Authorization": f"Bearer {trainer_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
+    def test_trainer_cannot_assign_roles(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Trainer Role Assign Gym",
+                "logo_url": "https://example.com/trainer-role-assign.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        self.post_json_with_auth(
+            "/gyms/join-requests",
+            {"gym_id": created_gym["gym"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        pending_requests = self.get_json_with_auth(
+            "/gyms/join-requests",
+            access_token=admin_login["access_token"],
+        )
+        self.patch_json(
+            "/gyms/join-requests",
+            {"request_id": pending_requests["requests"][0]["id"], "decision": "approve"},
+            access_token=admin_login["access_token"],
+        )
+        connection = server.get_connection()
+        trainer_user = connection.execute(
+            "select id from users where email = ?",
+            (server.TRAINER_EMAIL,),
+        ).fetchone()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(trainer_user)
+        self.assertIsNotNone(athlete_user)
+        now = server.now_utc()
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                )
+                values (?, ?, 'trainer', ?, 'active', ?, ?)
+                """,
+                (
+                    trainer_user["id"],
+                    created_gym["gym"]["id"],
+                    server.encode_roles(["athlete", "trainer"]),
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            connection.execute(
+                "update users set active_gym_id = ? where id = ?",
+                (created_gym["gym"]["id"], trainer_user["id"]),
+            )
+            server.sync_user_context(connection, trainer_user["id"])
+        connection.close()
+
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/roles/users",
+            data=json_bytes({"user_id": athlete_user["id"], "roles": ["athlete", "trainer"]}),
+            headers={
+                "Authorization": f"Bearer {trainer_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
     def test_admin_can_create_and_update_daily_workout(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

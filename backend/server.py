@@ -2907,12 +2907,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         self.send_json(HTTPStatus.CREATED, {"message": "Join request submitted."})
 
     def handle_list_join_requests(self) -> None:
-        session = self.require_session()
-        if session["role"] != "admin" or session["active_gym_id"] is None:
-            raise ApiError(
-                HTTPStatus.FORBIDDEN,
-                "An active admin gym context is required.",
-            )
+        session = self.require_admin_gym_session()
         connection = get_connection()
         rows = connection.execute(
             """
@@ -2948,12 +2943,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         )
 
     def handle_list_audit_logs(self) -> None:
-        session = self.require_role("admin")
-        if session["active_gym_id"] is None:
-            raise ApiError(
-                HTTPStatus.FORBIDDEN,
-                "An active admin gym context is required.",
-            )
+        session = self.require_admin_gym_session()
         connection = get_connection()
         rows = connection.execute(
             """
@@ -3031,12 +3021,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         )
 
     def handle_review_join_request(self, body: dict[str, Any]) -> None:
-        session = self.require_session()
-        if session["role"] != "admin" or session["active_gym_id"] is None:
-            raise ApiError(
-                HTTPStatus.FORBIDDEN,
-                "An active admin gym context is required.",
-            )
+        session = self.require_admin_gym_session()
         request_id = require_user_id(body.get("request_id"))
         decision = require_join_request_decision(body.get("decision"))
         connection = get_connection()
@@ -3117,12 +3102,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         )
 
     def handle_list_role_users(self) -> None:
-        session = self.require_role("admin")
-        if session["active_gym_id"] is None:
-            raise ApiError(
-                HTTPStatus.FORBIDDEN,
-                "An active admin gym context is required.",
-            )
+        session = self.require_admin_gym_session()
         connection = get_connection()
         rows = connection.execute(
             """
@@ -3152,12 +3132,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         )
 
     def handle_assign_role(self, body: dict[str, Any]) -> None:
-        session = self.require_role("admin")
-        if session["active_gym_id"] is None:
-            raise ApiError(
-                HTTPStatus.FORBIDDEN,
-                "An active admin gym context is required.",
-            )
+        session = self.require_admin_gym_session()
         user_id = require_user_id(body.get("user_id"))
         roles = require_role_list(body)
         managed_roles = [role for role in roles if role in {"athlete", "trainer"}]
@@ -3468,6 +3443,15 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             raise ApiError(
                 HTTPStatus.FORBIDDEN,
                 f"The {required_role} role is required for this action.",
+            )
+        return session
+
+    def require_admin_gym_session(self) -> sqlite3.Row:
+        session = self.require_role("admin")
+        if session["active_gym_id"] is None:
+            raise ApiError(
+                HTTPStatus.FORBIDDEN,
+                "An active admin gym context is required.",
             )
         return session
 
