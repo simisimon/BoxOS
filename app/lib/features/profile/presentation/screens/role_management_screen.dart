@@ -18,15 +18,9 @@ class RoleManagementScreen extends ConsumerStatefulWidget {
 class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
   List<RoleManagedUser>? _users;
   String? _errorText;
-  bool _isLoading = true;
+  bool _isLoading = false;
   int? _savingUserId;
   final Map<int, List<UserRole>> _draftRoles = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUsers();
-  }
 
   Future<void> _loadUsers() async {
     setState(() {
@@ -125,7 +119,12 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
-    final hasAccess = profile?.role == UserRole.admin;
+    final hasAccess =
+        profile?.role == UserRole.admin && profile?.activeGym != null;
+
+    if (hasAccess && !_isLoading && _users == null && _errorText == null) {
+      Future.microtask(_loadUsers);
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Gym Members')),
@@ -146,7 +145,7 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
               child: Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
-                  'You need the Admin role to manage roles.',
+                  'You need an active admin gym to manage member roles.',
                   textAlign: TextAlign.center,
                 ),
               ),

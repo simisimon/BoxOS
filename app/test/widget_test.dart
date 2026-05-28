@@ -321,6 +321,8 @@ class RecordingProfileRepository implements ProfileRepository {
 }
 
 class RecordingGymRepository implements GymRepository {
+  int createGymCalls = 0;
+  int fetchJoinRequestsCalls = 0;
   List<GymSummary> gyms = const [
     GymSummary(
       id: 1,
@@ -350,6 +352,7 @@ class RecordingGymRepository implements GymRepository {
     required String logoUrl,
     required String timezone,
   }) async {
+    createGymCalls += 1;
     final gym = GymSummary(
       id: gyms.length + 1,
       name: name,
@@ -362,7 +365,10 @@ class RecordingGymRepository implements GymRepository {
   }
 
   @override
-  Future<List<GymJoinRequest>> fetchJoinRequests() async => requests;
+  Future<List<GymJoinRequest>> fetchJoinRequests() async {
+    fetchJoinRequestsCalls += 1;
+    return requests;
+  }
 
   @override
   Future<List<MyGymJoinRequest>> fetchMyJoinRequests() async => myRequests;
@@ -1940,6 +1946,47 @@ void main() {
     expect(gymRepository.lastReviewApproval, isTrue);
   });
 
+  testWidgets('Athletes are blocked from join request review screen', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository();
+    final gymRepository = RecordingGymRepository();
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/gym-requests',
+      gymRepository: gymRepository,
+    );
+
+    expect(
+      find.text('You need an active admin gym to review join requests.'),
+      findsOneWidget,
+    );
+    expect(gymRepository.fetchJoinRequestsCalls, 0);
+  });
+
+  testWidgets('Athletes are blocked from create gym screen', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository();
+    final gymRepository = RecordingGymRepository();
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/create-gym',
+      gymRepository: gymRepository,
+    );
+
+    expect(find.text('Only admin accounts can create a gym.'), findsOneWidget);
+    expect(gymRepository.createGymCalls, 0);
+  });
+
   testWidgets('Profile shows gym switcher actions for multiple memberships', (
     WidgetTester tester,
   ) async {
@@ -2178,7 +2225,7 @@ void main() {
     );
 
     expect(
-      find.text('You need the Admin role to manage roles.'),
+      find.text('You need an active admin gym to manage member roles.'),
       findsOneWidget,
     );
   });

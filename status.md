@@ -15,8 +15,8 @@ Last updated: 2026-05-28
 
 ## Validation State
 - `python3 -m unittest backend.test_server`: passed (66 tests)
-- `cd app && flutter test test/widget_test.dart --plain-name "Trainer can create a recurring class from schedule screen"`: passed
-- `flutter analyze`: passed with no issues found
+- `cd app && flutter test ...`: [blocked in this environment] `flutter` binary is currently not available in PATH
+- `flutter analyze`: [blocked in this environment] `flutter` binary is currently not available in PATH
 
 ## Current Risks / Gaps
 1. Verification and password-reset tokens are still printed to the backend terminal for local development instead of being emailed.
@@ -25,7 +25,7 @@ Last updated: 2026-05-28
 4. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
 
 ## Recommended Next Steps
-1. Continue role-hardening with broader wrong-gym/no-gym backend coverage and mirror the same restrictions across app surfaces.
+1. Finish app-surface parity for role-gated admin flows and run Flutter validation once the toolchain is available in this environment.
 2. Define and implement the first production slice of memberships and payments.
 3. Tighten production hardening: real email delivery, secret management, push infrastructure, and deployment posture.
 

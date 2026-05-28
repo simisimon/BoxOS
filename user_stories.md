@@ -192,7 +192,8 @@ Last updated: 2026-05-28
 - Admin-only role management is enforced.
 - Admin-only operational endpoints now share a dedicated active-admin-gym guard in the backend.
 - A repository-level role permission matrix now documents the intended production-core access rules in `ROLE_PERMISSION_MATRIX.md`.
-- Remaining work is to mirror the same restrictions across every app surface and complete broader regression coverage for wrong-gym and no-gym edge cases.
+- App surfaces are now being aligned so direct navigation to admin-only screens is blocked before the repository call is made.
+- Remaining work is to complete broader client parity and resume Flutter-side automated validation once the Flutter toolchain is available in the environment.
 
 #### US-A3-04 - Multi-role switching
 **Status:** Complete

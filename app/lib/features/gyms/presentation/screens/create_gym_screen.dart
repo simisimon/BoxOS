@@ -2,6 +2,7 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
+import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -77,57 +78,87 @@ class _CreateGymScreenState extends ConsumerState<CreateGymScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profileAsync = ref.watch(currentProfileProvider);
+    final profile = profileAsync.hasValue ? profileAsync.value : null;
+    final hasAccess = profile?.accountType == AccountType.admin;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Create Gym')),
-      body: MobileScrollableContent(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Gym Name',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => _requiredValidator(value, 'Gym name'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _logoUrlController,
-                decoration: const InputDecoration(
-                  labelText: 'Logo URL',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => _requiredValidator(value, 'Logo URL'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _timezoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Timezone',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => _requiredValidator(value, 'Timezone'),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _isSubmitting ? null : _submit,
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Create Gym'),
-                ),
-              ),
-            ],
+      body: profileAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              errorMessageFrom(error, fallback: 'Failed to load profile'),
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
+        data: (_) {
+          if (!hasAccess) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Only admin accounts can create a gym.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
+          return MobileScrollableContent(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Gym Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => _requiredValidator(value, 'Gym name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _logoUrlController,
+                    decoration: const InputDecoration(
+                      labelText: 'Logo URL',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => _requiredValidator(value, 'Logo URL'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _timezoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Timezone',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => _requiredValidator(value, 'Timezone'),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Create Gym'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
