@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
@@ -208,121 +210,149 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     final canManage =
         profile?.activeGym != null &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
+    final roleLabel = profile?.role?.label ?? 'Athlete';
+    final gymName = profile?.activeGym?.name;
 
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (profile?.activeGym == null)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No active gym selected. Join or switch to a gym to use the schedule.',
-                ),
-              ),
-            )
-          else
-            FutureBuilder<List<ScheduleClass>>(
-              future: _scheduleFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        errorMessageFrom(
-                          snapshot.error!,
-                          fallback: 'Failed to load schedule',
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                final items = snapshot.data ?? const <ScheduleClass>[];
-                final selectedItems =
-                    items
-                        .where(
-                          (item) =>
-                              _isSameDay(item.startTime, _selectedWorkoutDate),
-                        )
-                        .toList()
-                      ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                final selectedDateLabel = MaterialLocalizations.of(
-                  context,
-                ).formatFullDate(_selectedWorkoutDate);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _WorkoutCalendarCard(
-                      selectedDate: _selectedWorkoutDate,
-                      items: items,
-                      canManage: canManage,
-                      createClassMode: _createClassMode,
-                      onSelectCreateMode: (mode) {
-                        setState(() {
-                          _createClassMode = _createClassMode == mode
-                              ? null
-                              : mode;
-                        });
-                      },
-                      onCreateSuccess: () async {
-                        setState(() {
-                          _createClassMode = null;
-                        });
-                        await _refresh();
-                      },
-                      onDateChanged: (nextDate) {
-                        setState(() {
-                          _selectedWorkoutDate = _dateOnly(nextDate);
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Classes on $selectedDateLabel',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    if (selectedItems.isEmpty)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            canManage
-                                ? 'No classes scheduled on this date yet. Add a class for $selectedDateLabel.'
-                                : 'No classes are scheduled on this date.',
-                          ),
-                        ),
-                      )
-                    else
-                      for (final item in selectedItems) ...[
-                        _ScheduleClassCard(
-                          item: item,
-                          canManage: canManage,
-                          onToggleBooking: () => _toggleBooking(item),
-                          onToggleWaitlist: () => _toggleWaitlist(item),
-                          onUpdateAttendance: (booking, status) =>
-                              _updateAttendance(
-                                item: item,
-                                booking: booking,
-                                attendanceStatus: status,
-                              ),
-                          onEdit: () =>
-                              _openEditor(existing: item, canManage: canManage),
-                          onDelete: () => _deleteClass(item, canManage),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                  ],
-                );
-              },
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF09111E),
+            Color(0xFF10192A),
+            Color(0xFF0B1320),
+          ],
+        ),
+      ),
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            _CalendarHero(
+              canManage: canManage,
+              roleLabel: roleLabel,
+              gymName: gymName,
             ),
-        ],
+            const SizedBox(height: 16),
+            if (profile?.activeGym == null)
+              const _CalendarStateCard(
+                icon: Icons.store_mall_directory_outlined,
+                title: 'No active gym selected',
+                message:
+                    'Join or switch to a gym to use the schedule, bookings, waitlist, and attendance tools.',
+                accentColor: Color(0xFF5FB2FF),
+              )
+            else
+              FutureBuilder<List<ScheduleClass>>(
+                future: _scheduleFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return _CalendarStateCard(
+                      icon: Icons.error_outline,
+                      title: 'Failed to load schedule',
+                      message: errorMessageFrom(
+                        snapshot.error!,
+                        fallback: 'Failed to load schedule',
+                      ),
+                      accentColor: const Color(0xFFFF6B2C),
+                    );
+                  }
+                  final items = snapshot.data ?? const <ScheduleClass>[];
+                  final selectedItems =
+                      items
+                          .where(
+                            (item) =>
+                                _isSameDay(item.startTime, _selectedWorkoutDate),
+                          )
+                          .toList()
+                        ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                  final selectedDateLabel = MaterialLocalizations.of(
+                    context,
+                  ).formatFullDate(_selectedWorkoutDate);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _WorkoutCalendarCard(
+                        selectedDate: _selectedWorkoutDate,
+                        items: items,
+                        canManage: canManage,
+                        createClassMode: _createClassMode,
+                        onSelectCreateMode: (mode) {
+                          setState(() {
+                            _createClassMode = _createClassMode == mode
+                                ? null
+                                : mode;
+                          });
+                        },
+                        onCreateSuccess: () async {
+                          setState(() {
+                            _createClassMode = null;
+                          });
+                          await _refresh();
+                        },
+                        onDateChanged: (nextDate) {
+                          setState(() {
+                            _selectedWorkoutDate = _dateOnly(nextDate);
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _CalendarSectionHeader(
+                        eyebrow: 'Schedule',
+                        title: 'Classes on $selectedDateLabel',
+                        subtitle: canManage
+                            ? 'Coach, capacity, attendance, and booking controls stay anchored to the selected day.'
+                            : 'See exactly what is running that day and act on bookings without leaving the schedule.',
+                      ),
+                      const SizedBox(height: 12),
+                      if (selectedItems.isEmpty)
+                        _CalendarStateCard(
+                          icon: canManage
+                              ? Icons.edit_calendar_outlined
+                              : Icons.event_busy_outlined,
+                          title: 'No classes scheduled',
+                          message: canManage
+                              ? 'Nothing is scheduled on $selectedDateLabel yet. Add a class to open the day.'
+                              : 'No classes are scheduled on this date.',
+                          accentColor: canManage
+                              ? const Color(0xFFFF6B2C)
+                              : const Color(0xFF7EE7C6),
+                        )
+                      else
+                        for (final item in selectedItems) ...[
+                          _ScheduleClassCard(
+                            item: item,
+                            canManage: canManage,
+                            onToggleBooking: () => _toggleBooking(item),
+                            onToggleWaitlist: () => _toggleWaitlist(item),
+                            onUpdateAttendance: (booking, status) =>
+                                _updateAttendance(
+                                  item: item,
+                                  booking: booking,
+                                  attendanceStatus: status,
+                                ),
+                            onEdit: () => _openEditor(
+                              existing: item,
+                              canManage: canManage,
+                            ),
+                            onDelete: () => _deleteClass(item, canManage),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                    ],
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -336,6 +366,216 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       default:
         return 'Booked';
     }
+  }
+}
+
+class _CalendarHero extends StatelessWidget {
+  const _CalendarHero({
+    required this.canManage,
+    required this.roleLabel,
+    required this.gymName,
+  });
+
+  final bool canManage;
+  final String roleLabel;
+  final String? gymName;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accentColor = canManage
+        ? const Color(0xFFFF6B2C)
+        : const Color(0xFF7EE7C6);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accentColor.withOpacity(0.24),
+            const Color(0xFF11192A),
+            const Color(0xFF070B12),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.14),
+            blurRadius: 32,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -10,
+            top: -12,
+            child: _GlowOrb(color: accentColor, size: 84),
+          ),
+          Positioned(
+            right: 38,
+            bottom: -28,
+            child: _GlowOrb(
+              color: const Color(0xFF5FB2FF).withOpacity(0.6),
+              size: 88,
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _HeroPill(label: roleLabel, color: accentColor),
+                  _HeroPill(
+                    label: gymName ?? 'No active gym',
+                    color: const Color(0xFF7EE7C6),
+                    outlined: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Schedule',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFFE8EEF8),
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                canManage
+                    ? 'Run the floor with less friction.'
+                    : 'Plan the next training session.',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  height: 0.96,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                canManage
+                    ? 'Use one cleaner schedule surface for class creation, capacity control, attendance, and booking oversight.'
+                    : 'Check the day, book quickly, and keep your waitlist or attendance state visible at a glance.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: const Color(0xFFD7E0EE),
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarSectionHeader extends StatelessWidget {
+  const _CalendarSectionHeader({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow.toUpperCase(),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: const Color(0xFF7EE7C6),
+            letterSpacing: 1.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            height: 0.96,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: const Color(0xFFB8C4D9),
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarStateCard extends StatelessWidget {
+  const _CalendarStateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.accentColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101826),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _AccentBadge(icon: icon, color: accentColor),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFB8C4D9),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -362,28 +602,54 @@ class _WorkoutCalendarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Workout Calendar',
-              style: Theme.of(context).textTheme.titleMedium,
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101826),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Workout Calendar',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select a date to check whether the gym has a workout scheduled.',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select a date to check whether the gym has a workout scheduled.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFFB8C4D9),
             ),
-            const SizedBox(height: 12),
-            CalendarDatePicker(
+          ),
+          const SizedBox(height: 12),
+          Theme(
+            data: theme.copyWith(
+              colorScheme: theme.colorScheme.copyWith(
+                primary: const Color(0xFFFF6B2C),
+                onPrimary: Colors.white,
+                surface: const Color(0xFF101826),
+                onSurface: Colors.white,
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF7EE7C6),
+                ),
+              ),
+            ),
+            child: CalendarDatePicker(
               initialDate: selectedDate,
               firstDate: DateTime.now().subtract(const Duration(days: 30)),
               lastDate: DateTime.now().add(const Duration(days: 365)),
               currentDate: DateTime.now(),
               onDateChanged: onDateChanged,
             ),
+          ),
             if (canManage) ...[
               const SizedBox(height: 12),
               Row(
@@ -917,6 +1183,7 @@ class _ScheduleClassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final date = MaterialLocalizations.of(
       context,
     ).formatFullDate(item.startTime);
@@ -926,94 +1193,172 @@ class _ScheduleClassCard extends StatelessWidget {
     final isFuture = item.startTime.isAfter(DateTime.now());
     final canManageAttendance = canManage && !isFuture;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    item.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Chip(label: Text(item.classType)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(date),
-            Text('Start: $startTime'),
-            Text('Duration: ${item.durationMinutes} min'),
-            if (item.assignedTrainer != null)
-              Text('Trainer: ${item.assignedTrainer!.label}'),
-            Text('Bookings: ${item.bookedCount}/${item.capacity}'),
-            Text('Remaining spots: ${item.remainingSpots}'),
-            if (item.waitlistCount > 0) Text('Waitlist: ${item.waitlistCount}'),
-            if (item.wodDescription.isNotEmpty)
-              Text('WOD: ${item.wodDescription}'),
-            if (item.attendanceStatus != null)
-              Text(
-                'Your attendance: ${_attendanceLabel(item.attendanceStatus!)}',
-              ),
-            if (item.isWaitlisted) const Text('Your status: Waitlisted'),
-            if (isFuture) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (item.isBooked)
-                    OutlinedButton(
-                      onPressed: onToggleBooking,
-                      child: const Text('Cancel Booking'),
-                    )
-                  else if (item.isWaitlisted)
-                    OutlinedButton(
-                      onPressed: onToggleWaitlist,
-                      child: const Text('Leave Waitlist'),
-                    )
-                  else
-                    FilledButton(
-                      onPressed: item.isFull
-                          ? onToggleWaitlist
-                          : onToggleBooking,
-                      child: Text(item.isFull ? 'Join Waitlist' : 'Book Class'),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101826),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF5FB2FF).withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  if (canManage) ...[
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      onPressed: onEdit,
-                      child: const Text('Edit'),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      onPressed: onDelete,
-                      child: const Text('Delete'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _HeroPill(label: item.classType, color: const Color(0xFFFF6B2C)),
+                        _HeroPill(label: startTime, color: const Color(0xFF5FB2FF)),
+                        _HeroPill(label: '${item.durationMinutes} min', color: const Color(0xFF7EE7C6)),
+                      ],
                     ),
                   ],
+                ),
+              ),
+              if (canManage && isFuture)
+                IconButton.filledTonal(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Edit',
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            date,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFFB8C4D9),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _MetricTile(label: 'Bookings', value: '${item.bookedCount}/${item.capacity}', accentColor: const Color(0xFFFF6B2C)),
+              _MetricTile(label: 'Open spots', value: '${item.remainingSpots}', accentColor: const Color(0xFF7EE7C6)),
+              if (item.waitlistCount > 0)
+                _MetricTile(label: 'Waitlist', value: '${item.waitlistCount}', accentColor: const Color(0xFFB98CFF)),
+            ],
+          ),
+          if (item.assignedTrainer != null) ...[
+            const SizedBox(height: 14),
+            _DetailLine(label: 'Trainer', value: item.assignedTrainer!.label),
+          ],
+          if (item.wodDescription.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _ContentPanel(
+              label: 'WOD',
+              accentColor: const Color(0xFFFF6B2C),
+              child: Text(
+                item.wodDescription,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
+          if (item.attendanceStatus != null || item.isWaitlisted) ...[
+            const SizedBox(height: 14),
+            _ContentPanel(
+              label: 'Your Status',
+              accentColor: const Color(0xFF7EE7C6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (item.attendanceStatus != null)
+                    Text(
+                      'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+                    ),
+                  if (item.isWaitlisted)
+                    Text(
+                      'Waitlist: Active',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+                    ),
                 ],
               ),
-            ],
-            if (item.bookings.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Divider(),
-              Text(
-                'Booked Members',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-              for (final booking in item.bookings) ...[
-                _AttendanceRow(
-                  booking: booking,
-                  canManageAttendance: canManageAttendance,
-                  onUpdateAttendance: onUpdateAttendance,
-                ),
-                const SizedBox(height: 8),
+            ),
+          ],
+          if (isFuture) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (item.isBooked)
+                  OutlinedButton(
+                    onPressed: onToggleBooking,
+                    child: const Text('Cancel Booking'),
+                  )
+                else if (item.isWaitlisted)
+                  OutlinedButton(
+                    onPressed: onToggleWaitlist,
+                    child: const Text('Leave Waitlist'),
+                  )
+                else
+                  FilledButton(
+                    onPressed: item.isFull ? onToggleWaitlist : onToggleBooking,
+                    child: Text(item.isFull ? 'Join Waitlist' : 'Book Class'),
+                  ),
+                if (canManage) ...[
+                  OutlinedButton(
+                    onPressed: onEdit,
+                    child: const Text('Edit'),
+                  ),
+                  OutlinedButton(
+                    onPressed: onDelete,
+                    child: const Text('Delete'),
+                  ),
+                ],
               ],
+            ),
+          ],
+          if (item.bookings.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(color: Color(0x1FFFFFFF)),
+            const SizedBox(height: 12),
+            Text(
+              'Booked Members',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final booking in item.bookings) ...[
+              _AttendanceRow(
+                booking: booking,
+                canManageAttendance: canManageAttendance,
+                onUpdateAttendance: onUpdateAttendance,
+              ),
+              const SizedBox(height: 10),
             ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1037,6 +1382,214 @@ bool _isSameDay(DateTime left, DateTime right) {
   return left.year == right.year &&
       left.month == right.month &&
       left.day == right.day;
+}
+
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.accentColor,
+  });
+
+  final String label;
+  final String value;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 104),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor.withOpacity(0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: accentColor,
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return RichText(
+      text: TextSpan(
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: const Color(0xFFB8C4D9),
+        ),
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(text: value),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContentPanel extends StatelessWidget {
+  const _ContentPanel({
+    required this.label,
+    required this.accentColor,
+    required this.child,
+  });
+
+  final String label;
+  final Color accentColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accentColor.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: accentColor,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({
+    required this.label,
+    required this.color,
+    this.outlined = false,
+  });
+
+  final String label;
+  final Color color;
+  final bool outlined;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: outlined ? Colors.transparent : color.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(outlined ? 0.55 : 0.3)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _GlowOrb extends StatelessWidget {
+  const _GlowOrb({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withOpacity(0.95),
+              color.withOpacity(0.0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccentBadge extends StatelessWidget {
+  const _AccentBadge({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(0.28),
+                color.withOpacity(0.12),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.28)),
+          ),
+          child: Icon(icon, color: color),
+        ),
+      ),
+    );
+  }
 }
 
 class _AttendanceRow extends StatelessWidget {
