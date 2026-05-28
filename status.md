@@ -11,10 +11,11 @@ Last updated: 2026-05-28
 - Active backend: local REST backend in `backend/server.py`
 
 ## Current Focus
-- Finish `US-A3-03` role-based access hardening and document the production permission matrix
+- Complete the remaining production hardening around memberships/payments, real email delivery, push infrastructure, and backend deployment posture
 
 ## Validation State
 - `python3 -m unittest backend.test_server`: passed (66 tests)
+- Frontend polish slices committed across home, programming, calendar, profile, shell, logbook, notifications, edit profile, security, and auth flows
 - `cd app && flutter test ...`: [blocked in this environment] `flutter` binary is currently not available in PATH
 - `flutter analyze`: [blocked in this environment] `flutter` binary is currently not available in PATH
 
@@ -22,10 +23,11 @@ Last updated: 2026-05-28
 1. Verification and password-reset tokens are still printed to the backend terminal for local development instead of being emailed.
 2. External push delivery is not implemented yet; current notification coverage is primarily in-app.
 3. Memberships, billing, and admin analytics are still unimplemented core modules.
-4. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
+4. Flutter validation is still blocked in this environment, so the full UI polish pass has not yet been verified with `flutter test` / `flutter analyze` here.
+5. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
 
 ## Recommended Next Steps
-1. Finish app-surface parity for role-gated admin flows and run Flutter validation once the toolchain is available in this environment.
+1. Run Flutter validation once the toolchain is available in this environment and fix any UI regressions from the completed polish pass.
 2. Define and implement the first production slice of memberships and payments.
 3. Tighten production hardening: real email delivery, secret management, push infrastructure, and deployment posture.
 

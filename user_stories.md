@@ -15,7 +15,7 @@ Last updated: 2026-05-28
 
 ### Current phase
 - Production-core build for a single gym
-- Current focus: finish remaining role-permission hardening, especially explicit admin-only endpoint coverage
+- Current focus: move from completed frontend polish into the next production-hardening slice around memberships/payments and infrastructure readiness
 - Active backend: local REST backend in `backend/server.py`
 
 ### Completed modules
@@ -40,9 +40,10 @@ Last updated: 2026-05-28
 - Later: add analytics and complete production hardening such as real email delivery, push infrastructure, and deployment/security posture
 
 ### Validation snapshot
-- `python -m unittest backend.test_server`: passed (57 tests)
-- `cd app && flutter test test/widget_test.dart --plain-name "Trainer can create a recurring class from schedule screen"`: passed
-- `flutter analyze`: passed with no issues found
+- `python3 -m unittest backend.test_server`: passed (66 tests)
+- Frontend polish slices committed for home, programming, calendar, profile, shell, logbook, notifications, edit profile, security, and auth flows
+- `cd app && flutter test ...`: [blocked in this environment] `flutter` binary is currently not available in PATH
+- `flutter analyze`: [blocked in this environment] `flutter` binary is currently not available in PATH
 
 ---
 
@@ -192,8 +193,9 @@ Last updated: 2026-05-28
 - Admin-only role management is enforced.
 - Admin-only operational endpoints now share a dedicated active-admin-gym guard in the backend.
 - A repository-level role permission matrix now documents the intended production-core access rules in `ROLE_PERMISSION_MATRIX.md`.
-- App surfaces are now being aligned so direct navigation to admin-only screens is blocked before the repository call is made.
-- Remaining work is to complete broader client parity and resume Flutter-side automated validation once the Flutter toolchain is available in the environment.
+- App surfaces now block direct navigation to admin-only screens before the repository call is made.
+- The primary frontend polish pass is complete across the main app, security flows, and auth flows.
+- Remaining work is to resume Flutter-side automated validation once the Flutter toolchain is available in the environment.
 
 #### US-A3-04 - Multi-role switching
 **Status:** Complete

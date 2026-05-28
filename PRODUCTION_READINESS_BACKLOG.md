@@ -1,6 +1,6 @@
 # BoxOS Production Readiness Backlog
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-28
 
 This backlog is based on the current Flutter client, local REST backend, `requirements.md`, `user_stories.md`, and `status.md`. The goal is to identify what must be completed before BoxOS can be moved into real production use for a single CrossFit box.
 
@@ -21,14 +21,14 @@ The app is not production-ready yet because several core product areas are still
 
 ### Auth Screens
 
-- `LoginScreen`: usable sign-in flow with forgot-password, create-account, and admin-access navigation.
-- `SignUpScreen`: athlete signup exists, but production email verification delivery is still missing.
-- `AdminSignUpScreen`: admin onboarding exists, but this must be controlled before production so arbitrary public admin creation cannot create operational risk.
-- `VerifyEmailScreen`: token-based verification exists, but currently depends on backend-log token delivery.
-- `ForgotPasswordScreen` and `ResetPasswordScreen`: flows exist, but reset delivery currently depends on backend-log token delivery.
-- `ChangePasswordScreen`: implemented.
-- `DeleteAccountScreen`: implemented, but production policy/legal copy and deletion/audit verification should be reviewed.
-- `AuthCallbackScreen`: exists for callback handling, but production OAuth/deep-link behavior needs device testing.
+- `LoginScreen`: polished production-style sign-in flow with clearer auth entry hierarchy and navigation.
+- `SignUpScreen`: athlete signup exists and now matches the shared auth design system, but production email verification delivery is still missing.
+- `AdminSignUpScreen`: admin onboarding exists in a distinct polished path, but this must still be controlled before production so arbitrary public admin creation cannot create operational risk.
+- `VerifyEmailScreen`: token-based verification exists in the polished auth surface, but currently depends on backend-log token delivery.
+- `ForgotPasswordScreen` and `ResetPasswordScreen`: recovery flows exist in the polished auth surface, but reset delivery currently depends on backend-log token delivery.
+- `ChangePasswordScreen`: implemented and polished.
+- `DeleteAccountScreen`: implemented and polished, but production policy/legal copy and deletion/audit verification should still be reviewed.
+- `AuthCallbackScreen`: exists for callback handling and now matches the auth surface, but production OAuth/deep-link behavior needs device testing.
 
 ### Shell And Home
 
@@ -112,7 +112,7 @@ Exit criteria:
 - Backend tests cover admin, trainer, athlete, no-gym, and wrong-gym access for critical endpoints.
 - The app has no visible unauthorized actions for each role.
 
-Progress note: admin-only endpoint guards and initial no-gym/wrong-gym backend regression coverage are now in place; client-surface parity still needs completion.
+Progress note: admin-only endpoint guards and initial no-gym/wrong-gym backend regression coverage are now in place; primary client-surface parity and the standalone frontend polish pass are complete, with Flutter-side validation still pending because the toolchain is unavailable in this environment.
 
 ### 2. Implement Memberships And Payments
 
@@ -268,10 +268,10 @@ These are not all absolute blockers, but they are important for credible product
 
 ### UI Consistency
 
-- Apply `docs/ui-guidelines.md` across all standalone screens.
-- Align app bars, back buttons, body width, empty states, and button placement.
-- Review all screens at narrow phone width, large phone width, and tablet/desktop debug width.
+- Review the completed polish pass against `docs/ui-guidelines.md` once Flutter tooling is available.
+- Run width/device QA across narrow phone width, large phone width, and tablet/desktop debug width.
 - Remove remaining demo/placeholder copy from production-facing screens.
+- Check shared auth-stage and security surfaces for any compile/layout regressions after the broad redesign.
 
 ## Security, Privacy, And Compliance
 
@@ -311,7 +311,7 @@ Required before launch:
 5. Implement real push notifications.
 6. Add admin analytics.
 7. Harden backend deployment, secrets, monitoring, backups, and production database.
-8. Complete UI consistency pass using `docs/ui-guidelines.md`.
+8. Validate the completed UI consistency pass using `docs/ui-guidelines.md` and Flutter/device QA.
 9. Run full iOS/Android release QA.
 
 ## Launch Readiness Definition
