@@ -112,6 +112,8 @@ Exit criteria:
 - Backend tests cover admin, trainer, athlete, no-gym, and wrong-gym access for critical endpoints.
 - The app has no visible unauthorized actions for each role.
 
+Progress note: admin-only endpoint guards and initial no-gym/wrong-gym backend regression coverage are now in place; client-surface parity still needs completion.
+
 ### 2. Implement Memberships And Payments
 
 Current status: Epic C is not started.

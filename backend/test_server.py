@@ -3745,6 +3745,392 @@ class BackendServerTests(unittest.TestCase):
         with urllib.request.urlopen(request) as response:
             return json_loads(response.read())
 
+    def test_schedule_requires_active_gym_context(self) -> None:
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/schedule/classes",
+            headers={"Authorization": f"Bearer {athlete_login['access_token']}"},
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
+    def test_athlete_cannot_book_class_from_other_gym(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym_one = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Booking Home Gym",
+                "logo_url": "https://example.com/booking-home.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        gym_two = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Booking Other Gym",
+                "logo_url": "https://example.com/booking-other.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=gym_one["gym"]["id"],
+            roles=["athlete"],
+        )
+
+        future_start = server.now_utc() + timedelta(days=2)
+        connection = server.get_connection()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(athlete_user)
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into class_schedules (
+                  gym_id, title, class_type, start_time, end_time, duration_minutes, capacity,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, 'Other Gym Class', 'CrossFit', ?, ?, 60, 12, ?, ?, ?, ?)
+                """,
+                (
+                    gym_two["gym"]["id"],
+                    server.isoformat(future_start),
+                    server.isoformat(future_start + timedelta(hours=1)),
+                    athlete_user["id"],
+                    athlete_user["id"],
+                    server.isoformat(server.now_utc()),
+                    server.isoformat(server.now_utc()),
+                ),
+            )
+            class_id = int(cursor.lastrowid)
+        connection.close()
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/schedule/bookings",
+            data=json_bytes({"class_id": class_id}),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 404)
+
+    def test_trainer_cannot_record_attendance_for_other_gym_class(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym_one = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Attendance Home Gym",
+                "logo_url": "https://example.com/attendance-home.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        gym_two = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Attendance Other Gym",
+                "logo_url": "https://example.com/attendance-other.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=gym_one["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+
+        connection = server.get_connection()
+        trainer_user = connection.execute(
+            "select id from users where email = ?",
+            (server.TRAINER_EMAIL,),
+        ).fetchone()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(trainer_user)
+        self.assertIsNotNone(athlete_user)
+        now = server.now_utc()
+        with connection:
+            connection.execute(
+                """
+                insert into gym_memberships (
+                  user_id, gym_id, active_role, roles_json, status, created_at, updated_at
+                )
+                values (?, ?, 'athlete', ?, 'active', ?, ?)
+                """,
+                (
+                    athlete_user["id"],
+                    gym_two["gym"]["id"],
+                    server.encode_roles(["athlete"]),
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            class_cursor = connection.execute(
+                """
+                insert into class_schedules (
+                  gym_id, title, class_type, start_time, end_time, duration_minutes, capacity,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, 'Other Attendance Class', 'Open Gym', ?, ?, 60, 12, ?, ?, ?, ?)
+                """,
+                (
+                    gym_two["gym"]["id"],
+                    server.isoformat(now - timedelta(hours=2)),
+                    server.isoformat(now - timedelta(hours=1)),
+                    trainer_user["id"],
+                    trainer_user["id"],
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            class_id = int(class_cursor.lastrowid)
+            connection.execute(
+                """
+                insert into class_bookings (
+                  class_schedule_id, user_id, attendance_status, created_at
+                ) values (?, ?, 'booked', ?)
+                """,
+                (class_id, athlete_user["id"], server.isoformat(now - timedelta(hours=3))),
+            )
+        connection.close()
+
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/schedule/bookings/attendance",
+            data=json_bytes(
+                {
+                    "class_id": class_id,
+                    "user_id": athlete_user["id"],
+                    "attendance_status": "attended",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {trainer_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 404)
+
+    def test_athlete_cannot_submit_whiteboard_result_for_other_gym_workout(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym_one = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Whiteboard Home Gym",
+                "logo_url": "https://example.com/whiteboard-home.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        gym_two = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Whiteboard Other Gym",
+                "logo_url": "https://example.com/whiteboard-other.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=gym_one["gym"]["id"],
+            roles=["athlete"],
+        )
+
+        connection = server.get_connection()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(athlete_user)
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into daily_workouts (
+                  gym_id, scheduled_date, title, strength_text, metcon_text, notes_text,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, ?, 'Other Gym WOD', '', 'Run 5k', '', ?, ?, ?, ?)
+                """,
+                (
+                    gym_two["gym"]["id"],
+                    (server.now_utc() - timedelta(days=1)).date().isoformat(),
+                    athlete_user["id"],
+                    athlete_user["id"],
+                    server.isoformat(server.now_utc()),
+                    server.isoformat(server.now_utc()),
+                ),
+            )
+            workout_id = int(cursor.lastrowid)
+        connection.close()
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/programming/whiteboard",
+            data=json_bytes(
+                {
+                    "workout_id": workout_id,
+                    "score_type": "time",
+                    "score_value": 1500,
+                    "notes_text": "blocked",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 404)
+
+    def test_athlete_cannot_log_workout_with_other_gym_class_reference(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        gym_one = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Logbook Home Gym",
+                "logo_url": "https://example.com/logbook-home.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        gym_two = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Logbook Other Gym",
+                "logo_url": "https://example.com/logbook-other.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=gym_one["gym"]["id"],
+            roles=["athlete"],
+        )
+
+        connection = server.get_connection()
+        athlete_user = connection.execute(
+            "select id from users where email = ?",
+            (server.DEMO_EMAIL,),
+        ).fetchone()
+        self.assertIsNotNone(athlete_user)
+        now = server.now_utc()
+        with connection:
+            workout_cursor = connection.execute(
+                """
+                insert into daily_workouts (
+                  gym_id, scheduled_date, title, strength_text, metcon_text, notes_text,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, ?, 'Home Gym WOD', '', '21-15-9 thrusters and pull-ups', '', ?, ?, ?, ?)
+                """,
+                (
+                    gym_one["gym"]["id"],
+                    now.date().isoformat(),
+                    athlete_user["id"],
+                    athlete_user["id"],
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            workout_id = int(workout_cursor.lastrowid)
+            class_cursor = connection.execute(
+                """
+                insert into class_schedules (
+                  gym_id, title, class_type, start_time, end_time, duration_minutes, capacity,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, 'Other Gym Class Ref', 'CrossFit', ?, ?, 60, 12, ?, ?, ?, ?)
+                """,
+                (
+                    gym_two["gym"]["id"],
+                    server.isoformat(now + timedelta(hours=1)),
+                    server.isoformat(now + timedelta(hours=2)),
+                    athlete_user["id"],
+                    athlete_user["id"],
+                    server.isoformat(now),
+                    server.isoformat(now),
+                ),
+            )
+            class_id = int(class_cursor.lastrowid)
+        connection.close()
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/logbook",
+            data=json_bytes(
+                {
+                    "workout_id": workout_id,
+                    "class_id": class_id,
+                    "score_type": "rounds_reps",
+                    "score_value": 189,
+                    "notes_text": "blocked",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 404)
+
     def _verify_user_email(self, email: str) -> None:
         connection = server.get_connection()
         user = connection.execute(

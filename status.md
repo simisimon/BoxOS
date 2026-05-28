@@ -14,7 +14,7 @@ Last updated: 2026-05-28
 - Finish `US-A3-03` role-based access hardening and document the production permission matrix
 
 ## Validation State
-- `python3 -m unittest backend.test_server`: passed (61 tests)
+- `python3 -m unittest backend.test_server`: passed (66 tests)
 - `cd app && flutter test test/widget_test.dart --plain-name "Trainer can create a recurring class from schedule screen"`: passed
 - `flutter analyze`: passed with no issues found
 
@@ -25,7 +25,7 @@ Last updated: 2026-05-28
 4. Profile photo upload remains out of scope for the current profile slice; only display name and nickname are implemented.
 
 ## Recommended Next Steps
-1. Finish backend role-hardening coverage for admin-only endpoints and mirror the same restrictions across app surfaces.
+1. Continue role-hardening with broader wrong-gym/no-gym backend coverage and mirror the same restrictions across app surfaces.
 2. Define and implement the first production slice of memberships and payments.
 3. Tighten production hardening: real email delivery, secret management, push infrastructure, and deployment posture.
 
