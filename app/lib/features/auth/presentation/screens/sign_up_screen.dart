@@ -1,6 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
-import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
+import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,140 +29,108 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   String? _emailValidator(String? value) {
     final email = value?.trim() ?? '';
-    if (email.isEmpty) {
-      return 'Email is required';
-    }
-
+    if (email.isEmpty) return 'Email is required';
     final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-    if (!emailRegex.hasMatch(email)) {
-      return 'Enter a valid email';
-    }
+    if (!emailRegex.hasMatch(email)) return 'Enter a valid email';
     return null;
   }
 
   String? _passwordValidator(String? value) {
     final password = value ?? '';
-    if (password.isEmpty) {
-      return 'Password is required';
-    }
-
-    if (password.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
+    if (password.isEmpty) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
     return null;
   }
 
   String? _confirmValidator(String? value) {
-    if ((value ?? '') != _passwordController.text) {
-      return 'Passwords do not match';
-    }
+    if ((value ?? '') != _passwordController.text) return 'Passwords do not match';
     return null;
   }
 
   Future<void> _onSubmit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid || _isSubmitting) {
-      return;
-    }
-
+    if (!isValid || _isSubmitting) return;
     setState(() => _isSubmitting = true);
     try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .signUp(
+      await ref.read(authControllerProvider.notifier).signUp(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sign up successful. Verify your email to continue.'),
-        ),
+        const SnackBar(content: Text('Sign up successful. Verify your email to continue.')),
       );
-      context.go(
-        '/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}',
-      );
+      context.go('/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}');
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessageFrom(error, fallback: 'Sign up failed')),
-        ),
+        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Sign up failed'))),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
-      body: MobileScrollableContent(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
-                validator: _emailValidator,
+    return AuthStage(
+      title: 'Create Account',
+      eyebrow: 'Onboarding',
+      headline: 'Start clean. Move fast.',
+      description:
+          'Create your athlete account, verify your email, and get into programming, classes, and tracking without friction.',
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AuthFieldGroup(
+              icon: Icons.person_add_alt_1_outlined,
+              title: 'Athlete Sign Up',
+              subtitle: 'This path is for members joining and training inside a gym.',
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                    validator: _emailValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                    validator: _passwordValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder()),
+                    validator: _confirmValidator,
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                ),
-                validator: _passwordValidator,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm Password',
-                  border: OutlineInputBorder(),
-                ),
-                validator: _confirmValidator,
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _isSubmitting ? null : _onSubmit,
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Create Account'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _isSubmitting
-                    ? null
-                    : () => context.go('/admin-sign-up'),
-                child: const Text('I need admin access'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 14),
+            const AuthNoteCard(
+              title: 'Next step',
+              body: 'After sign up, BoxOS sends a verification email before account access becomes active.',
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _isSubmitting ? null : _onSubmit,
+              child: _isSubmitting
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Create Account'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: _isSubmitting ? null : () => context.go('/admin-sign-up'),
+              child: const Text('I need admin access'),
+            ),
+          ],
         ),
       ),
     );

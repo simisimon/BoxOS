@@ -1,6 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
-import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
+import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -42,47 +42,34 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
       _setError(authError);
       return;
     }
-
     if (type.isEmpty || tokenHash.isEmpty) {
       _setError('The authentication link is missing required parameters.');
       return;
     }
-
     if (type == 'recovery') {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       context.go('/reset-password?token=${Uri.encodeComponent(tokenHash)}');
       return;
     }
-
     if (type != 'signup' && type != 'email') {
       _setError('Unsupported authentication link type: $type');
       return;
     }
 
     try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .verifyEmail(token: tokenHash, type: type);
-      if (!mounted) {
-        return;
-      }
+      await ref.read(authControllerProvider.notifier).verifyEmail(token: tokenHash, type: type);
+      if (!mounted) return;
       setState(() {
         _status = _AuthCallbackStatus.success;
         _message = 'Email verified. You can now sign in.';
       });
     } catch (error) {
-      _setError(
-        errorMessageFrom(error, fallback: 'Authentication link failed'),
-      );
+      _setError(errorMessageFrom(error, fallback: 'Authentication link failed'));
     }
   }
 
   void _setError(String message) {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() {
       _status = _AuthCallbackStatus.error;
       _message = message;
@@ -93,40 +80,42 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
   Widget build(BuildContext context) {
     final isLoading = _status == _AuthCallbackStatus.loading;
     final isError = _status == _AuthCallbackStatus.error;
+    final icon = isLoading
+        ? const SizedBox(height: 56, width: 56, child: CircularProgressIndicator(strokeWidth: 3))
+        : Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            size: 56,
+            color: isError ? const Color(0xFFFF7A7A) : const Color(0xFF7EE7C6),
+          );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Auth Callback')),
-      body: MobileContent(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLoading)
-              const CircularProgressIndicator()
-            else
-              Icon(
-                isError ? Icons.error_outline : Icons.check_circle_outline,
-                size: 48,
-                color: isError
-                    ? Theme.of(context).colorScheme.error
-                    : Colors.green,
-              ),
+    return AuthStage(
+      title: 'Auth Callback',
+      eyebrow: 'Magic Link',
+      headline: isLoading
+          ? 'Verifying the link.'
+          : isError
+              ? 'The link needs attention.'
+              : 'You are verified.' ,
+      description: 'BoxOS is interpreting the authentication callback and routing you into the correct next step.',
+      accentColor: isError ? const Color(0xFFFF7A7A) : const Color(0xFF7EE7C6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: icon),
+          const SizedBox(height: 16),
+          Text(
+            _message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+          if (!isLoading) ...[
             const SizedBox(height: 16),
-            Text(
-              _message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
+            FilledButton(
+              onPressed: () => context.go('/login'),
+              child: const Text('Back to Sign In'),
             ),
-            const SizedBox(height: 16),
-            if (!isLoading)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => context.go('/login'),
-                  child: const Text('Back to Sign In'),
-                ),
-              ),
           ],
-        ),
+        ],
       ),
     );
   }
