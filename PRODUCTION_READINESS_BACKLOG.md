@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-05-28
 
-This backlog is based on the current Flutter client, local REST backend, `requirements.md`, `user_stories.md`, and `status.md`. The goal is to identify what must be completed before BoxOS can be moved into real production use for a single CrossFit box.
+This backlog is based on the current Flutter client, local REST backend, `requirements.md`, `user_stories.md`, `status.md`, and `SUGARWOD_FEATURE_GAP.md`. The goal is to identify what must be completed before BoxOS can be moved into real production use for a single CrossFit box and what product gaps remain if BoxOS is meant to become a meaningfully better SugarWOD-style platform.
 
 ## Current State Summary
 
@@ -15,7 +15,7 @@ BoxOS already has a meaningful production-core foundation:
 - Programming supports daily WOD creation/editing, workout calendar views, whiteboard results, workout logging, workout history, and basic PR detection.
 - Admin role management and audit logs exist.
 
-The app is not production-ready yet because several core product areas are still missing or not hardened enough: memberships/payments, admin analytics, external email/push delivery, complete role-permission verification, production backend deployment posture, and store-ready mobile app polish.
+The app is not production-ready yet because several core product areas are still missing or not hardened enough: memberships/payments, admin analytics, external email/push delivery, complete role-permission verification, production backend deployment posture, store-ready mobile app polish, deeper community features, stronger performance tracking, and coach-grade programming workflows.
 
 ## Screen Review
 
@@ -67,12 +67,17 @@ The app is not production-ready yet because several core product areas are still
 ### Programming Screen
 
 - `ProgrammingScreen`: daily WOD creation/editing, programming calendar, whiteboard, whiteboard submission, and workout log submission exist.
-- Production gaps include richer programming templates, stronger validation for score types, coach/admin editing review, and UX polish for heavy workout text.
+- Production gaps include richer programming templates, stronger validation for score types, coach/admin editing review, UX polish for heavy workout text, and more structured coach authoring fields such as warm-up, scaling, stimulus, and coach notes.
 
 ### Logbook Screen
 
 - `LogbookScreen`: workout history, PR tracking chips, and logged result display exist.
-- Production gaps include better filtering/search, clearer PR history, and stronger empty states for new athletes.
+- Production gaps include better filtering/search, clearer PR history, benchmark history, richer comparison against previous attempts, and stronger empty states for new athletes.
+
+### Community And Engagement
+
+- BoxOS currently has workout logging and in-app notifications, but it does not yet have a real community layer around workouts.
+- Missing capabilities include workout comments, reactions/cheers, coach comments on athlete results, gym announcement/feed content, and broader recognition loops for consistency and PRs.
 
 ### Notifications
 
@@ -88,6 +93,9 @@ The app is not production-ready yet because several core product areas are still
 - Booking eligibility/entitlement UI is missing.
 - Admin analytics dashboard is missing.
 - Revenue snapshot screen is missing.
+- Community feed / workout comments surface is missing.
+- Coach-facing programming template and publishing workflow surface is missing.
+- Benchmark/performance analytics views are missing.
 - Production operational/admin backoffice surface is not yet implemented beyond mobile admin workflows.
 
 ## Production Blockers
@@ -202,13 +210,73 @@ Required work:
 - Membership activity overview.
 - Revenue snapshot.
 - Basic date range filters.
+- Class fill-rate and waitlist pressure views.
+- No-show trend visibility.
+- Programming engagement and workout logging engagement views.
 - Admin-only backend endpoints and mobile/admin UI.
 
 Exit criteria:
 
-- Admin can answer: attendance trend, utilization, active members, past due members, and recurring revenue snapshot.
+- Admin can answer: attendance trend, utilization, active members, past due members, recurring revenue snapshot, and where operational pressure or engagement drop-off is happening.
 
-### 7. Production Mobile Release Readiness
+### 7. Community And Engagement Loops
+
+Current status: not started.
+
+Required work:
+
+- Workout comments.
+- Reactions / cheers / fist-bumps.
+- Coach comments on athlete results.
+- Gym announcements or feed posts.
+- Recognition flows for PRs, streaks, and consistency.
+- Moderation and role-aware visibility rules for community content.
+- Notification events tied to new comments/reactions where appropriate.
+
+Exit criteria:
+
+- Athletes can react to and discuss workouts/results in-app.
+- Coaches can leave contextual feedback on athlete results.
+- Admins/coaches can publish real gym announcements instead of relying on placeholder home content.
+
+### 8. Performance Tracking And Athlete Progress
+
+Current status: partially implemented through logbook and basic PR detection.
+
+Required work:
+
+- Benchmark workout history.
+- Movement-specific PR views.
+- Progress charts and trend summaries.
+- Better “since last time” comparison views.
+- Filtering by movement, workout type, score type, and date range.
+- Retest prompts or benchmark revisit cues.
+
+Exit criteria:
+
+- Athletes can quickly understand progress over time, not just see isolated past entries.
+- Coaches can use the recorded data to guide progression and celebrate improvements.
+
+### 9. Coach-Grade Programming Workflows
+
+Current status: partially implemented through daily WOD creation/editing.
+
+Required work:
+
+- Workout templates.
+- Copy/duplicate day, week, and block workflows.
+- Movement library.
+- Warm-up, scaling, stimulus, and coach-note fields.
+- Draft / scheduled / published workflow.
+- Coach/admin review or approval flow where needed.
+- Support for more workout structures such as partner, team, relay, interval, and phased formats.
+
+Exit criteria:
+
+- Coaches can program faster and more consistently than with free-text-only daily authoring.
+- Programming quality and structure hold up under real daily gym use.
+
+### 10. Production Mobile Release Readiness
 
 Required work:
 
@@ -234,6 +302,7 @@ These are not all absolute blockers, but they are important for credible product
 - Replace static News cards with real gym announcements or recent operational events.
 - Show the athlete's actual next booking in Today.
 - Show the active gym's actual WOD in Today.
+- Add stronger engagement prompts such as comments/reactions highlights, PR celebrations, or consistency nudges.
 - Add role-specific home content:
   - Athlete: next class, WOD, recent PR/logging prompt.
   - Trainer: next classes to coach, attendance tasks, today's programming.
@@ -253,12 +322,23 @@ These are not all absolute blockers, but they are important for credible product
 - Improve score type guidance and validation.
 - Add clearer whiteboard filtering/sorting.
 - Add better edit history/audit visibility for coaches/admins.
+- Add structured programming fields for warm-up, scaling, stimulus, and coach intent.
+- Add publishing states and better multi-day/block authoring workflows.
 
 ### Logbook
 
 - Add filters/search by workout, date, PR, score type, and movement.
 - Add PR history detail view.
+- Add benchmark history and “since last time” comparisons.
+- Add progress charts/trend views.
 - Add clearer empty state and onboarding path for new athletes.
+
+### Community And Announcements
+
+- Add workout comments and reactions.
+- Add coach comments on athlete results.
+- Add gym announcement/feed content to replace placeholder home-news behavior.
+- Add moderation/visibility controls for community content.
 
 ### Profile And Account
 
@@ -310,9 +390,12 @@ Required before launch:
 4. Implement transactional email.
 5. Implement real push notifications.
 6. Add admin analytics.
-7. Harden backend deployment, secrets, monitoring, backups, and production database.
-8. Validate the completed UI consistency pass using `docs/ui-guidelines.md` and Flutter/device QA.
-9. Run full iOS/Android release QA.
+7. Implement first community/engagement loop features: announcements, comments, and reactions.
+8. Implement deeper performance tracking: benchmark history, progress comparisons, and richer logbook analytics.
+9. Implement coach-grade programming templates and publishing workflow.
+10. Harden backend deployment, secrets, monitoring, backups, and production database.
+11. Validate the completed UI consistency pass using `docs/ui-guidelines.md` and Flutter/device QA.
+12. Run full iOS/Android release QA.
 
 ## Launch Readiness Definition
 
@@ -323,5 +406,7 @@ BoxOS should not be considered production-ready until:
 - A real single gym can onboard admins, trainers, and athletes without developer intervention.
 - Payments/memberships can control booking access.
 - Email and push notifications work on real devices.
-- Admins can monitor basic attendance, membership, and revenue state.
+- Admins can monitor basic attendance, membership, revenue, and operational pressure state.
+- Athletes and coaches have real community/engagement loops instead of placeholder content only.
+- Performance tracking goes beyond raw history and supports meaningful progress review.
 - Critical flows pass automated tests and manual iOS/Android QA.
