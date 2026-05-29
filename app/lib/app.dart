@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/routing/router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,12 +9,12 @@ class BoxOsApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
-    const seed = Color(0xFF2563EB);
+    const seed = appPrimary;
     final colorScheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: Brightness.light,
-      surface: Colors.white,
-      background: const Color(0xFFF5F9FF),
+      surface: appSurface,
+      background: appPageBackground,
     );
 
     return MaterialApp.router(
@@ -21,31 +22,34 @@ class BoxOsApp extends ConsumerWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: colorScheme,
-        scaffoldBackgroundColor: const Color(0xFFF5F9FF),
+        scaffoldBackgroundColor: appPageBackground,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Color(0xFF0F172A),
+          backgroundColor: appSurface,
+          foregroundColor: appText,
           elevation: 0,
           centerTitle: false,
         ),
         cardTheme: const CardThemeData(
-          color: Colors.white,
+          color: appSurface,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(24)),
-            side: BorderSide(color: Color(0xFFD8E4F2)),
+            side: BorderSide(color: appBorder),
           ),
         ),
-        dividerColor: const Color(0xFFD8E4F2),
+        dividerColor: appBorder,
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          labelStyle: const TextStyle(color: Color(0xFF475569)),
-          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+          fillColor: appSurface,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          labelStyle: const TextStyle(color: appMutedText),
+          hintStyle: const TextStyle(color: appSubtleText),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD8E4F2)),
+            borderSide: const BorderSide(color: appBorder),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -53,11 +57,11 @@ class BoxOsApp extends ConsumerWidget {
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFDC2626)),
+            borderSide: const BorderSide(color: appDanger),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.6),
+            borderSide: const BorderSide(color: appDanger, width: 1.6),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
@@ -65,16 +69,20 @@ class BoxOsApp extends ConsumerWidget {
             backgroundColor: seed,
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF0F172A),
-            side: const BorderSide(color: Color(0xFFD8E4F2)),
+            foregroundColor: appText,
+            side: const BorderSide(color: appBorder),
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),

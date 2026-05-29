@@ -1,4 +1,5 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
@@ -47,7 +48,11 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Email verification failed'))),
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Email verification failed'),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isVerifying = false);
@@ -59,13 +64,19 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     if (email.isEmpty || _isResending) return;
     setState(() => _isResending = true);
     try {
-      await ref.read(authControllerProvider.notifier).resendEmailVerification(email: email);
+      await ref
+          .read(authControllerProvider.notifier)
+          .resendEmailVerification(email: email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification email resent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification email resent.')),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Resend failed'))),
+        SnackBar(
+          content: Text(errorMessageFrom(error, fallback: 'Resend failed')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isResending = false);
@@ -80,25 +91,33 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       headline: 'Prove the inbox. Unlock the account.',
       description:
           'Enter the verification token from your email, or resend the message if the first delivery missed you.',
-      accentColor: const Color(0xFF5FB2FF),
+      accentColor: appPrimary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AuthFieldGroup(
             icon: Icons.verified_outlined,
             title: 'Verification Token',
-            subtitle: 'Paste the token from the email to activate account access.',
+            subtitle:
+                'Paste the token from the email to activate account access.',
             child: Column(
               children: [
                 TextField(
                   controller: _tokenController,
-                  decoration: const InputDecoration(labelText: 'Verification Token', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Verification Token',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 FilledButton(
                   onPressed: _isVerifying ? null : _verify,
                   child: _isVerifying
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Verify Email'),
                 ),
               ],
@@ -108,20 +127,28 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
           AuthFieldGroup(
             icon: Icons.outgoing_mail,
             title: 'Resend Verification Email',
-            subtitle: 'If needed, trigger a fresh verification email to the address below.',
-            accentColor: const Color(0xFFB98CFF),
+            subtitle:
+                'If needed, trigger a fresh verification email to the address below.',
+            accentColor: appPrimary,
             child: Column(
               children: [
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 OutlinedButton(
                   onPressed: _isResending ? null : _resend,
                   child: _isResending
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Resend Verification Email'),
                 ),
               ],

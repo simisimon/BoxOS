@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
@@ -57,7 +58,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(profileRepositoryProvider).updateProfile(
+      await ref
+          .read(profileRepositoryProvider)
+          .updateProfile(
             displayName: _displayNameController.text.trim(),
             nickname: _nicknameController.text.trim(),
           );
@@ -101,16 +104,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final profileAsync = ref.watch(currentProfileProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: appPageBackground,
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFF5F9FF),
-              Color(0xFFEAF2FF),
-              Color(0xFFF9FBFF),
+              appPageBackground,
+              appPageBackgroundSoft,
+              appPageBackgroundEnd,
             ],
           ),
         ),
@@ -126,7 +129,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   error,
                   fallback: 'Failed to load profile',
                 ),
-                accentColor: const Color(0xFFFF6B2C),
+                accentColor: appPrimary,
               ),
             ),
             data: (profile) {
@@ -139,7 +142,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _EditProfileHero(onBack: () => Navigator.of(context).maybePop()),
+                      _EditProfileHero(
+                        onBack: () => Navigator.of(context).maybePop(),
+                      ),
                       const SizedBox(height: 16),
                       const _SectionTitle(
                         eyebrow: 'Profile',
@@ -151,7 +156,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       _FieldCard(
                         icon: Icons.mail_outline,
                         title: 'Email',
-                        subtitle: 'Your account email is shown here and cannot be edited from this screen.',
+                        subtitle:
+                            'Your account email is shown here and cannot be edited from this screen.',
                         child: TextFormField(
                           initialValue: profile.email,
                           enabled: false,
@@ -165,7 +171,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       _FieldCard(
                         icon: Icons.badge_outlined,
                         title: 'Display Name',
-                        subtitle: 'This is how you appear across the app experience.',
+                        subtitle:
+                            'This is how you appear across the app experience.',
                         child: TextFormField(
                           controller: _displayNameController,
                           decoration: const InputDecoration(
@@ -179,7 +186,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       _FieldCard(
                         icon: Icons.alternate_email,
                         title: 'Nickname',
-                        subtitle: 'Optional shorthand for faster recognition in social or class contexts.',
+                        subtitle:
+                            'Optional shorthand for faster recognition in social or class contexts.',
                         child: TextFormField(
                           controller: _nicknameController,
                           decoration: const InputDecoration(
@@ -198,7 +206,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('Save Profile'),
                         ),
@@ -223,7 +233,7 @@ class _EditProfileHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const accentColor = Color(0xFF5FB2FF);
+    const accentColor = appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -232,13 +242,9 @@ class _EditProfileHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -257,10 +263,7 @@ class _EditProfileHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFFB98CFF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +283,7 @@ class _EditProfileHero extends StatelessWidget {
               Text(
                 'Edit Profile',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -288,7 +291,7 @@ class _EditProfileHero extends StatelessWidget {
               Text(
                 'Sharpen how you show up.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -297,7 +300,7 @@ class _EditProfileHero extends StatelessWidget {
               Text(
                 'Update the identity details that teammates, coaches, and gym admins see throughout BoxOS.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -328,14 +331,14 @@ class _FieldCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: const Color(0xFF5FB2FF)),
+          _AccentBadge(icon: icon, color: appPrimary),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -344,7 +347,7 @@ class _FieldCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -352,7 +355,7 @@ class _FieldCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -387,7 +390,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w700,
           ),
@@ -396,7 +399,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF0F172A),
+            color: appText,
             fontWeight: FontWeight.w800,
             height: 0.96,
           ),
@@ -405,7 +408,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF64748B),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
@@ -433,9 +436,9 @@ class _StateCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,7 +452,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -457,7 +460,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -471,10 +474,7 @@ class _StateCard extends StatelessWidget {
 }
 
 class _HeroPill extends StatelessWidget {
-  const _HeroPill({
-    required this.label,
-    required this.color,
-  });
+  const _HeroPill({required this.label, required this.color});
 
   final String label;
   final Color color;
@@ -491,7 +491,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -521,9 +521,9 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FBFF),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFD8E4F2)),
+            border: Border.all(color: appBorder),
           ),
           child: Icon(icon, color: Colors.white),
         ),
@@ -547,10 +547,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -577,10 +574,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

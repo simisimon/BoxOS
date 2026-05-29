@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -59,11 +60,11 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
     final gymName = activeGym?.name;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: appPageBackground,
       appBar: AppBar(title: const Text('Programming')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
-              backgroundColor: const Color(0xFFFF6B2C),
+              backgroundColor: appPrimary,
               foregroundColor: Colors.white,
               onPressed: () => _openEditor(),
               icon: const Icon(Icons.add),
@@ -76,9 +77,9 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFF5F9FF),
-              Color(0xFFEAF2FF),
-              Color(0xFFF9FBFF),
+              appPageBackground,
+              appPageBackgroundSoft,
+              appPageBackgroundEnd,
             ],
           ),
         ),
@@ -102,7 +103,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                     title: 'No active gym selected',
                     message:
                         'Join or switch to a gym to unlock the workout stream, whiteboard, and personal logging.',
-                    accentColor: Color(0xFF5FB2FF),
+                    accentColor: appPrimary,
                   )
                 else
                   FutureBuilder<List<DailyWorkout>>(
@@ -122,7 +123,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                             snapshot.error!,
                             fallback: 'Failed to load programming',
                           ),
-                          accentColor: const Color(0xFFFF6B2C),
+                          accentColor: appPrimary,
                         );
                       }
 
@@ -138,9 +139,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                           message: canManage
                               ? 'Add the first daily WOD to give coaches and athletes a proper training runway.'
                               : 'This gym has no scheduled workout yet. Pull to refresh or check back after your coach publishes the next block.',
-                          accentColor: canManage
-                              ? const Color(0xFFFF6B2C)
-                              : const Color(0xFF7EE7C6),
+                          accentColor: canManage ? appPrimary : appPrimary,
                         );
                       }
 
@@ -204,9 +203,7 @@ class _ProgrammingHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor = canManage
-        ? const Color(0xFFFF6B2C)
-        : const Color(0xFF7EE7C6);
+    final accentColor = canManage ? appPrimary : appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -215,13 +212,9 @@ class _ProgrammingHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -240,10 +233,7 @@ class _ProgrammingHero extends StatelessWidget {
           Positioned(
             right: 40,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFF5FB2FF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +245,7 @@ class _ProgrammingHero extends StatelessWidget {
                   _HeroPill(label: roleLabel, color: accentColor),
                   _HeroPill(
                     label: gymName ?? 'No active gym',
-                    color: const Color(0xFF7EE7C6),
+                    color: appPrimary,
                     outlined: true,
                   ),
                 ],
@@ -264,7 +254,7 @@ class _ProgrammingHero extends StatelessWidget {
               Text(
                 'Programming',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -274,7 +264,7 @@ class _ProgrammingHero extends StatelessWidget {
                     ? 'Shape the training week.'
                     : 'See the next training hit.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -285,7 +275,7 @@ class _ProgrammingHero extends StatelessWidget {
                     ? 'Build each daily WOD with cleaner structure, stronger hierarchy, and faster access to whiteboard and athlete logs.'
                     : 'Track the current WOD, whiteboard standings, and your own result history in one tighter workout stream.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -314,16 +304,15 @@ class _ProgrammingIntroBand extends StatelessWidget {
           subtitle: canManage
               ? 'Publish structure, notes, and benchmark context for each day.'
               : 'Read the plan quickly, then log your result without leaving the stream.',
-          accentColor: canManage
-              ? const Color(0xFFFF6B2C)
-              : const Color(0xFF7EE7C6),
+          accentColor: canManage ? appPrimary : appPrimary,
         ),
         const SizedBox(height: 12),
         const _InfoBand(
           icon: Icons.emoji_events_outlined,
           title: 'Whiteboard',
-          subtitle: 'Live ranking, score type, notes, and personal updates stay attached to the workout card.',
-          accentColor: Color(0xFF5FB2FF),
+          subtitle:
+              'Live ranking, score type, notes, and personal updates stay attached to the workout card.',
+          accentColor: appPrimary,
         ),
       ],
     );
@@ -350,9 +339,9 @@ class _InfoBand extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +351,7 @@ class _InfoBand extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -370,7 +359,7 @@ class _InfoBand extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF64748B),
+              color: appSubtleText,
               height: 1.4,
             ),
           ),
@@ -399,9 +388,9 @@ class _ProgrammingStateCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +404,7 @@ class _ProgrammingStateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -423,7 +412,7 @@ class _ProgrammingStateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -462,12 +451,12 @@ class _WorkoutCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF5FB2FF).withOpacity(0.08),
+            color: appPrimary.withOpacity(0.08),
             blurRadius: 24,
             offset: const Offset(0, 16),
           ),
@@ -486,7 +475,7 @@ class _WorkoutCard extends StatelessWidget {
                     Text(
                       scheduledDate.toUpperCase(),
                       style: theme.textTheme.labelMedium?.copyWith(
-                        color: const Color(0xFF7EE7C6),
+                        color: appPrimary,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w700,
                       ),
@@ -495,7 +484,7 @@ class _WorkoutCard extends StatelessWidget {
                     Text(
                       workout.title,
                       style: theme.textTheme.headlineSmall?.copyWith(
-                        color: const Color(0xFF0F172A),
+                        color: appText,
                         fontWeight: FontWeight.w800,
                         height: 1.0,
                       ),
@@ -517,11 +506,11 @@ class _WorkoutCard extends StatelessWidget {
             runSpacing: 10,
             children: [
               if (workout.strengthText.isNotEmpty)
-                _WorkoutPill(label: 'Strength', color: const Color(0xFF5FB2FF)),
+                _WorkoutPill(label: 'Strength', color: appPrimary),
               if (workout.metconText.isNotEmpty)
-                _WorkoutPill(label: 'MetCon', color: const Color(0xFFFF6B2C)),
+                _WorkoutPill(label: 'MetCon', color: appPrimary),
               if (workout.notesText.isNotEmpty)
-                _WorkoutPill(label: 'Notes', color: const Color(0xFFB98CFF)),
+                _WorkoutPill(label: 'Notes', color: appPrimary),
             ],
           ),
           if (workout.strengthText.isNotEmpty) ...[
@@ -529,7 +518,7 @@ class _WorkoutCard extends StatelessWidget {
             _WorkoutSection(
               label: 'Strength',
               value: workout.strengthText,
-              accentColor: const Color(0xFF5FB2FF),
+              accentColor: appPrimary,
             ),
           ],
           if (workout.metconText.isNotEmpty) ...[
@@ -537,7 +526,7 @@ class _WorkoutCard extends StatelessWidget {
             _WorkoutSection(
               label: 'MetCon',
               value: workout.metconText,
-              accentColor: const Color(0xFFFF6B2C),
+              accentColor: appPrimary,
             ),
           ],
           if (workout.notesText.isNotEmpty) ...[
@@ -545,7 +534,7 @@ class _WorkoutCard extends StatelessWidget {
             _WorkoutSection(
               label: 'Notes',
               value: workout.notesText,
-              accentColor: const Color(0xFFB98CFF),
+              accentColor: appPrimary,
             ),
           ],
           const SizedBox(height: 18),
@@ -580,9 +569,9 @@ class _PanelSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFF),
+        color: appSurfaceAlt,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: child,
     );
@@ -612,7 +601,7 @@ class _WorkoutLogSection extends StatelessWidget {
               child: Text(
                 'My log',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -631,15 +620,13 @@ class _WorkoutLogSection extends StatelessWidget {
         if (workout.myWorkoutLog == null)
           Text(
             'No personal workout log yet.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
           )
         else
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF151F31),
+              color: appSurface,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Column(
@@ -651,7 +638,7 @@ class _WorkoutLogSection extends StatelessWidget {
                       child: Text(
                         '${workout.myWorkoutLog!.scoreLabel} (${_scoreTypeLabel(workout.myWorkoutLog!.scoreType)})',
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF0F172A),
+                          color: appText,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -665,7 +652,7 @@ class _WorkoutLogSection extends StatelessWidget {
                   Text(
                     workout.myWorkoutLog!.notesText,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF64748B),
+                      color: appSubtleText,
                     ),
                   ),
                 ],
@@ -675,7 +662,7 @@ class _WorkoutLogSection extends StatelessWidget {
                   Text(
                     'Benchmark rank: #${workout.myWorkoutLog!.prRank}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF7EE7C6),
+                      color: appPrimary,
                     ),
                   ),
                 ],
@@ -710,7 +697,7 @@ class _WhiteboardSection extends StatelessWidget {
               child: Text(
                 'Whiteboard',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -732,7 +719,7 @@ class _WhiteboardSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF151F31),
+              color: appSurface,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Column(
@@ -741,7 +728,7 @@ class _WhiteboardSection extends StatelessWidget {
                 Text(
                   'My result: ${workout.myWhiteboardResult!.scoreLabel} (${_scoreTypeLabel(workout.myWhiteboardResult!.scoreType)})',
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -750,7 +737,7 @@ class _WhiteboardSection extends StatelessWidget {
                   Text(
                     workout.myWhiteboardResult!.notesText,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF64748B),
+                      color: appSubtleText,
                     ),
                   ),
                 ],
@@ -762,9 +749,7 @@ class _WhiteboardSection extends StatelessWidget {
         if (workout.whiteboardResults.isEmpty)
           Text(
             'No whiteboard results yet.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
           )
         else
           Column(
@@ -779,7 +764,7 @@ class _WhiteboardSection extends StatelessWidget {
                         child: Text(
                           '${result.rank}',
                           style: theme.textTheme.labelLarge?.copyWith(
-                            color: const Color(0xFF0F172A),
+                            color: appText,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -792,7 +777,7 @@ class _WhiteboardSection extends StatelessWidget {
                             Text(
                               result.athleteName,
                               style: theme.textTheme.titleSmall?.copyWith(
-                                color: const Color(0xFF0F172A),
+                                color: appText,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -802,7 +787,7 @@ class _WhiteboardSection extends StatelessWidget {
                                   ? _scoreTypeLabel(result.scoreType)
                                   : '${_scoreTypeLabel(result.scoreType)} • ${result.notesText}',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFF64748B),
+                                color: appSubtleText,
                               ),
                             ),
                           ],
@@ -812,7 +797,7 @@ class _WhiteboardSection extends StatelessWidget {
                       Text(
                         result.scoreLabel,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF7EE7C6),
+                          color: appPrimary,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -859,7 +844,7 @@ class _WorkoutPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -904,7 +889,7 @@ class _WorkoutSection extends StatelessWidget {
           Text(
             value,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               height: 1.45,
             ),
           ),
@@ -937,7 +922,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -960,10 +945,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -990,10 +972,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),
@@ -1028,10 +1007,18 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
   void initState() {
     super.initState();
     _selectedDate = widget.existing?.scheduledDate ?? DateTime.now();
-    _titleController = TextEditingController(text: widget.existing?.title ?? 'Daily WOD');
-    _strengthController = TextEditingController(text: widget.existing?.strengthText ?? '');
-    _metconController = TextEditingController(text: widget.existing?.metconText ?? '');
-    _notesController = TextEditingController(text: widget.existing?.notesText ?? '');
+    _titleController = TextEditingController(
+      text: widget.existing?.title ?? 'Daily WOD',
+    );
+    _strengthController = TextEditingController(
+      text: widget.existing?.strengthText ?? '',
+    );
+    _metconController = TextEditingController(
+      text: widget.existing?.metconText ?? '',
+    );
+    _notesController = TextEditingController(
+      text: widget.existing?.notesText ?? '',
+    );
   }
 
   @override
@@ -1104,7 +1091,9 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = MaterialLocalizations.of(context).formatFullDate(_selectedDate);
+    final dateLabel = MaterialLocalizations.of(
+      context,
+    ).formatFullDate(_selectedDate);
     return AlertDialog(
       title: Text(widget.existing == null ? 'New Daily WOD' : 'Edit Daily WOD'),
       content: SizedBox(
@@ -1188,7 +1177,8 @@ class _WhiteboardResultDialog extends ConsumerStatefulWidget {
       _WhiteboardResultDialogState();
 }
 
-class _WhiteboardResultDialogState extends ConsumerState<_WhiteboardResultDialog> {
+class _WhiteboardResultDialogState
+    extends ConsumerState<_WhiteboardResultDialog> {
   final _formKey = GlobalKey<FormState>();
   late String _scoreType;
   late TextEditingController _scoreValueController;
@@ -1220,7 +1210,9 @@ class _WhiteboardResultDialogState extends ConsumerState<_WhiteboardResultDialog
     }
     setState(() => _isSaving = true);
     try {
-      await ref.read(programmingRepositoryProvider).submitWhiteboardResult(
+      await ref
+          .read(programmingRepositoryProvider)
+          .submitWhiteboardResult(
             workoutId: widget.workout.id,
             scoreType: _scoreType,
             scoreValue: _scoreValueController.text.trim(),
@@ -1237,7 +1229,10 @@ class _WhiteboardResultDialogState extends ConsumerState<_WhiteboardResultDialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            errorMessageFrom(error, fallback: 'Failed to save whiteboard result'),
+            errorMessageFrom(
+              error,
+              fallback: 'Failed to save whiteboard result',
+            ),
           ),
         ),
       );
@@ -1284,8 +1279,8 @@ class _WhiteboardResultDialogState extends ConsumerState<_WhiteboardResultDialog
                     labelText: _scoreType == 'time'
                         ? 'Score (mm:ss or hh:mm:ss)'
                         : _scoreType == 'reps'
-                            ? 'Score (reps)'
-                            : 'Score (load)',
+                        ? 'Score (reps)'
+                        : 'Score (load)',
                   ),
                   validator: (value) {
                     if ((value ?? '').trim().isEmpty) {
@@ -1367,7 +1362,9 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
     }
     setState(() => _isSaving = true);
     try {
-      await ref.read(logbookRepositoryProvider).submitEntry(
+      await ref
+          .read(logbookRepositoryProvider)
+          .submitEntry(
             workoutId: widget.workout.id,
             scoreType: _scoreType,
             scoreValue: _scoreValueController.text.trim(),
@@ -1416,11 +1413,13 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
                     DropdownMenuItem(value: 'reps', child: Text('Reps')),
                     DropdownMenuItem(value: 'load', child: Text('Load')),
                   ],
-                  onChanged: _isSaving ? null : (value) {
-                    if (value != null) {
-                      setState(() => _scoreType = value);
-                    }
-                  },
+                  onChanged: _isSaving
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() => _scoreType = value);
+                          }
+                        },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1429,10 +1428,11 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
                     labelText: _scoreType == 'time'
                         ? 'Score (mm:ss or hh:mm:ss)'
                         : _scoreType == 'reps'
-                            ? 'Score (reps)'
-                            : 'Score (load)',
+                        ? 'Score (reps)'
+                        : 'Score (load)',
                   ),
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Enter a score' : null,
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty ? 'Enter a score' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1454,7 +1454,11 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
         FilledButton(
           onPressed: _isSaving ? null : _submit,
           child: _isSaving
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Save'),
         ),
       ],

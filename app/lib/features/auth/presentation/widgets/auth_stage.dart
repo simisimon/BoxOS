@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 const _boxOsLogoAsset = 'assets/images/boxOS_logo.png';
 
@@ -15,6 +16,7 @@ class AuthStage extends StatelessWidget {
     required this.child,
     this.eyebrow,
     this.footer,
+    this.showBrandHero = false,
     this.accentColor = appPrimary,
     this.backgroundColor = appPageBackground,
   });
@@ -25,6 +27,7 @@ class AuthStage extends StatelessWidget {
   final Widget child;
   final String? eyebrow;
   final Widget? footer;
+  final bool showBrandHero;
   final Color accentColor;
   final Color backgroundColor;
 
@@ -41,15 +44,21 @@ class AuthStage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TopBar(accentColor: accentColor),
-                const SizedBox(height: 16),
-                _HeroCard(
-                  title: title,
-                  headline: headline,
-                  description: description,
-                  accentColor: accentColor,
-                ),
-                const SizedBox(height: 18),
+                if (showBrandHero) ...[
+                  const SizedBox(height: 18),
+                  _BrandHero(accentColor: accentColor),
+                  const SizedBox(height: 28),
+                ] else ...[
+                  _TopBar(accentColor: accentColor),
+                  const SizedBox(height: 16),
+                  _HeroCard(
+                    title: title,
+                    headline: headline,
+                    description: description,
+                    accentColor: accentColor,
+                  ),
+                  const SizedBox(height: 18),
+                ],
                 if (eyebrow != null)
                   Text(
                     eyebrow!.toUpperCase(),
@@ -65,10 +74,7 @@ class AuthStage extends StatelessWidget {
                   decoration: appPanelDecoration(radius: 26),
                   child: child,
                 ),
-                if (footer != null) ...[
-                  const SizedBox(height: 14),
-                  footer!,
-                ],
+                if (footer != null) ...[const SizedBox(height: 14), footer!],
               ],
             ),
           ),
@@ -248,6 +254,46 @@ class AuthActionRow extends StatelessWidget {
   }
 }
 
+class _BrandHero extends StatelessWidget {
+  const _BrandHero({required this.accentColor});
+
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            label: 'BoxOS logo',
+            image: true,
+            child: Image.asset(
+              _boxOsLogoAsset,
+              width: 340,
+              height: 340,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.fitness_center, size: 170, color: accentColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'BoxOS',
+            style: GoogleFonts.oswald(
+              fontSize: 48,
+              fontWeight: FontWeight.w900,
+              color: appText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.accentColor});
 
@@ -290,7 +336,11 @@ class _TopBar extends StatelessWidget {
                 width: 22,
                 height: 22,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(Icons.fitness_center, size: 20, color: appPrimary),
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.fitness_center,
+                  size: 20,
+                  color: appPrimary,
+                ),
               ),
               const SizedBox(width: 8),
               Text(

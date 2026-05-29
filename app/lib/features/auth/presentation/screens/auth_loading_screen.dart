@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
 
@@ -10,8 +11,9 @@ class AuthLoadingScreen extends StatelessWidget {
       title: 'Authenticating',
       eyebrow: 'Session',
       headline: 'Opening your workspace.',
-      description: 'BoxOS is loading your account, memberships, and navigation context.',
-      accentColor: Color(0xFF7EE7C6),
+      description:
+          'BoxOS is loading your account, memberships, and navigation context.',
+      accentColor: appPrimary,
       child: Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 32),

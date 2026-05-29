@@ -1159,6 +1159,32 @@ void main() {
     expect(repository.isSignedIn, isTrue);
   });
 
+  testWidgets('Login shows brand hero and create box entry point', (
+    WidgetTester tester,
+  ) async {
+    final container = await _pumpAppWithRepository(
+      tester,
+      RecordingAuthRepository(),
+    );
+    final router = container.read(appRouterProvider);
+
+    expect(find.text('BoxOS'), findsOneWidget);
+    expect(find.text('Access'), findsNothing);
+    expect(
+      find.widgetWithText(TextButton, 'I need admin access'),
+      findsNothing,
+    );
+
+    final createBoxButton = find.widgetWithText(OutlinedButton, 'Create Box');
+    expect(createBoxButton, findsOneWidget);
+    await tester.ensureVisible(createBoxButton);
+    await tester.tap(createBoxButton);
+    await _settleApp(tester);
+
+    expect(router.state.matchedLocation, '/admin-sign-up');
+    expect(find.text('Create Admin Account'), findsWidgets);
+  });
+
   testWidgets('Sign up flow calls API and routes to verify email', (
     WidgetTester tester,
   ) async {

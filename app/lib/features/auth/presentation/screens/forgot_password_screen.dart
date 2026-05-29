@@ -1,4 +1,5 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,8 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
@@ -35,13 +37,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     if (!isValid || _isSubmitting) return;
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(authControllerProvider.notifier).requestPasswordReset(email: _emailController.text.trim());
+      await ref
+          .read(authControllerProvider.notifier)
+          .requestPasswordReset(email: _emailController.text.trim());
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset email sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password reset email sent.')),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Reset request failed'))),
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Reset request failed'),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -56,7 +66,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       headline: 'Recover access without support tickets.',
       description:
           'Request a reset link, verify ownership, and get back into training and operations quickly.',
-      accentColor: const Color(0xFF7EE7C6),
+      accentColor: appPrimary,
       child: Form(
         key: _formKey,
         child: Column(
@@ -65,25 +75,34 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             AuthFieldGroup(
               icon: Icons.mark_email_unread_outlined,
               title: 'Reset Link',
-              subtitle: 'Enter the email tied to your account and we send recovery instructions.',
-              accentColor: const Color(0xFF7EE7C6),
+              subtitle:
+                  'Enter the email tied to your account and we send recovery instructions.',
+              accentColor: appPrimary,
               child: TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
                 validator: _emailValidator,
               ),
             ),
             const SizedBox(height: 14),
             const AuthNoteCard(
               title: 'What to expect',
-              body: 'Use the link from your inbox to set a new password. If the account exists, the flow stays privacy-safe.',
+              body:
+                  'Use the link from your inbox to set a new password. If the account exists, the flow stays privacy-safe.',
             ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _isSubmitting ? null : _submit,
               child: _isSubmitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('Send Reset Link'),
             ),
           ],

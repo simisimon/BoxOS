@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_chrome.dart';
 import 'dart:ui';
 
 import 'package:app/features/auth/application/auth_controller.dart';
@@ -29,9 +30,9 @@ class ProfileScreen extends ConsumerWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFFF5F9FF),
-            Color(0xFFEAF2FF),
-            Color(0xFFF9FBFF),
+            appPageBackground,
+            appPageBackgroundSoft,
+            appPageBackgroundEnd,
           ],
         ),
       ),
@@ -57,8 +58,9 @@ class ProfileScreen extends ConsumerWidget {
                 _PrimaryActionTile(
                   icon: Icons.edit_outlined,
                   title: 'Edit Profile',
-                  subtitle: 'Update name, nickname, and personal profile details.',
-                  accentColor: const Color(0xFF5FB2FF),
+                  subtitle:
+                      'Update name, nickname, and personal profile details.',
+                  accentColor: appPrimary,
                   enabled: !isLoading,
                   onTap: () => context.go('/edit-profile'),
                 ),
@@ -70,7 +72,7 @@ class ProfileScreen extends ConsumerWidget {
                     title: 'Create Gym',
                     subtitle:
                         'Finish the admin setup path so members and programming can go live.',
-                    accentColor: const Color(0xFFFF6B2C),
+                    accentColor: appPrimary,
                     enabled: !isLoading,
                     onTap: () => context.go('/create-gym'),
                   ),
@@ -80,7 +82,7 @@ class ProfileScreen extends ConsumerWidget {
                     title: 'Find or Request Gym',
                     subtitle:
                         'Browse available gyms or request access from the athlete flow.',
-                    accentColor: const Color(0xFF7EE7C6),
+                    accentColor: appPrimary,
                     enabled: !isLoading,
                     onTap: () => context.go('/gyms'),
                   ),
@@ -98,7 +100,8 @@ class ProfileScreen extends ConsumerWidget {
                   _SecondaryActionTile(
                     icon: Icons.insights_outlined,
                     title: 'Admin Analytics',
-                    subtitle: 'Read attendance, utilization, and pressure at a glance.',
+                    subtitle:
+                        'Read attendance, utilization, and pressure at a glance.',
                     enabled: !isLoading,
                     onTap: () => context.go('/admin-analytics'),
                   ),
@@ -130,7 +133,8 @@ class ProfileScreen extends ConsumerWidget {
                 _SecondaryActionTile(
                   icon: Icons.notifications_outlined,
                   title: 'Notification Settings',
-                  subtitle: 'Tune workout, PR, booking, and payment-related alerts.',
+                  subtitle:
+                      'Tune workout, PR, booking, and payment-related alerts.',
                   enabled: !isLoading,
                   onTap: () => context.go('/notification-settings'),
                 ),
@@ -155,7 +159,8 @@ class ProfileScreen extends ConsumerWidget {
                 _SecondaryActionTile(
                   icon: Icons.delete_outline,
                   title: 'Delete Account',
-                  subtitle: 'Permanently remove the account when you are done with BoxOS.',
+                  subtitle:
+                      'Permanently remove the account when you are done with BoxOS.',
                   enabled: !isLoading,
                   destructive: true,
                   onTap: () => context.go('/delete-account'),
@@ -175,11 +180,8 @@ class ProfileScreen extends ConsumerWidget {
                       membership: membership,
                       isCurrentGym: profile.activeGym?.id == membership.gym.id,
                       enabled: !isLoading,
-                      onSwitch: () => _switchGym(
-                        context,
-                        ref,
-                        membership.gym.id,
-                      ),
+                      onSwitch: () =>
+                          _switchGym(context, ref, membership.gym.id),
                     ),
                     if (membership != profile.memberships.last)
                       const SizedBox(height: 12),
@@ -239,13 +241,9 @@ class _ProfileHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -264,10 +262,7 @@ class _ProfileHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFF5FB2FF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,7 +274,7 @@ class _ProfileHero extends StatelessWidget {
                   _HeroPill(label: roleLabel, color: accentColor),
                   _HeroPill(
                     label: gymName ?? 'No gym selected',
-                    color: const Color(0xFF7EE7C6),
+                    color: appPrimary,
                     outlined: true,
                   ),
                 ],
@@ -288,7 +283,7 @@ class _ProfileHero extends StatelessWidget {
               Text(
                 'Profile',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -296,7 +291,7 @@ class _ProfileHero extends StatelessWidget {
               Text(
                 displayName,
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -306,7 +301,7 @@ class _ProfileHero extends StatelessWidget {
                 Text(
                   '@$nickname',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                   ),
                 ),
               ],
@@ -314,7 +309,7 @@ class _ProfileHero extends StatelessWidget {
               Text(
                 email ?? 'No email loaded',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -328,11 +323,11 @@ class _ProfileHero extends StatelessWidget {
   static Color _accentForRole(String roleLabel) {
     switch (roleLabel.toLowerCase()) {
       case 'admin':
-        return const Color(0xFFFF6B2C);
+        return appPrimary;
       case 'trainer':
-        return const Color(0xFF5FB2FF);
+        return appPrimary;
       default:
-        return const Color(0xFF7EE7C6);
+        return appPrimary;
     }
   }
 }
@@ -356,9 +351,9 @@ class _ActionSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,7 +361,7 @@ class _ActionSection extends StatelessWidget {
           Text(
             eyebrow.toUpperCase(),
             style: theme.textTheme.labelMedium?.copyWith(
-              color: const Color(0xFF7EE7C6),
+              color: appPrimary,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
             ),
@@ -375,7 +370,7 @@ class _ActionSection extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
               height: 0.96,
             ),
@@ -384,7 +379,7 @@ class _ActionSection extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
+              color: appSubtleText,
               height: 1.4,
             ),
           ),
@@ -422,10 +417,7 @@ class _PrimaryActionTile extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.2),
-            const Color(0xFF151F31),
-          ],
+          colors: [accentColor.withOpacity(0.2), appSurface],
         ),
         border: Border.all(color: accentColor.withOpacity(0.22)),
       ),
@@ -447,7 +439,7 @@ class _PrimaryActionTile extends StatelessWidget {
                       Text(
                         title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF0F172A),
+                          color: appText,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -455,7 +447,7 @@ class _PrimaryActionTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF475569),
+                          color: appMutedText,
                           height: 1.45,
                         ),
                       ),
@@ -493,15 +485,13 @@ class _SecondaryActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor = destructive
-        ? const Color(0xFFFF7A7A)
-        : const Color(0xFF5FB2FF);
+    final accentColor = destructive ? appDanger : appPrimary;
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF151F31),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Material(
         color: Colors.transparent,
@@ -521,7 +511,7 @@ class _SecondaryActionTile extends StatelessWidget {
                       Text(
                         title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF0F172A),
+                          color: appText,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -529,7 +519,7 @@ class _SecondaryActionTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: appSubtleText,
                           height: 1.45,
                         ),
                       ),
@@ -566,12 +556,10 @@ class _MembershipCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF151F31),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isCurrentGym
-              ? const Color(0xFF7EE7C6).withOpacity(0.26)
-              : const Color(0xFFF8FBFF),
+          color: isCurrentGym ? appPrimary.withOpacity(0.26) : appSurfaceAlt,
         ),
       ),
       child: Column(
@@ -583,31 +571,24 @@ class _MembershipCard extends StatelessWidget {
                 child: Text(
                   membership.gym.name,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
               if (isCurrentGym)
-                const _HeroPill(
-                  label: 'Current Gym',
-                  color: Color(0xFF7EE7C6),
-                ),
+                const _HeroPill(label: 'Current Gym', color: appPrimary),
             ],
           ),
           const SizedBox(height: 10),
           Text(
             'Active role here: ${membership.role.label}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF475569),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: appMutedText),
           ),
           const SizedBox(height: 4),
           Text(
             'Timezone: ${membership.gym.timezone}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
           ),
           if (!isCurrentGym) ...[
             const SizedBox(height: 14),
@@ -645,7 +626,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -668,10 +649,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -698,10 +676,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

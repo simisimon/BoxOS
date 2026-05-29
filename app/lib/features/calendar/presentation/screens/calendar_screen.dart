@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
@@ -198,9 +199,9 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFFF5F9FF),
-            Color(0xFFEAF2FF),
-            Color(0xFFF9FBFF),
+            appPageBackground,
+            appPageBackgroundSoft,
+            appPageBackgroundEnd,
           ],
         ),
       ),
@@ -221,7 +222,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                 title: 'No active gym selected',
                 message:
                     'Join or switch to a gym to use the schedule, bookings, waitlist, and attendance tools.',
-                accentColor: Color(0xFF5FB2FF),
+                accentColor: appPrimary,
               )
             else
               FutureBuilder<List<ScheduleClass>>(
@@ -241,15 +242,17 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                         snapshot.error!,
                         fallback: 'Failed to load schedule',
                       ),
-                      accentColor: const Color(0xFFFF6B2C),
+                      accentColor: appPrimary,
                     );
                   }
                   final items = snapshot.data ?? const <ScheduleClass>[];
                   final selectedItems =
                       items
                           .where(
-                            (item) =>
-                                _isSameDay(item.startTime, _selectedWorkoutDate),
+                            (item) => _isSameDay(
+                              item.startTime,
+                              _selectedWorkoutDate,
+                            ),
                           )
                           .toList()
                         ..sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -301,9 +304,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                           message: canManage
                               ? 'Nothing is scheduled on $selectedDateLabel yet. Add a class to open the day.'
                               : 'No classes are scheduled on this date.',
-                          accentColor: canManage
-                              ? const Color(0xFFFF6B2C)
-                              : const Color(0xFF7EE7C6),
+                          accentColor: canManage ? appPrimary : appPrimary,
                         )
                       else
                         for (final item in selectedItems) ...[
@@ -362,9 +363,7 @@ class _CalendarHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor = canManage
-        ? const Color(0xFFFF6B2C)
-        : const Color(0xFF7EE7C6);
+    final accentColor = canManage ? appPrimary : appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -373,13 +372,9 @@ class _CalendarHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -398,10 +393,7 @@ class _CalendarHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFF5FB2FF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +405,7 @@ class _CalendarHero extends StatelessWidget {
                   _HeroPill(label: roleLabel, color: accentColor),
                   _HeroPill(
                     label: gymName ?? 'No active gym',
-                    color: const Color(0xFF7EE7C6),
+                    color: appPrimary,
                     outlined: true,
                   ),
                 ],
@@ -422,7 +414,7 @@ class _CalendarHero extends StatelessWidget {
               Text(
                 'Schedule',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -432,7 +424,7 @@ class _CalendarHero extends StatelessWidget {
                     ? 'Run the floor with less friction.'
                     : 'Plan the next training session.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -443,7 +435,7 @@ class _CalendarHero extends StatelessWidget {
                     ? 'Use one cleaner schedule surface for class creation, capacity control, attendance, and booking oversight.'
                     : 'Check the day, book quickly, and keep your waitlist or attendance state visible at a glance.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -475,7 +467,7 @@ class _CalendarSectionHeader extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w700,
           ),
@@ -484,7 +476,7 @@ class _CalendarSectionHeader extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF0F172A),
+            color: appText,
             fontWeight: FontWeight.w800,
             height: 0.96,
           ),
@@ -493,7 +485,7 @@ class _CalendarSectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF64748B),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
@@ -521,9 +513,9 @@ class _CalendarStateCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,7 +529,7 @@ class _CalendarStateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -545,7 +537,7 @@ class _CalendarStateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -586,9 +578,9 @@ class _WorkoutCalendarCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,30 +588,26 @@ class _WorkoutCalendarCard extends StatelessWidget {
           Text(
             'Workout Calendar',
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Select a date to check whether the gym has a workout scheduled.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
           ),
           const SizedBox(height: 12),
           Theme(
             data: theme.copyWith(
               colorScheme: theme.colorScheme.copyWith(
-                primary: const Color(0xFFFF6B2C),
+                primary: appPrimary,
                 onPrimary: Colors.white,
-                surface: const Color(0xFF101826),
+                surface: appSurface,
                 onSurface: Colors.white,
               ),
               textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF7EE7C6),
-                ),
+                style: TextButton.styleFrom(foregroundColor: appPrimary),
               ),
             ),
             child: Material(
@@ -639,8 +627,7 @@ class _WorkoutCalendarCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () =>
-                        onSelectCreateMode(_CreateClassMode.fresh),
+                    onPressed: () => onSelectCreateMode(_CreateClassMode.fresh),
                     icon: Icon(
                       createClassMode == _CreateClassMode.fresh
                           ? Icons.close
@@ -658,8 +645,7 @@ class _WorkoutCalendarCard extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: items.isEmpty
                         ? null
-                        : () =>
-                            onSelectCreateMode(_CreateClassMode.existing),
+                        : () => onSelectCreateMode(_CreateClassMode.existing),
                     icon: Icon(
                       createClassMode == _CreateClassMode.existing
                           ? Icons.close
@@ -1179,12 +1165,12 @@ class _ScheduleClassCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF5FB2FF).withOpacity(0.08),
+            color: appPrimary.withOpacity(0.08),
             blurRadius: 24,
             offset: const Offset(0, 16),
           ),
@@ -1203,7 +1189,7 @@ class _ScheduleClassCard extends StatelessWidget {
                     Text(
                       item.title,
                       style: theme.textTheme.headlineSmall?.copyWith(
-                        color: const Color(0xFF0F172A),
+                        color: appText,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1212,9 +1198,12 @@ class _ScheduleClassCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _HeroPill(label: item.classType, color: const Color(0xFFFF6B2C)),
-                        _HeroPill(label: startTime, color: const Color(0xFF5FB2FF)),
-                        _HeroPill(label: '${item.durationMinutes} min', color: const Color(0xFF7EE7C6)),
+                        _HeroPill(label: item.classType, color: appPrimary),
+                        _HeroPill(label: startTime, color: appPrimary),
+                        _HeroPill(
+                          label: '${item.durationMinutes} min',
+                          color: appPrimary,
+                        ),
                       ],
                     ),
                   ],
@@ -1231,19 +1220,29 @@ class _ScheduleClassCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             date,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
           ),
           const SizedBox(height: 14),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: [
-              _MetricTile(label: 'Bookings', value: '${item.bookedCount}/${item.capacity}', accentColor: const Color(0xFFFF6B2C)),
-              _MetricTile(label: 'Open spots', value: '${item.remainingSpots}', accentColor: const Color(0xFF7EE7C6)),
+              _MetricTile(
+                label: 'Bookings',
+                value: '${item.bookedCount}/${item.capacity}',
+                accentColor: appPrimary,
+              ),
+              _MetricTile(
+                label: 'Open spots',
+                value: '${item.remainingSpots}',
+                accentColor: appPrimary,
+              ),
               if (item.waitlistCount > 0)
-                _MetricTile(label: 'Waitlist', value: '${item.waitlistCount}', accentColor: const Color(0xFFB98CFF)),
+                _MetricTile(
+                  label: 'Waitlist',
+                  value: '${item.waitlistCount}',
+                  accentColor: appPrimary,
+                ),
             ],
           ),
           if (item.assignedTrainer != null) ...[
@@ -1254,11 +1253,11 @@ class _ScheduleClassCard extends StatelessWidget {
             const SizedBox(height: 14),
             _ContentPanel(
               label: 'WOD',
-              accentColor: const Color(0xFFFF6B2C),
+              accentColor: appPrimary,
               child: Text(
                 item.wodDescription,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   height: 1.45,
                 ),
               ),
@@ -1268,19 +1267,23 @@ class _ScheduleClassCard extends StatelessWidget {
             const SizedBox(height: 14),
             _ContentPanel(
               label: 'Your Status',
-              accentColor: const Color(0xFF7EE7C6),
+              accentColor: appPrimary,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (item.attendanceStatus != null)
                     Text(
                       'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                      ),
                     ),
                   if (item.isWaitlisted)
                     Text(
                       'Waitlist: Active',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                      ),
                     ),
                 ],
               ),
@@ -1308,10 +1311,7 @@ class _ScheduleClassCard extends StatelessWidget {
                     child: Text(item.isFull ? 'Join Waitlist' : 'Book Class'),
                   ),
                 if (canManage) ...[
-                  OutlinedButton(
-                    onPressed: onEdit,
-                    child: const Text('Edit'),
-                  ),
+                  OutlinedButton(onPressed: onEdit, child: const Text('Edit')),
                   OutlinedButton(
                     onPressed: onDelete,
                     child: const Text('Delete'),
@@ -1327,7 +1327,7 @@ class _ScheduleClassCard extends StatelessWidget {
             Text(
               'Booked Members',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: const Color(0xFF0F172A),
+                color: appText,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1404,7 +1404,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             value,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1425,16 +1425,11 @@ class _DetailLine extends StatelessWidget {
     final theme = Theme.of(context);
     return RichText(
       text: TextSpan(
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: const Color(0xFF64748B),
-        ),
+        style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
         children: [
           TextSpan(
             text: '$label: ',
-            style: const TextStyle(
-              color: const Color(0xFF0F172A),
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
           ),
           TextSpan(text: value),
         ],
@@ -1507,7 +1502,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -1530,10 +1525,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -1560,10 +1552,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

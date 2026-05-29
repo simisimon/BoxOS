@@ -49,10 +49,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return AuthStage(
       title: 'Sign In',
-      eyebrow: 'Access',
       headline: 'Step back into the box.',
       description:
           'Open your schedule, log training, and manage the gym from one sharp mobile entry point.',
+      showBrandHero: true,
       child: Form(
         key: _formKey,
         child: Column(
@@ -68,14 +68,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
                     validator: _emailValidator,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
                     validator: _passwordValidator,
                   ),
                 ],
@@ -90,15 +96,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onPressed: isLoading
                   ? null
                   : () {
-                      final isValid = _formKey.currentState?.validate() ?? false;
+                      final isValid =
+                          _formKey.currentState?.validate() ?? false;
                       if (!isValid) return;
-                      ref.read(authControllerProvider.notifier).signIn(
+                      ref
+                          .read(authControllerProvider.notifier)
+                          .signIn(
                             email: _emailController.text.trim(),
                             password: _passwordController.text,
                           );
                     },
               child: isLoading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('Sign In'),
             ),
             const SizedBox(height: 10),
@@ -107,13 +120,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: const Text('Create Account'),
             ),
             const SizedBox(height: 8),
-            TextButton(
-              onPressed: isLoading ? null : () => context.go('/forgot-password'),
-              child: const Text('Forgot Password?'),
-            ),
-            TextButton(
+            OutlinedButton(
               onPressed: isLoading ? null : () => context.go('/admin-sign-up'),
-              child: const Text('I need admin access'),
+              child: const Text('Create Box'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: isLoading
+                  ? null
+                  : () => context.go('/forgot-password'),
+              child: const Text('Forgot Password?'),
             ),
           ],
         ),

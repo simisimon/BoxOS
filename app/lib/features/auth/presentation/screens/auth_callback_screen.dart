@@ -1,4 +1,5 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
@@ -57,14 +58,18 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
     }
 
     try {
-      await ref.read(authControllerProvider.notifier).verifyEmail(token: tokenHash, type: type);
+      await ref
+          .read(authControllerProvider.notifier)
+          .verifyEmail(token: tokenHash, type: type);
       if (!mounted) return;
       setState(() {
         _status = _AuthCallbackStatus.success;
         _message = 'Email verified. You can now sign in.';
       });
     } catch (error) {
-      _setError(errorMessageFrom(error, fallback: 'Authentication link failed'));
+      _setError(
+        errorMessageFrom(error, fallback: 'Authentication link failed'),
+      );
     }
   }
 
@@ -81,11 +86,15 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
     final isLoading = _status == _AuthCallbackStatus.loading;
     final isError = _status == _AuthCallbackStatus.error;
     final icon = isLoading
-        ? const SizedBox(height: 56, width: 56, child: CircularProgressIndicator(strokeWidth: 3))
+        ? const SizedBox(
+            height: 56,
+            width: 56,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          )
         : Icon(
             isError ? Icons.error_outline : Icons.check_circle_outline,
             size: 56,
-            color: isError ? const Color(0xFFFF7A7A) : const Color(0xFF7EE7C6),
+            color: isError ? appDanger : appPrimary,
           );
 
     return AuthStage(
@@ -94,10 +103,11 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
       headline: isLoading
           ? 'Verifying the link.'
           : isError
-              ? 'The link needs attention.'
-              : 'You are verified.' ,
-      description: 'BoxOS is interpreting the authentication callback and routing you into the correct next step.',
-      accentColor: isError ? const Color(0xFFFF7A7A) : const Color(0xFF7EE7C6),
+          ? 'The link needs attention.'
+          : 'You are verified.',
+      description:
+          'BoxOS is interpreting the authentication callback and routing you into the correct next step.',
+      accentColor: isError ? appDanger : appPrimary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -106,7 +116,10 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
           Text(
             _message,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           if (!isLoading) ...[
             const SizedBox(height: 16),

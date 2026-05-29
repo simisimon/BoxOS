@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +65,9 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(authControllerProvider.notifier).changePassword(
+      await ref
+          .read(authControllerProvider.notifier)
+          .changePassword(
             currentPassword: _currentPasswordController.text,
             newPassword: _newPasswordController.text,
             logoutOtherSessions: _logoutOtherSessions,
@@ -100,15 +103,15 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: appPageBackground,
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFF5F9FF),
-              Color(0xFFEAF2FF),
+              appPageBackground,
+              appPageBackgroundSoft,
               Color(0xFF0B1320),
             ],
           ),
@@ -127,7 +130,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                     headline: 'Rotate access with confidence.',
                     description:
                         'Update your credentials and optionally clear other active sessions from one cleaner security surface.',
-                    accentColor: Color(0xFF5FB2FF),
+                    accentColor: appPrimary,
                   ),
                   const SizedBox(height: 16),
                   const _SectionTitle(
@@ -140,7 +143,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                   _FieldCard(
                     icon: Icons.lock_outline,
                     title: 'Current Password',
-                    subtitle: 'Confirm the current credential before rotating access.',
+                    subtitle:
+                        'Confirm the current credential before rotating access.',
                     child: TextFormField(
                       controller: _currentPasswordController,
                       obscureText: true,
@@ -193,7 +197,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                         : (value) {
                             setState(() => _logoutOtherSessions = value);
                           },
-                    accentColor: const Color(0xFF7EE7C6),
+                    accentColor: appPrimary,
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
@@ -244,13 +248,9 @@ class _SecurityHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -269,10 +269,7 @@ class _SecurityHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFFB98CFF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,7 +285,7 @@ class _SecurityHero extends StatelessWidget {
               Text(
                 title,
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -305,7 +302,7 @@ class _SecurityHero extends StatelessWidget {
               Text(
                 description,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -337,7 +334,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w700,
           ),
@@ -355,7 +352,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFFB8C4D9),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
@@ -383,14 +380,14 @@ class _FieldCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: const Color(0xFF5FB2FF)),
+          _AccentBadge(icon: icon, color: appPrimary),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -407,7 +404,7 @@ class _FieldCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -445,9 +442,9 @@ class _ToggleCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,7 +466,7 @@ class _ToggleCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -524,9 +521,9 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FBFF),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFF8FBFF)),
+            border: Border.all(color: appSurfaceAlt),
           ),
           child: const Icon(Icons.arrow_back_rounded, color: Colors.white),
         ),
@@ -550,10 +547,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -580,10 +574,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

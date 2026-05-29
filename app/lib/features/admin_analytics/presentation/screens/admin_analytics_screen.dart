@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_chrome.dart';
 import 'dart:ui';
 
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
@@ -17,10 +18,11 @@ class AdminAnalyticsScreen extends ConsumerWidget {
     final selectedWindowDays = ref.watch(adminAnalyticsWindowDaysProvider);
     final analyticsAsync = ref.watch(adminAnalyticsOverviewProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
-    final hasAccess = profile?.role == UserRole.admin && profile?.activeGym != null;
+    final hasAccess =
+        profile?.role == UserRole.admin && profile?.activeGym != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: appPageBackground,
       body: SafeArea(
         child: DecoratedBox(
           decoration: const BoxDecoration(
@@ -28,9 +30,9 @@ class AdminAnalyticsScreen extends ConsumerWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFFF5F9FF),
-                Color(0xFFEAF2FF),
-                Color(0xFFF9FBFF),
+                appPageBackground,
+                appPageBackgroundSoft,
+                appPageBackgroundEnd,
               ],
             ),
           ),
@@ -42,7 +44,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
                   IconButton(
                     onPressed: () => context.go('/profile'),
                     icon: const Icon(Icons.arrow_back),
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
@@ -97,7 +99,7 @@ class _HeaderBlock extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.8,
           ),
@@ -106,17 +108,16 @@ class _HeaderBlock extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: const Color(0xFF0F172A),
+            color: appText,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           subtitle,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF475569),
-            height: 1.45,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: appMutedText, height: 1.45),
         ),
       ],
     );
@@ -147,17 +148,17 @@ class _OverviewContent extends StatelessWidget {
             _MetricCard(
               label: 'Active members',
               value: '${overview.activeMembers}',
-              tone: const Color(0xFF5FB2FF),
+              tone: appPrimary,
             ),
             _MetricCard(
               label: 'Active trainers',
               value: '${overview.activeTrainers}',
-              tone: const Color(0xFFFFA94D),
+              tone: appPrimary,
             ),
             _MetricCard(
               label: 'Pending join requests',
               value: '${overview.pendingJoinRequests}',
-              tone: const Color(0xFF7EE7C6),
+              tone: appPrimary,
             ),
           ],
         ),
@@ -191,25 +192,25 @@ class _OverviewContent extends StatelessWidget {
                   _MetricCard(
                     label: 'New members',
                     value: '${overview.newMembersInWindow}',
-                    tone: const Color(0xFF7EE7C6),
+                    tone: appPrimary,
                     compact: true,
                   ),
                   _MetricCard(
                     label: 'Athlete only',
                     value: '${overview.roleMix.athleteOnly}',
-                    tone: const Color(0xFF5FB2FF),
+                    tone: appPrimary,
                     compact: true,
                   ),
                   _MetricCard(
                     label: 'Trainer capable',
                     value: '${overview.roleMix.trainerCapable}',
-                    tone: const Color(0xFFFFA94D),
+                    tone: appPrimary,
                     compact: true,
                   ),
                   _MetricCard(
                     label: 'Admin capable',
                     value: '${overview.roleMix.adminCapable}',
-                    tone: const Color(0xFFE6F14A),
+                    tone: appPrimary,
                     compact: true,
                   ),
                 ],
@@ -220,7 +221,7 @@ class _OverviewContent extends StatelessWidget {
                 child: Text(
                   'Recent members',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -231,15 +232,19 @@ class _OverviewContent extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'No recent memberships in this gym yet.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF475569),
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: appMutedText),
                   ),
                 )
               else
                 Column(
                   children: [
-                    for (var index = 0; index < overview.recentMembers.length; index++) ...[
+                    for (
+                      var index = 0;
+                      index < overview.recentMembers.length;
+                      index++
+                    ) ...[
                       _RecentMemberRow(item: overview.recentMembers[index]),
                       if (index < overview.recentMembers.length - 1)
                         const Divider(color: Color(0x1FFFFFFF), height: 24),
@@ -260,31 +265,32 @@ class _OverviewContent extends StatelessWidget {
               _MetricCard(
                 label: 'Classes',
                 value: '${overview.classesInWindow}',
-                tone: const Color(0xFFFF6B2C),
+                tone: appPrimary,
                 compact: true,
               ),
               _MetricCard(
                 label: 'Bookings',
                 value: '${overview.bookingsInWindow}',
-                tone: const Color(0xFF5FB2FF),
+                tone: appPrimary,
                 compact: true,
               ),
               _MetricCard(
                 label: 'Attendance rate',
                 value: '${overview.attendanceRateInWindow.toStringAsFixed(1)}%',
-                tone: const Color(0xFF7EE7C6),
+                tone: appPrimary,
                 compact: true,
               ),
               _MetricCard(
                 label: 'Utilization',
-                value: '${overview.utilizationRateInWindow.toStringAsFixed(1)}%',
-                tone: const Color(0xFFE6F14A),
+                value:
+                    '${overview.utilizationRateInWindow.toStringAsFixed(1)}%',
+                tone: appPrimary,
                 compact: true,
               ),
               _MetricCard(
                 label: 'No-show rate',
                 value: '${overview.noShowRateInWindow.toStringAsFixed(1)}%',
-                tone: const Color(0xFFFF8A80),
+                tone: appDanger,
                 compact: true,
               ),
             ],
@@ -326,19 +332,19 @@ class _OverviewContent extends StatelessWidget {
                   _MetricCard(
                     label: 'Waitlist spots',
                     value: '${overview.upcomingWaitlistSpotsNext7Days}',
-                    tone: const Color(0xFFB98CFF),
+                    tone: appPrimary,
                     compact: true,
                   ),
                   _MetricCard(
                     label: 'Classes with waitlist',
                     value: '${overview.upcomingClassesWithWaitlistNext7Days}',
-                    tone: const Color(0xFFFF8A80),
+                    tone: appDanger,
                     compact: true,
                   ),
                   _MetricCard(
                     label: 'Full classes',
                     value: '${overview.upcomingFullClassesNext7Days}',
-                    tone: const Color(0xFFE6F14A),
+                    tone: appPrimary,
                     compact: true,
                   ),
                 ],
@@ -354,15 +360,17 @@ class _OverviewContent extends StatelessWidget {
               ? Text(
                   'No waitlist-heavy or full classes are building pressure right now.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
+                    color: appMutedText,
                     height: 1.5,
                   ),
                 )
               : Column(
                   children: [
-                    for (var index = 0;
-                        index < overview.pressureClasses.length;
-                        index++) ...[
+                    for (
+                      var index = 0;
+                      index < overview.pressureClasses.length;
+                      index++
+                    ) ...[
                       _PressureClassRow(item: overview.pressureClasses[index]),
                       if (index < overview.pressureClasses.length - 1)
                         const Divider(color: Color(0x1FFFFFFF), height: 24),
@@ -378,15 +386,17 @@ class _OverviewContent extends StatelessWidget {
               ? Text(
                   'No completed classes crossed the low-attendance or high-no-show thresholds in this window.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
+                    color: appMutedText,
                     height: 1.5,
                   ),
                 )
               : Column(
                   children: [
-                    for (var index = 0;
-                        index < overview.problemClasses.length;
-                        index++) ...[
+                    for (
+                      var index = 0;
+                      index < overview.problemClasses.length;
+                      index++
+                    ) ...[
                       _ProblemClassRow(item: overview.problemClasses[index]),
                       if (index < overview.problemClasses.length - 1)
                         const Divider(color: Color(0x1FFFFFFF), height: 24),
@@ -437,7 +447,7 @@ class _MetricCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF111C2D).withOpacity(0.84),
+              color: appSurface.withOpacity(0.84),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: tone.withOpacity(0.28)),
             ),
@@ -456,7 +466,7 @@ class _MetricCard extends StatelessWidget {
                 Text(
                   value,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -485,7 +495,7 @@ class _Panel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF111C2D),
+        color: appSurface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: const Color(0x1FFFFFFF)),
       ),
@@ -495,7 +505,7 @@ class _Panel extends StatelessWidget {
           Text(
             eyebrow.toUpperCase(),
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: const Color(0xFF7EE7C6),
+              color: appPrimary,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.6,
             ),
@@ -504,7 +514,7 @@ class _Panel extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -530,16 +540,16 @@ class _ForwardStat extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF0F172A),
+            color: appText,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF64748B),
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: appSubtleText),
         ),
       ],
     );
@@ -566,16 +576,16 @@ class _RecentMemberRow extends StatelessWidget {
               Text(
                 item.displayName,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 '${item.email} · ${item.activeRole}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF475569),
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: appMutedText),
               ),
             ],
           ),
@@ -584,7 +594,7 @@ class _RecentMemberRow extends StatelessWidget {
         Text(
           dateLabel,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -614,20 +624,14 @@ class _WindowChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFF7EE7C6).withOpacity(0.16)
-                : const Color(0xFFF8FBFF),
+            color: selected ? appPrimary.withOpacity(0.16) : appSurfaceAlt,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF7EE7C6)
-                  : const Color(0xFFD8E4F2),
-            ),
+            border: Border.all(color: selected ? appPrimary : appBorder),
           ),
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected ? const Color(0xFF7EE7C6) : Colors.white,
+              color: selected ? appPrimary : Colors.white,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.0,
             ),
@@ -655,7 +659,7 @@ class _DailyRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -663,16 +667,16 @@ class _DailyRow extends StatelessWidget {
         Expanded(
           child: Text(
             '${day.classes} classes · ${day.bookings} bookings · ${day.attended} attended · ${day.noShows} no-shows',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF475569),
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: appMutedText),
           ),
         ),
         const SizedBox(width: 12),
         Text(
           '${day.utilizationRate.toStringAsFixed(1)}%',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -701,16 +705,16 @@ class _PressureClassRow extends StatelessWidget {
               Text(
                 item.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 '$dateLabel · ${item.bookings}/${item.capacity} booked',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF475569),
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: appMutedText),
               ),
             ],
           ),
@@ -722,7 +726,7 @@ class _PressureClassRow extends StatelessWidget {
             Text(
               '${item.waitlistCount} WL',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: const Color(0xFFB98CFF),
+                color: appPrimary,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -730,7 +734,7 @@ class _PressureClassRow extends StatelessWidget {
             Text(
               '${item.utilizationRate.toStringAsFixed(1)}%',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: const Color(0xFFE6F14A),
+                color: appPrimary,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -761,16 +765,16 @@ class _ProblemClassRow extends StatelessWidget {
               Text(
                 item.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 '$dateLabel · ${item.bookings}/${item.capacity} booked · ${item.attended} attended · ${item.noShows} no-shows',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF475569),
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: appMutedText),
               ),
             ],
           ),
@@ -782,7 +786,7 @@ class _ProblemClassRow extends StatelessWidget {
             Text(
               '${item.noShowRate.toStringAsFixed(1)}% NS',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: const Color(0xFFFF8A80),
+                color: appDanger,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -790,7 +794,7 @@ class _ProblemClassRow extends StatelessWidget {
             Text(
               '${item.attendanceRate.toStringAsFixed(1)}% att.',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: const Color(0xFF7EE7C6),
+                color: appPrimary,
                 fontWeight: FontWeight.w700,
               ),
             ),

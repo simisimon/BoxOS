@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -45,9 +46,9 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFFF5F9FF),
-            Color(0xFFEAF2FF),
-            Color(0xFFF9FBFF),
+            appPageBackground,
+            appPageBackgroundSoft,
+            appPageBackgroundEnd,
           ],
         ),
       ),
@@ -64,7 +65,7 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
                 title: 'No active gym selected',
                 message:
                     'Join or switch to a gym to unlock your workout history, PR trail, and recent result log.',
-                accentColor: Color(0xFF5FB2FF),
+                accentColor: appPrimary,
               )
             else
               FutureBuilder<List<WorkoutLogEntry>>(
@@ -84,7 +85,7 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
                         snapshot.error!,
                         fallback: 'Failed to load logbook',
                       ),
-                      accentColor: const Color(0xFFFF6B2C),
+                      accentColor: appPrimary,
                     );
                   }
 
@@ -114,7 +115,7 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
                           title: 'No workout logs yet',
                           message:
                               'Log a result from Programming to start building your personal training history.',
-                          accentColor: Color(0xFF7EE7C6),
+                          accentColor: appPrimary,
                         )
                       else
                         Column(
@@ -145,7 +146,7 @@ class _LogbookHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const accentColor = Color(0xFF7EE7C6);
+    const accentColor = appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -154,13 +155,9 @@ class _LogbookHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -179,10 +176,7 @@ class _LogbookHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFF5FB2FF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,7 +188,7 @@ class _LogbookHero extends StatelessWidget {
                   const _HeroPill(label: 'Logbook', color: accentColor),
                   _HeroPill(
                     label: gymName ?? 'No active gym',
-                    color: const Color(0xFF5FB2FF),
+                    color: appPrimary,
                     outlined: true,
                   ),
                 ],
@@ -203,7 +197,7 @@ class _LogbookHero extends StatelessWidget {
               Text(
                 'Logbook',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -211,7 +205,7 @@ class _LogbookHero extends StatelessWidget {
               Text(
                 'Your training block, archived cleanly.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -220,7 +214,7 @@ class _LogbookHero extends StatelessWidget {
               Text(
                 'Track workout history, result quality, class context, and PR momentum in one more readable performance stream.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -229,9 +223,9 @@ class _LogbookHero extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: const [
-                  _HeroPill(label: 'Workout History', color: Color(0xFFFF6B2C)),
-                  _HeroPill(label: 'Result Logging', color: Color(0xFF5FB2FF)),
-                  _HeroPill(label: 'PR Tracking', color: Color(0xFFB98CFF)),
+                  _HeroPill(label: 'Workout History', color: appPrimary),
+                  _HeroPill(label: 'Result Logging', color: appPrimary),
+                  _HeroPill(label: 'PR Tracking', color: appPrimary),
                 ],
               ),
             ],
@@ -262,7 +256,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w700,
           ),
@@ -271,7 +265,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF0F172A),
+            color: appText,
             fontWeight: FontWeight.w800,
             height: 0.96,
           ),
@@ -280,7 +274,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF64748B),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
@@ -298,7 +292,11 @@ class _SnapshotGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final thisWeekCount = entries
-        .where((entry) => entry.scheduledDate.isAfter(now.subtract(const Duration(days: 7))))
+        .where(
+          (entry) => entry.scheduledDate.isAfter(
+            now.subtract(const Duration(days: 7)),
+          ),
+        )
         .length;
     final latest = entries.isEmpty ? 'Not yet' : entries.first.scoreLabel;
     WorkoutLogEntry? latestPr;
@@ -317,7 +315,7 @@ class _SnapshotGrid extends StatelessWidget {
               child: _SnapshotStat(
                 label: 'Workouts This Week',
                 value: '$thisWeekCount',
-                accentColor: const Color(0xFF7EE7C6),
+                accentColor: appPrimary,
               ),
             ),
             const SizedBox(width: 12),
@@ -325,7 +323,7 @@ class _SnapshotGrid extends StatelessWidget {
               child: _SnapshotStat(
                 label: 'Total Logged',
                 value: '${entries.length}',
-                accentColor: const Color(0xFF5FB2FF),
+                accentColor: appPrimary,
               ),
             ),
           ],
@@ -337,7 +335,7 @@ class _SnapshotGrid extends StatelessWidget {
               child: _SnapshotStat(
                 label: 'Latest Score',
                 value: latest,
-                accentColor: const Color(0xFFFF6B2C),
+                accentColor: appPrimary,
               ),
             ),
             const SizedBox(width: 12),
@@ -345,7 +343,7 @@ class _SnapshotGrid extends StatelessWidget {
               child: _SnapshotStat(
                 label: 'Latest PR',
                 value: latestPr?.scoreLabel ?? 'Not yet',
-                accentColor: const Color(0xFFB98CFF),
+                accentColor: appPrimary,
               ),
             ),
           ],
@@ -391,7 +389,7 @@ class _SnapshotStat extends StatelessWidget {
           Text(
             value,
             style: theme.textTheme.titleLarge?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -409,16 +407,18 @@ class _HistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateLabel = MaterialLocalizations.of(context).formatFullDate(entry.scheduledDate);
+    final dateLabel = MaterialLocalizations.of(
+      context,
+    ).formatFullDate(entry.scheduledDate);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF5FB2FF).withOpacity(0.08),
+            color: appPrimary.withOpacity(0.08),
             blurRadius: 24,
             offset: const Offset(0, 16),
           ),
@@ -428,8 +428,10 @@ class _HistoryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _AccentBadge(
-            icon: entry.isPr ? Icons.emoji_events_outlined : Icons.fitness_center_outlined,
-            color: entry.isPr ? const Color(0xFFFF6B2C) : const Color(0xFF5FB2FF),
+            icon: entry.isPr
+                ? Icons.emoji_events_outlined
+                : Icons.fitness_center_outlined,
+            color: entry.isPr ? appPrimary : appPrimary,
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -439,7 +441,7 @@ class _HistoryCard extends StatelessWidget {
                 Text(
                   entry.workoutTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -448,13 +450,13 @@ class _HistoryCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _HeroPill(label: entry.scoreLabel, color: const Color(0xFF7EE7C6)),
+                    _HeroPill(label: entry.scoreLabel, color: appPrimary),
                     if (entry.isPr)
-                      const _HeroPill(label: 'PR', color: Color(0xFFFF6B2C))
+                      const _HeroPill(label: 'PR', color: appPrimary)
                     else if (entry.prRank != null)
                       _HeroPill(
                         label: 'Rank #${entry.prRank}',
-                        color: const Color(0xFFB98CFF),
+                        color: appPrimary,
                       ),
                   ],
                 ),
@@ -462,15 +464,16 @@ class _HistoryCard extends StatelessWidget {
                 Text(
                   dateLabel,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                   ),
                 ),
-                if (entry.classTitle != null && entry.classTitle!.isNotEmpty) ...[
+                if (entry.classTitle != null &&
+                    entry.classTitle!.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
                     'Class: ${entry.classTitle!}',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF475569),
+                      color: appMutedText,
                     ),
                   ),
                 ],
@@ -480,14 +483,14 @@ class _HistoryCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FBFF),
+                      color: appSurfaceAlt,
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFD8E4F2)),
+                      border: Border.all(color: appBorder),
                     ),
                     child: Text(
                       entry.notesText,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF0F172A),
+                        color: appText,
                         height: 1.45,
                       ),
                     ),
@@ -521,9 +524,9 @@ class _StateCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,7 +540,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -545,7 +548,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -581,7 +584,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -604,10 +607,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -634,10 +634,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

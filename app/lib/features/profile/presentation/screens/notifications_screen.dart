@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_chrome.dart';
 import 'dart:ui';
 
 import 'package:app/core/presentation/mobile_content.dart';
@@ -51,16 +52,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Widget build(BuildContext context) {
     final inboxAsync = ref.watch(notificationInboxProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: appPageBackground,
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFF5F9FF),
-              Color(0xFFEAF2FF),
-              Color(0xFFF9FBFF),
+              appPageBackground,
+              appPageBackgroundSoft,
+              appPageBackgroundEnd,
             ],
           ),
         ),
@@ -74,7 +75,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 title: 'Notifications could not be loaded',
                 message:
                     'The inbox is temporarily unavailable. Pull to refresh or try again in a moment.',
-                accentColor: Color(0xFFFF6B2C),
+                accentColor: appPrimary,
               ),
               data: (inbox) {
                 return RefreshIndicator(
@@ -87,7 +88,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         unreadCount: inbox.unreadCount,
                         isSubmitting: _isSubmitting,
                         onBack: () => Navigator.of(context).maybePop(),
-                        onMarkAllRead: inbox.unreadCount == 0 ? null : _markAllRead,
+                        onMarkAllRead: inbox.unreadCount == 0
+                            ? null
+                            : _markAllRead,
                       ),
                       const SizedBox(height: 16),
                       if (inbox.notifications.isEmpty)
@@ -104,15 +107,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                             children: [
                               _HeroPill(
                                 label: 'Unread: ${inbox.unreadCount}',
-                                color: const Color(0xFFFF6B2C),
+                                color: appPrimary,
                               ),
                               const _HeroPill(
                                 label: 'Workout Alerts',
-                                color: Color(0xFF5FB2FF),
+                                color: appPrimary,
                               ),
                               const _HeroPill(
                                 label: 'Community',
-                                color: Color(0xFF7EE7C6),
+                                color: appPrimary,
                               ),
                             ],
                           ),
@@ -153,7 +156,7 @@ class _NotificationsHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const accentColor = Color(0xFFFF6B2C);
+    const accentColor = appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -162,13 +165,9 @@ class _NotificationsHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -187,10 +186,7 @@ class _NotificationsHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFF5FB2FF).withOpacity(0.6),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,7 +204,9 @@ class _NotificationsHero extends StatelessWidget {
                   const _HeroPill(label: 'Notifications', color: accentColor),
                   FilledButton.tonal(
                     onPressed: isSubmitting ? null : onMarkAllRead,
-                    child: Text(unreadCount == 0 ? 'Inbox clear' : 'Mark all read'),
+                    child: Text(
+                      unreadCount == 0 ? 'Inbox clear' : 'Mark all read',
+                    ),
                   ),
                 ],
               ),
@@ -216,7 +214,7 @@ class _NotificationsHero extends StatelessWidget {
               Text(
                 'Notifications',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -224,7 +222,7 @@ class _NotificationsHero extends StatelessWidget {
               Text(
                 'Stay on top of the box pulse.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -233,7 +231,7 @@ class _NotificationsHero extends StatelessWidget {
               Text(
                 'Booking changes, WOD drops, waitlist moves, PR alerts, and announcement reactions now sit in a cleaner inbox with stronger visibility for unread items.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -243,12 +241,14 @@ class _NotificationsHero extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _HeroPill(
-                    label: unreadCount == 0 ? 'Inbox clear' : '$unreadCount unread',
-                    color: const Color(0xFF7EE7C6),
+                    label: unreadCount == 0
+                        ? 'Inbox clear'
+                        : '$unreadCount unread',
+                    color: appPrimary,
                   ),
                   const _HeroPill(
                     label: 'Operational Feed',
-                    color: Color(0xFF5FB2FF),
+                    color: appPrimary,
                     outlined: true,
                   ),
                 ],
@@ -273,7 +273,7 @@ class _NotificationsPlaceholder extends StatelessWidget {
           title: 'You are all caught up',
           message:
               'Booking updates, WOD posts, waitlist changes, and PR alerts will appear here once your gym starts sending them.',
-          accentColor: Color(0xFF7EE7C6),
+          accentColor: appPrimary,
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
@@ -302,27 +302,30 @@ class _NotificationCard extends StatelessWidget {
         '${createdAt.hour.toString().padLeft(2, '0')}:'
         '${createdAt.minute.toString().padLeft(2, '0')}';
     final isPr = notification.type == 'pr_achieved';
-    final isAnnouncement = notification.type == 'announcement_liked' ||
+    final isAnnouncement =
+        notification.type == 'announcement_liked' ||
         notification.type == 'announcement_commented';
     final accentColor = isPr
-        ? const Color(0xFFFF6B2C)
+        ? appPrimary
         : isAnnouncement
-        ? const Color(0xFF7EE7C6)
-        : const Color(0xFF5FB2FF);
+        ? appPrimary
+        : appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: notification.readAt == null
               ? accentColor.withOpacity(0.28)
-              : const Color(0xFFF8FBFF),
+              : appSurfaceAlt,
         ),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withOpacity(notification.readAt == null ? 0.1 : 0.05),
+            color: accentColor.withOpacity(
+              notification.readAt == null ? 0.1 : 0.05,
+            ),
             blurRadius: 22,
             offset: const Offset(0, 14),
           ),
@@ -353,7 +356,7 @@ class _NotificationCard extends StatelessWidget {
                       child: Text(
                         notification.title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF0F172A),
+                          color: appText,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -361,10 +364,7 @@ class _NotificationCard extends StatelessWidget {
                     if (notification.readAt == null)
                       const Padding(
                         padding: EdgeInsets.only(left: 8),
-                        child: _HeroPill(
-                          label: 'New',
-                          color: Color(0xFFFF6B2C),
-                        ),
+                        child: _HeroPill(label: 'New', color: appPrimary),
                       ),
                   ],
                 ),
@@ -372,7 +372,7 @@ class _NotificationCard extends StatelessWidget {
                 Text(
                   notification.body,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
+                    color: appMutedText,
                     height: 1.45,
                   ),
                 ),
@@ -380,7 +380,7 @@ class _NotificationCard extends StatelessWidget {
                 Text(
                   timestamp,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF8FA0BA),
+                    color: appSubtleText,
                   ),
                 ),
               ],
@@ -414,7 +414,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: appPrimary,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w700,
           ),
@@ -423,7 +423,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF0F172A),
+            color: appText,
             fontWeight: FontWeight.w800,
             height: 0.96,
           ),
@@ -432,14 +432,11 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF64748B),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
-        if (trailing != null) ...[
-          const SizedBox(height: 12),
-          trailing!,
-        ],
+        if (trailing != null) ...[const SizedBox(height: 12), trailing!],
       ],
     );
   }
@@ -464,9 +461,9 @@ class _NotificationsStateCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -480,7 +477,7 @@ class _NotificationsStateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -488,7 +485,7 @@ class _NotificationsStateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -524,7 +521,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -554,9 +551,9 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FBFF),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFD8E4F2)),
+            border: Border.all(color: appBorder),
           ),
           child: Icon(icon, color: Colors.white),
         ),
@@ -580,10 +577,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -610,10 +604,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

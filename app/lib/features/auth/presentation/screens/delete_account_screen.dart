@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:flutter/material.dart';
@@ -104,15 +105,15 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: appPageBackground,
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFF5F9FF),
-              Color(0xFFEAF2FF),
+              appPageBackground,
+              appPageBackgroundSoft,
               Color(0xFF0B1320),
             ],
           ),
@@ -131,7 +132,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                     headline: 'Make the irreversible choice carefully.',
                     description:
                         'Confirm your password before removing account access, anonymizing profile data, and scheduling permanent deletion.',
-                    accentColor: Color(0xFFFF7A7A),
+                    accentColor: appDanger,
                   ),
                   const SizedBox(height: 16),
                   const _SectionTitle(
@@ -146,8 +147,9 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                   _FieldCard(
                     icon: Icons.lock_outline,
                     title: 'Current Password',
-                    subtitle: 'Enter your password to confirm ownership of the account.',
-                    accentColor: const Color(0xFFFF7A7A),
+                    subtitle:
+                        'Enter your password to confirm ownership of the account.',
+                    accentColor: appDanger,
                     child: TextFormField(
                       controller: _currentPasswordController,
                       obscureText: true,
@@ -164,7 +166,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                     child: FilledButton(
                       onPressed: _isSubmitting ? null : _submit,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF7A7A),
+                        backgroundColor: appDanger,
                         foregroundColor: Colors.white,
                       ),
                       child: _isSubmitting
@@ -209,13 +211,9 @@ class _SecurityHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.24),
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-          ],
+          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -234,10 +232,7 @@ class _SecurityHero extends StatelessWidget {
           Positioned(
             right: 38,
             bottom: -28,
-            child: _GlowOrb(
-              color: const Color(0xFFB98CFF).withOpacity(0.45),
-              size: 88,
-            ),
+            child: _GlowOrb(color: appPrimary.withOpacity(0.45), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,7 +248,7 @@ class _SecurityHero extends StatelessWidget {
               Text(
                 title,
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: appPrimary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -270,7 +265,7 @@ class _SecurityHero extends StatelessWidget {
               Text(
                 description,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -302,7 +297,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFFFF7A7A),
+            color: appDanger,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w700,
           ),
@@ -320,7 +315,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFFB8C4D9),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
@@ -338,9 +333,9 @@ class _WarningCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFF7A7A).withOpacity(0.08),
+        color: appDanger.withOpacity(0.08),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFFF7A7A).withOpacity(0.22)),
+        border: Border.all(color: appDanger.withOpacity(0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,7 +353,7 @@ class _WarningCard extends StatelessWidget {
             '• Profile data is anonymized\n'
             '• Permanent deletion happens after 30 days',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF475569),
+              color: appMutedText,
               height: 1.5,
             ),
           ),
@@ -389,9 +384,9 @@ class _FieldCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101826),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +408,7 @@ class _FieldCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -468,9 +463,9 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FBFF),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFF8FBFF)),
+            border: Border.all(color: appSurfaceAlt),
           ),
           child: const Icon(Icons.arrow_back_rounded, color: Colors.white),
         ),
@@ -494,10 +489,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -524,10 +516,7 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.28),
-                color.withOpacity(0.12),
-              ],
+              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withOpacity(0.28)),

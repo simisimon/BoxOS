@@ -43,7 +43,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   String? _confirmValidator(String? value) {
-    if ((value ?? '') != _passwordController.text) return 'Passwords do not match';
+    if ((value ?? '') != _passwordController.text)
+      return 'Passwords do not match';
     return null;
   }
 
@@ -52,19 +53,27 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (!isValid || _isSubmitting) return;
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(authControllerProvider.notifier).signUp(
+      await ref
+          .read(authControllerProvider.notifier)
+          .signUp(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign up successful. Verify your email to continue.')),
+        const SnackBar(
+          content: Text('Sign up successful. Verify your email to continue.'),
+        ),
       );
-      context.go('/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}');
+      context.go(
+        '/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}',
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Sign up failed'))),
+        SnackBar(
+          content: Text(errorMessageFrom(error, fallback: 'Sign up failed')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -87,27 +96,37 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             AuthFieldGroup(
               icon: Icons.person_add_alt_1_outlined,
               title: 'Athlete Sign Up',
-              subtitle: 'This path is for members joining and training inside a gym.',
+              subtitle:
+                  'This path is for members joining and training inside a gym.',
               child: Column(
                 children: [
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
                     validator: _emailValidator,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
                     validator: _passwordValidator,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm Password',
+                      border: OutlineInputBorder(),
+                    ),
                     validator: _confirmValidator,
                   ),
                 ],
@@ -116,18 +135,25 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             const SizedBox(height: 14),
             const AuthNoteCard(
               title: 'Next step',
-              body: 'After sign up, BoxOS sends a verification email before account access becomes active.',
+              body:
+                  'After sign up, BoxOS sends a verification email before account access becomes active.',
             ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _isSubmitting ? null : _onSubmit,
               child: _isSubmitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('Create Account'),
             ),
             const SizedBox(height: 10),
             OutlinedButton(
-              onPressed: _isSubmitting ? null : () => context.go('/admin-sign-up'),
+              onPressed: _isSubmitting
+                  ? null
+                  : () => context.go('/admin-sign-up'),
               child: const Text('I need admin access'),
             ),
           ],

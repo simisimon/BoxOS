@@ -15,6 +15,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+const _homeAccent = appPrimary;
+const _homeAccentSoft = Color(0x1F2563EB);
+const _homeDanger = Color(0xFFD64545);
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -82,7 +86,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: appBorder),
         ),
-        title: const Text('Delete announcement', style: TextStyle(color: appText)),
+        title: const Text(
+          'Delete announcement',
+          style: TextStyle(color: appText),
+        ),
         content: Text(
           'Delete "${announcement.title}"? This can’t be undone.',
           style: const TextStyle(color: appMutedText),
@@ -94,7 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD64545)),
+            style: FilledButton.styleFrom(backgroundColor: _homeDanger),
             child: const Text('Delete'),
           ),
         ],
@@ -142,17 +149,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Like update failed.'))),
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Like update failed.'),
+          ),
+        ),
       );
     }
   }
 
-  Future<void> _createAnnouncementComment(Announcement announcement, String body) async {
+  Future<void> _createAnnouncementComment(
+    Announcement announcement,
+    String body,
+  ) async {
     try {
-      await ref.read(announcementRepositoryProvider).createComment(
-        announcementId: announcement.id,
-        body: body,
-      );
+      await ref
+          .read(announcementRepositoryProvider)
+          .createComment(announcementId: announcement.id, body: body);
       if (!mounted) {
         return;
       }
@@ -162,17 +175,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Comment could not be posted.'))),
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Comment could not be posted.'),
+          ),
+        ),
       );
     }
   }
 
-  Future<void> _editAnnouncementComment(AnnouncementComment comment, String body) async {
+  Future<void> _editAnnouncementComment(
+    AnnouncementComment comment,
+    String body,
+  ) async {
     try {
-      await ref.read(announcementRepositoryProvider).updateComment(
-        commentId: comment.id,
-        body: body,
-      );
+      await ref
+          .read(announcementRepositoryProvider)
+          .updateComment(commentId: comment.id, body: body);
       if (!mounted) {
         return;
       }
@@ -182,14 +201,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Comment could not be updated.'))),
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Comment could not be updated.'),
+          ),
+        ),
       );
     }
   }
 
   Future<void> _deleteAnnouncementComment(AnnouncementComment comment) async {
     try {
-      await ref.read(announcementRepositoryProvider).deleteComment(commentId: comment.id);
+      await ref
+          .read(announcementRepositoryProvider)
+          .deleteComment(commentId: comment.id);
       if (!mounted) {
         return;
       }
@@ -199,7 +224,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Comment could not be deleted.'))),
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Comment could not be deleted.'),
+          ),
+        ),
       );
     }
   }
@@ -231,7 +260,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const _SectionTitle(
             eyebrow: 'Booking',
             title: 'Class access',
-            subtitle: 'Jump straight into booking and keep your reserved classes one swipe away.',
+            subtitle:
+                'Jump straight into booking and keep your reserved classes one swipe away.',
           ),
           const SizedBox(height: 12),
           _BookingQuickAccessRail(
@@ -244,7 +274,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const _SectionTitle(
             eyebrow: 'News',
             title: 'Gym pulse',
-            subtitle: 'Announcements from your gym live here first, with expandable detail when you need it.',
+            subtitle:
+                'Announcements from your gym live here first, with expandable detail when you need it.',
           ),
           const SizedBox(height: 12),
           _AnnouncementRail(
@@ -263,7 +294,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const _SectionTitle(
             eyebrow: 'Today',
             title: 'Readiness board',
-            subtitle: 'The next class, the daily workout, and anything that needs attention.',
+            subtitle:
+                'The next class, the daily workout, and anything that needs attention.',
           ),
           const SizedBox(height: 12),
           _TodaySnapshot(
@@ -274,7 +306,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const _SectionTitle(
             eyebrow: 'Quick Access',
             title: 'Move fast',
-            subtitle: 'Role-aware shortcuts without duplicating footer navigation.',
+            subtitle:
+                'Role-aware shortcuts without duplicating footer navigation.',
           ),
           const SizedBox(height: 12),
           _QuickAccessGrid(
@@ -288,7 +321,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const _SectionTitle(
               eyebrow: 'Admin Setup',
               title: 'Open the floor',
-              subtitle: 'Create the first gym before members, bookings, and programming can go live.',
+              subtitle:
+                  'Create the first gym before members, bookings, and programming can go live.',
             ),
             const SizedBox(height: 12),
             _ActionSpotlight(
@@ -297,7 +331,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle:
                   'Finish admin onboarding and unlock member flows, scheduling, and workout delivery.',
               actionLabel: 'Create Gym',
-              accentColor: const Color(0xFFFF6B2C),
+              accentColor: _homeAccent,
               onTap: () => context.go('/create-gym'),
             ),
           ],
@@ -328,7 +362,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           eyebrow.toUpperCase(),
           style: theme.textTheme.labelMedium?.copyWith(
-            color: const Color(0xFF7EE7C6),
+            color: _homeAccent,
             letterSpacing: 1.6,
             fontWeight: FontWeight.w700,
           ),
@@ -338,7 +372,7 @@ class _SectionTitle extends StatelessWidget {
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: const Color(0xFF0F172A),
+            color: appText,
             height: 0.96,
           ),
         ),
@@ -346,7 +380,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF64748B),
+            color: appSubtleText,
             height: 1.4,
           ),
         ),
@@ -382,13 +416,9 @@ class _HeroPanel extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accent.withOpacity(0.32),
-            const Color(0xFF111827),
-            const Color(0xFF06090F),
-          ],
+          colors: [accent.withOpacity(0.14), appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accent.withOpacity(0.18),
@@ -407,10 +437,7 @@ class _HeroPanel extends StatelessWidget {
           Positioned(
             right: 36,
             bottom: -32,
-            child: _GlowOrb(
-              color: const Color(0xFF7EE7C6).withOpacity(0.65),
-              size: 92,
-            ),
+            child: _GlowOrb(color: _homeAccent.withOpacity(0.35), size: 92),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +449,7 @@ class _HeroPanel extends StatelessWidget {
                   _HeroChip(label: roleLabel, color: accent),
                   _HeroChip(
                     label: activeGymName ?? 'No active gym',
-                    color: const Color(0xFF7EE7C6),
+                    color: _homeAccent,
                     outlined: true,
                   ),
                 ],
@@ -431,7 +458,7 @@ class _HeroPanel extends StatelessWidget {
               Text(
                 'News',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF2563EB),
+                  color: _homeAccent,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -439,7 +466,7 @@ class _HeroPanel extends StatelessWidget {
               Text(
                 'Built for the next training block.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w900,
                   height: 0.95,
                 ),
@@ -448,7 +475,7 @@ class _HeroPanel extends StatelessWidget {
               Text(
                 'Welcome back, $greeting. BoxOS now starts with a sharper operational snapshot instead of a generic dashboard.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.45,
                 ),
               ),
@@ -482,12 +509,12 @@ class _HeroPanel extends StatelessWidget {
   static Color _accentForRole(UserRole? role) {
     switch (role) {
       case UserRole.admin:
-        return const Color(0xFFFF6B2C);
+        return _homeAccent;
       case UserRole.trainer:
-        return const Color(0xFF5FB2FF);
+        return _homeAccent;
       case UserRole.athlete:
       case null:
-        return const Color(0xFF7EE7C6);
+        return _homeAccent;
     }
   }
 }
@@ -508,9 +535,9 @@ class _MetricBand extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FBFF),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFD8E4F2)),
+            border: Border.all(color: appBorder),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,7 +545,7 @@ class _MetricBand extends StatelessWidget {
               Text(
                 label.toUpperCase(),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: const Color(0xFFAAB6CB),
+                  color: appSubtleText,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -526,7 +553,7 @@ class _MetricBand extends StatelessWidget {
               Text(
                 value,
                 style: theme.textTheme.titleLarge?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -553,10 +580,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.95),
-              color.withOpacity(0.0),
-            ],
+            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
         ),
       ),
@@ -587,7 +611,7 @@ class _HeroChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: appText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -607,9 +631,12 @@ class _TodaySnapshot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rolePrompt = switch (profileRole) {
-      UserRole.admin => 'Join requests, staffing, and payment alerts should surface here next.',
-      UserRole.trainer => 'Coaching blocks, roster checks, and today\'s programming should surface here next.',
-      _ => 'Your next booking, the daily WOD, and your logging prompt should surface here next.',
+      UserRole.admin =>
+        'Join requests, staffing, and payment alerts should surface here next.',
+      UserRole.trainer =>
+        'Coaching blocks, roster checks, and today\'s programming should surface here next.',
+      _ =>
+        'Your next booking, the daily WOD, and your logging prompt should surface here next.',
     };
 
     return Column(
@@ -619,16 +646,18 @@ class _TodaySnapshot extends StatelessWidget {
           icon: Icons.calendar_month_rounded,
           eyebrow: 'Next Class',
           headline: 'No booking yet',
-          body: 'Your next reserved class will appear here with cleaner hierarchy and stronger status visibility.',
-          accentColor: Color(0xFF5FB2FF),
+          body:
+              'Your next reserved class will appear here with cleaner hierarchy and stronger status visibility.',
+          accentColor: _homeAccent,
         ),
         const SizedBox(height: 12),
         const _FeatureCard(
           icon: Icons.local_fire_department_rounded,
           eyebrow: 'Today\'s WOD',
           headline: 'Not posted yet',
-          body: 'Programming for the active gym will surface here with better emphasis once the real data slice lands.',
-          accentColor: Color(0xFFFF6B2C),
+          body:
+              'Programming for the active gym will surface here with better emphasis once the real data slice lands.',
+          accentColor: _homeAccent,
         ),
         const SizedBox(height: 12),
         _FeatureCard(
@@ -638,7 +667,7 @@ class _TodaySnapshot extends StatelessWidget {
               ? 'Inbox clear'
               : '$unreadNotifications unread',
           body: rolePrompt,
-          accentColor: const Color(0xFF7EE7C6),
+          accentColor: _homeAccent,
         ),
       ],
     );
@@ -666,9 +695,9 @@ class _FeatureCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF101827),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.12),
@@ -698,7 +727,7 @@ class _FeatureCard extends StatelessWidget {
                 Text(
                   headline,
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -706,7 +735,7 @@ class _FeatureCard extends StatelessWidget {
                 Text(
                   body,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: appSubtleText,
                     height: 1.45,
                   ),
                 ),
@@ -735,10 +764,7 @@ class _AccentBadge extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.28),
-            color.withOpacity(0.12),
-          ],
+          colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
         ),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
@@ -796,10 +822,11 @@ class _BookingQuickAccessRail extends StatelessWidget {
         }
 
         final now = DateTime.now();
-        final bookedItems = (snapshot.data ?? const <ScheduleClass>[])
-            .where((item) => item.isBooked && item.startTime.isAfter(now))
-            .toList()
-          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+        final bookedItems =
+            (snapshot.data ?? const <ScheduleClass>[])
+                .where((item) => item.isBooked && item.startTime.isAfter(now))
+                .toList()
+              ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
         return SizedBox(
           height: 220,
@@ -847,11 +874,11 @@ class _BookingLauncherCard extends StatelessWidget {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFFF6B2C), Color(0xFFE4511E), Color(0xFFB83314)],
+                colors: [appPrimary, Color(0xFF1D4ED8)],
               ),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x44FF6B2C),
+                  color: Color(0x1F2563EB),
                   blurRadius: 28,
                   offset: Offset(0, 18),
                 ),
@@ -865,13 +892,13 @@ class _BookingLauncherCard extends StatelessWidget {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: Color(0x22FFFFFF),
-                    child: Icon(Icons.add_rounded, color: const Color(0xFF0F172A), size: 26),
+                    child: Icon(Icons.add_rounded, color: appText, size: 26),
                   ),
                   Spacer(),
                   Text(
                     'Book a class',
                     style: TextStyle(
-                      color: const Color(0xFF0F172A),
+                      color: appText,
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -881,7 +908,7 @@ class _BookingLauncherCard extends StatelessWidget {
                     'Open the schedule and reserve your next slot fast.',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Color(0xFFFBE7DE), height: 1.35),
+                    style: TextStyle(color: Colors.white, height: 1.35),
                   ),
                 ],
               ),
@@ -903,8 +930,8 @@ class _BookingPlaceholderCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        color: const Color(0xFF101827),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        color: appSurface,
+        border: Border.all(color: appBorder),
       ),
       child: const SingleChildScrollView(
         physics: NeverScrollableScrollPhysics(),
@@ -914,16 +941,12 @@ class _BookingPlaceholderCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.event_busy_outlined,
-                color: Color(0xFF5FB2FF),
-                size: 26,
-              ),
+              Icon(Icons.event_busy_outlined, color: appPrimary, size: 26),
               SizedBox(height: 14),
               Text(
                 'No class booked yet',
                 style: TextStyle(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
                 ),
@@ -933,7 +956,7 @@ class _BookingPlaceholderCard extends StatelessWidget {
                 'Reserve one and it stays pinned here for quick access.',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Color(0xFFB8C4D9), height: 1.4),
+                style: TextStyle(color: appSubtleText, height: 1.4),
               ),
             ],
           ),
@@ -972,9 +995,9 @@ class _BookedClassCard extends StatelessWidget {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF141E31), Color(0xFF101827)],
+                colors: [appSurface, appSurfaceAlt],
               ),
-              border: Border.all(color: const Color(0xFFD8E4F2)),
+              border: Border.all(color: appBorder),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -983,20 +1006,23 @@ class _BookedClassCard extends StatelessWidget {
                   children: [
                     const _AccentBadge(
                       icon: Icons.check_circle_outline_rounded,
-                      color: Color(0xFF7EE7C6),
+                      color: appPrimary,
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(999),
-                        color: const Color(0x147EE7C6),
-                        border: Border.all(color: const Color(0x337EE7C6)),
+                        color: _homeAccentSoft,
+                        border: Border.all(color: appBorder),
                       ),
-                    child: const Text(
+                      child: const Text(
                         'BOOKED',
                         style: TextStyle(
-                          color: Color(0xFF7EE7C6),
+                          color: appPrimary,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1,
@@ -1011,7 +1037,7 @@ class _BookedClassCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w900,
                     fontSize: 20,
                   ),
@@ -1022,7 +1048,7 @@ class _BookedClassCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
+                    color: appMutedText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1034,7 +1060,7 @@ class _BookedClassCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF8EA0BE),
+                    color: appSubtleText,
                   ),
                 ),
               ],
@@ -1067,8 +1093,10 @@ class _AnnouncementRail extends StatelessWidget {
   final Future<void> Function(Announcement announcement) onEditAnnouncement;
   final Future<void> Function(Announcement announcement) onDeleteAnnouncement;
   final Future<void> Function(Announcement announcement) onToggleLike;
-  final Future<void> Function(Announcement announcement, String body) onCreateComment;
-  final Future<void> Function(AnnouncementComment comment, String body) onEditComment;
+  final Future<void> Function(Announcement announcement, String body)
+  onCreateComment;
+  final Future<void> Function(AnnouncementComment comment, String body)
+  onEditComment;
   final Future<void> Function(AnnouncementComment comment) onDeleteComment;
 
   @override
@@ -1155,30 +1183,33 @@ class _AnnouncementComposerBanner extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0x33FF6B2C), Color(0x22141E31)],
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [appSurface, appSurfaceAlt],
+          ),
+          border: Border.all(color: appBorder),
         ),
-        border: Border.all(color: const Color(0x66FF6B2C)),
-      ),
-      child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 10,
+          ),
           leading: const _AccentBadge(
             icon: Icons.add_comment_outlined,
-            color: Color(0xFFFF6B2C),
+            color: appPrimary,
           ),
           title: const Text(
             'Post a new announcement',
-            style: TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.w800),
+            style: TextStyle(color: appText, fontWeight: FontWeight.w800),
           ),
           subtitle: const Text(
             'Share schedule changes, event reminders, or coach notes right on the home feed.',
-            style: TextStyle(color: Color(0xFFB8C4D9), height: 1.45),
+            style: TextStyle(color: appSubtleText, height: 1.45),
           ),
-          trailing: const Icon(Icons.north_east_rounded, color: Color(0xFFFF6B2C)),
+          trailing: const Icon(Icons.north_east_rounded, color: appPrimary),
           onTap: onTap,
         ),
       ),
@@ -1211,19 +1242,19 @@ class _AnnouncementEmptyState extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF141E31), Color(0xFF101827)],
+          colors: [appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: const Color(0xFF7EE7C6)),
+          _AccentBadge(icon: icon, color: _homeAccent),
           const SizedBox(height: 14),
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1231,7 +1262,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
+              color: appSubtleText,
               height: 1.45,
             ),
           ),
@@ -1240,7 +1271,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
             FilledButton(
               onPressed: onTap,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B2C),
+                backgroundColor: _homeAccent,
                 foregroundColor: Colors.white,
               ),
               child: Text(actionLabel!),
@@ -1270,7 +1301,8 @@ class _AnnouncementCard extends StatefulWidget {
   final Future<void> Function() onDelete;
   final Future<void> Function() onToggleLike;
   final Future<void> Function(String body) onCreateComment;
-  final Future<void> Function(AnnouncementComment comment, String body) onEditComment;
+  final Future<void> Function(AnnouncementComment comment, String body)
+  onEditComment;
   final Future<void> Function(AnnouncementComment comment) onDeleteComment;
 
   @override
@@ -1296,18 +1328,20 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF141E31), Color(0xFF101827)],
+          colors: [appSurface, appSurfaceAlt],
         ),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
           childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          collapsedIconColor: const Color(0xFF7EE7C6),
-          iconColor: const Color(0xFF7EE7C6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          collapsedIconColor: _homeAccent,
+          iconColor: _homeAccent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           collapsedShape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -1321,7 +1355,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     Text(
                       widget.announcement.title,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF0F172A),
+                        color: appText,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1329,7 +1363,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     Text(
                       'Posted by ${widget.announcement.authorName} · ${_formatAnnouncementDate(widget.announcement.createdAt)}',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF8EA0BE),
+                        color: appSubtleText,
                       ),
                     ),
                   ],
@@ -1337,8 +1371,8 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               ),
               if (widget.canManage)
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, color: Color(0xFFB8C4D9)),
-                  color: const Color(0xFF141E31),
+                  icon: const Icon(Icons.more_horiz, color: appSubtleText),
+                  color: appSurface,
                   onSelected: (value) {
                     if (value == 'edit') {
                       widget.onEdit();
@@ -1384,7 +1418,9 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   ),
                 ),
           children: [
-            if (widget.announcement.updatedAt.isAfter(widget.announcement.createdAt)) ...[
+            if (widget.announcement.updatedAt.isAfter(
+              widget.announcement.createdAt,
+            )) ...[
               Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
@@ -1392,7 +1428,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   child: Text(
                     'Last updated ${_formatAnnouncementDate(widget.announcement.updatedAt)}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF8EA0BE),
+                      color: appSubtleText,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -1404,7 +1440,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               child: Text(
                 widget.announcement.description,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF475569),
+                  color: appMutedText,
                   height: 1.55,
                 ),
               ),
@@ -1420,8 +1456,8 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                       : Icons.favorite_border_rounded,
                   label: '${widget.announcement.likeCount} likes',
                   accent: widget.announcement.likedByMe
-                      ? const Color(0xFFFF6B6B)
-                      : const Color(0xFF7EE7C6),
+                      ? _homeDanger
+                      : _homeAccent,
                   onTap: widget.onToggleLike,
                 ),
                 _AnnouncementStaticPill(
@@ -1438,7 +1474,8 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
             ),
             if (widget.announcement.comments.isNotEmpty) ...[
               const SizedBox(height: 18),
-              for (final (index, comment) in widget.announcement.comments.indexed) ...[
+              for (final (index, comment)
+                  in widget.announcement.comments.indexed) ...[
                 _AnnouncementCommentCard(
                   comment: comment,
                   onEdit: () => _promptEditComment(comment),
@@ -1542,7 +1579,13 @@ class _AnnouncementMetricButton extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: accent),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.w700)),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: appText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -1563,15 +1606,18 @@ class _AnnouncementStaticPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: const Color(0xFFF8FBFF),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        color: appSurfaceAlt,
+        border: Border.all(color: appBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF8EA0BE)),
+          Icon(icon, size: 18, color: appSubtleText),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );
@@ -1595,8 +1641,8 @@ class _AnnouncementCommentComposer extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFFF8FBFF),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        color: appSurfaceAlt,
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1618,7 +1664,7 @@ class _AnnouncementCommentComposer extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: isSubmitting ? null : onSubmit,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B2C),
+                backgroundColor: _homeAccent,
                 foregroundColor: Colors.white,
               ),
               icon: isSubmitting
@@ -1671,7 +1717,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
                     Text(
                       comment.authorName,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF0F172A),
+                        color: appText,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1679,7 +1725,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
                     Text(
                       _formatAnnouncementDate(comment.updatedAt),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF8EA0BE),
+                        color: appSubtleText,
                       ),
                     ),
                   ],
@@ -1687,8 +1733,8 @@ class _AnnouncementCommentCard extends StatelessWidget {
               ),
               if (comment.canManage)
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, color: Color(0xFF8EA0BE)),
-                  color: const Color(0xFF141E31),
+                  icon: const Icon(Icons.more_horiz, color: appSubtleText),
+                  color: appSurface,
                   onSelected: (value) {
                     if (value == 'edit') {
                       onEdit();
@@ -1697,8 +1743,14 @@ class _AnnouncementCommentCard extends StatelessWidget {
                     }
                   },
                   itemBuilder: (context) => const [
-                    PopupMenuItem<String>(value: 'edit', child: Text('Edit comment')),
-                    PopupMenuItem<String>(value: 'delete', child: Text('Delete comment')),
+                    PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Text('Edit comment'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text('Delete comment'),
+                    ),
                   ],
                 ),
             ],
@@ -1707,7 +1759,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
           Text(
             comment.body,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF475569),
+              color: appMutedText,
               height: 1.5,
             ),
           ),
@@ -1768,13 +1820,14 @@ class _QuickAccessGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = <_HomeAction>[
-      if (profileAccountType == AccountType.admin && profileRole == UserRole.admin)
+      if (profileAccountType == AccountType.admin &&
+          profileRole == UserRole.admin)
         const _HomeAction(
           icon: Icons.group_outlined,
           title: 'Review Join Requests',
           subtitle: 'Approve or reject athletes requesting access to your gym.',
           route: '/gym-requests',
-          accentColor: Color(0xFFFF6B2C),
+          accentColor: appPrimary,
         )
       else
         const _HomeAction(
@@ -1782,7 +1835,7 @@ class _QuickAccessGrid extends StatelessWidget {
           title: 'Find a Gym',
           subtitle: 'Browse gyms and request access from the athlete flow.',
           route: '/gyms',
-          accentColor: Color(0xFF7EE7C6),
+          accentColor: appPrimary,
         ),
       if (profileRole == UserRole.trainer || profileRole == UserRole.admin)
         const _HomeAction(
@@ -1790,7 +1843,7 @@ class _QuickAccessGrid extends StatelessWidget {
           title: 'Open Schedule',
           subtitle: 'Move into class planning and coaching workflows.',
           route: '/my-box',
-          accentColor: Color(0xFF5FB2FF),
+          accentColor: appPrimary,
         )
       else
         const _HomeAction(
@@ -1798,16 +1851,18 @@ class _QuickAccessGrid extends StatelessWidget {
           title: 'Open Logbook',
           subtitle: 'Jump straight into workout history and recent efforts.',
           route: '/logbook',
-          accentColor: Color(0xFF5FB2FF),
+          accentColor: appPrimary,
         ),
       _HomeAction(
-        icon: hasActiveGym ? Icons.local_fire_department_outlined : Icons.notifications_outlined,
+        icon: hasActiveGym
+            ? Icons.local_fire_department_outlined
+            : Icons.notifications_outlined,
         title: hasActiveGym ? 'See Programming' : 'Open Notifications',
         subtitle: hasActiveGym
             ? 'Check the current WOD and upcoming training flow.'
             : 'Stay on top of inbox items until a gym is active.',
         route: hasActiveGym ? '/programming' : '/notifications',
-        accentColor: const Color(0xFFB98CFF),
+        accentColor: _homeAccent,
       ),
     ];
 
@@ -1854,7 +1909,7 @@ class _ActionTile extends StatelessWidget {
                       Text(
                         action.title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF0F172A),
+                          color: appText,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1862,7 +1917,7 @@ class _ActionTile extends StatelessWidget {
                       Text(
                         action.subtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: appSubtleText,
                           height: 1.45,
                         ),
                       ),
@@ -1870,10 +1925,7 @@ class _ActionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(
-                  Icons.north_east_rounded,
-                  color: action.accentColor,
-                ),
+                Icon(Icons.north_east_rounded, color: action.accentColor),
               ],
             ),
           ),
@@ -1910,10 +1962,7 @@ class _ActionSpotlight extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            accentColor.withOpacity(0.22),
-            const Color(0xFF131A29),
-          ],
+          colors: [accentColor.withOpacity(0.22), appSurfaceAlt],
         ),
         border: Border.all(color: accentColor.withOpacity(0.22)),
       ),
@@ -1929,7 +1978,7 @@ class _ActionSpotlight extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF0F172A),
+                    color: appText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1937,7 +1986,7 @@ class _ActionSpotlight extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
+                    color: appMutedText,
                     height: 1.45,
                   ),
                 ),
@@ -2140,9 +2189,9 @@ class _AnnouncementComposerDialogState
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0x2218D2A8), Color(0x22FF6B2C)],
+                      colors: [_homeAccentSoft, Color(0x0F2563EB)],
                     ),
-                    border: Border.all(color: const Color(0xFFD8E4F2)),
+                    border: Border.all(color: appBorder),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2150,17 +2199,14 @@ class _AnnouncementComposerDialogState
                       const Text(
                         'Add a gallery image',
                         style: TextStyle(
-                          color: const Color(0xFF0F172A),
+                          color: appText,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 6),
                       const Text(
                         'Pick a photo from your phone. It will upload and attach automatically.',
-                        style: TextStyle(
-                          color: appMutedText,
-                          height: 1.4,
-                        ),
+                        style: TextStyle(color: appMutedText, height: 1.4),
                       ),
                       const SizedBox(height: 12),
                       if (_selectedImageBytes != null) ...[
@@ -2183,7 +2229,7 @@ class _AnnouncementComposerDialogState
                                 ? null
                                 : _pickImageFromGallery,
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF6B2C),
+                              backgroundColor: _homeAccent,
                               foregroundColor: Colors.white,
                             ),
                             icon: _isUploadingImage
@@ -2192,7 +2238,7 @@ class _AnnouncementComposerDialogState
                                     height: 16,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: const Color(0xFF0F172A),
+                                      color: appText,
                                     ),
                                   )
                                 : const Icon(Icons.photo_library_outlined),
@@ -2265,7 +2311,7 @@ class _AnnouncementComposerDialogState
         FilledButton(
           onPressed: _isSaving ? null : _submit,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFFF6B2C),
+            backgroundColor: _homeAccent,
             foregroundColor: Colors.white,
           ),
           child: Text(

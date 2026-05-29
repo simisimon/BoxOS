@@ -1,14 +1,15 @@
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 
 const boxOsLogoAsset = 'assets/images/boxOS_logo.png';
-const _shellBlue = Color(0xFF2563EB);
-const _shellBackground = Color(0xFFF5F9FF);
-const _shellSurface = Colors.white;
-const _shellBorder = Color(0xFFD8E4F2);
-const _shellText = Color(0xFF0F172A);
-const _shellMuted = Color(0xFF64748B);
+const _shellBlue = appPrimary;
+const _shellBackground = appPageBackground;
+const _shellSurface = appSurface;
+const _shellBorder = appBorder;
+const _shellText = appText;
+const _shellMuted = appSubtleText;
 
 class AuthenticatedScaffold extends StatelessWidget {
   const AuthenticatedScaffold({
@@ -66,8 +67,8 @@ class AuthenticatedScaffold extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [
               _shellBackground,
-              Color(0xFFEAF2FF),
-              Color(0xFFF9FBFF),
+              appPageBackgroundSoft,
+              appPageBackgroundEnd,
             ],
           ),
         ),
@@ -117,7 +118,9 @@ class _ShellHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accentColor = _accentForRole(roleLabel);
-    final titleLine = displayName.isEmpty ? roleLabel : '$displayName • $roleLabel';
+    final titleLine = displayName.isEmpty
+        ? roleLabel
+        : '$displayName • $roleLabel';
 
     return SafeArea(
       bottom: false,
@@ -157,9 +160,9 @@ class _ShellHeader extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         titleLine,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: _shellMuted,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: _shellMuted),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -173,7 +176,7 @@ class _ShellHeader extends StatelessWidget {
                             label: unreadNotifications > 0
                                 ? '$unreadNotifications unread'
                                 : 'Inbox clear',
-                            color: const Color(0xFF0EA5A4),
+                            color: appPrimary,
                             outlined: true,
                           ),
                         ],
@@ -189,13 +192,16 @@ class _ShellHeader extends StatelessWidget {
                         icon: Icons.swap_horiz_rounded,
                         tooltip: 'Switch Role',
                         onTap: () async {
-                          final renderBox = context.findRenderObject() as RenderBox?;
+                          final renderBox =
+                              context.findRenderObject() as RenderBox?;
                           final position = renderBox == null
                               ? const RelativeRect.fromLTRB(0, 0, 0, 0)
                               : RelativeRect.fromRect(
                                   Rect.fromPoints(
                                     renderBox.localToGlobal(Offset.zero),
-                                    renderBox.localToGlobal(renderBox.size.bottomRight(Offset.zero)),
+                                    renderBox.localToGlobal(
+                                      renderBox.size.bottomRight(Offset.zero),
+                                    ),
                                   ),
                                   Offset.zero & MediaQuery.of(context).size,
                                 );
@@ -234,10 +240,11 @@ class _ShellHeader extends StatelessWidget {
                             backgroundColor: accentColor.withOpacity(0.14),
                             child: Text(
                               _initials(displayName),
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: _shellText,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: _shellText,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
                           ),
                         ),
@@ -262,17 +269,18 @@ class _ShellHeader extends StatelessWidget {
     if (parts.length == 1) {
       return parts.first.substring(0, 1).toUpperCase();
     }
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+        .toUpperCase();
   }
 
   static Color _accentForRole(String roleLabel) {
     switch (roleLabel.toLowerCase()) {
       case 'admin':
-        return const Color(0xFFEA580C);
+        return appPrimary;
       case 'trainer':
         return _shellBlue;
       default:
-        return const Color(0xFF0EA5A4);
+        return appPrimary;
     }
   }
 }
@@ -292,10 +300,7 @@ class _LogoBadge extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Colors.white,
-            accentColor.withOpacity(0.12),
-          ],
+          colors: [Colors.white, accentColor.withOpacity(0.12)],
         ),
         border: Border.all(color: _shellBorder),
       ),
@@ -363,7 +368,7 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FBFF),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _shellBorder),
           ),
@@ -406,8 +411,7 @@ class _ShellFooter extends StatelessWidget {
       top: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final horizontalPadding =
-              constraints.maxWidth > mobileContentMaxWidth
+          final horizontalPadding = constraints.maxWidth > mobileContentMaxWidth
               ? (constraints.maxWidth - mobileContentMaxWidth) / 2
               : 0.0;
           return Padding(

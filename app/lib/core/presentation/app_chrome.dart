@@ -10,6 +10,7 @@ const appText = Color(0xFF0F172A);
 const appMutedText = Color(0xFF475569);
 const appSubtleText = Color(0xFF64748B);
 const appPrimary = Color(0xFF2563EB);
+const appDanger = Color(0xFFD64545);
 
 BoxDecoration appPageDecoration() => const BoxDecoration(
   gradient: LinearGradient(
@@ -24,11 +25,7 @@ BoxDecoration appPanelDecoration({double radius = 28}) => BoxDecoration(
   borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: appBorder),
   boxShadow: const [
-    BoxShadow(
-      color: Color(0x120F172A),
-      blurRadius: 24,
-      offset: Offset(0, 12),
-    ),
+    BoxShadow(color: Color(0x120F172A), blurRadius: 24, offset: Offset(0, 12)),
   ],
 );
 
@@ -37,10 +34,6 @@ BoxDecoration appHeroDecoration({double radius = 28}) => BoxDecoration(
   borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: appBorder),
   boxShadow: const [
-    BoxShadow(
-      color: Color(0x120F172A),
-      blurRadius: 28,
-      offset: Offset(0, 14),
-    ),
+    BoxShadow(color: Color(0x120F172A), blurRadius: 28, offset: Offset(0, 14)),
   ],
 );
