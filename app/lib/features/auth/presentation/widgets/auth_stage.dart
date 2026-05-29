@@ -1,7 +1,10 @@
 import 'dart:ui';
 
-import 'package:app/features/home/presentation/widgets/app_shell.dart';
+import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/mobile_content.dart';
 import 'package:flutter/material.dart';
+
+const _boxOsLogoAsset = 'assets/images/boxOS_logo.png';
 
 class AuthStage extends StatelessWidget {
   const AuthStage({
@@ -12,8 +15,8 @@ class AuthStage extends StatelessWidget {
     required this.child,
     this.eyebrow,
     this.footer,
-    this.accentColor = const Color(0xFF2563EB),
-    this.backgroundColor = const Color(0xFFF4F8FF),
+    this.accentColor = appPrimary,
+    this.backgroundColor = appPageBackground,
   });
 
   final String title;
@@ -31,19 +34,9 @@ class AuthStage extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              backgroundColor,
-              const Color(0xFFEAF2FF),
-              const Color(0xFFF8FBFF),
-            ],
-          ),
-        ),
+        decoration: appPageDecoration(),
         child: SafeArea(
-          child: SingleChildScrollView(
+          child: MobileScrollableContent(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -69,18 +62,7 @@ class AuthStage extends StatelessWidget {
                 if (eyebrow != null) const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: const Color(0xFFD7E3F4)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x140F172A),
-                        blurRadius: 24,
-                        offset: Offset(0, 12),
-                      ),
-                    ],
-                  ),
+                  decoration: appPanelDecoration(radius: 26),
                   child: child,
                 ),
                 if (footer != null) ...[
@@ -103,7 +85,7 @@ class AuthFieldGroup extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
-    this.accentColor = const Color(0xFF2563EB),
+    this.accentColor = appPrimary,
   });
 
   final IconData icon;
@@ -121,13 +103,13 @@ class AuthFieldGroup extends StatelessWidget {
       data: theme.copyWith(
         inputDecorationTheme: inputTheme.copyWith(
           filled: true,
-          fillColor: const Color(0xFFF8FBFF),
-          labelStyle: const TextStyle(color: Color(0xFF475569)),
+          fillColor: appSurfaceAlt,
+          labelStyle: const TextStyle(color: appMutedText),
           hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
           floatingLabelStyle: TextStyle(color: accentColor),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD7E3F4)),
+            borderSide: const BorderSide(color: appBorder),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -158,7 +140,7 @@ class AuthFieldGroup extends StatelessWidget {
                     Text(
                       title,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF0F172A),
+                        color: appText,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -166,7 +148,7 @@ class AuthFieldGroup extends StatelessWidget {
                     Text(
                       subtitle,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF475569),
+                        color: appMutedText,
                         height: 1.45,
                       ),
                     ),
@@ -188,7 +170,7 @@ class AuthNoteCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.body,
-    this.accentColor = const Color(0xFF7EE7C6),
+    this.accentColor = appPrimary,
   });
 
   final String title;
@@ -201,9 +183,9 @@ class AuthNoteCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
+        color: appSurfaceAlt,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accentColor.withOpacity(0.22)),
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +193,7 @@ class AuthNoteCard extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF0F172A),
+              color: appText,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -219,7 +201,7 @@ class AuthNoteCard extends StatelessWidget {
           Text(
             body,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF334155),
+              color: appMutedText,
               height: 1.5,
             ),
           ),
@@ -240,9 +222,9 @@ class AuthInlineError extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFE4E6),
+        color: const Color(0xFFFFF1F2),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFDA4AF)),
+        border: Border.all(color: const Color(0xFFFECDD3)),
       ),
       child: Text(
         message,
@@ -284,11 +266,11 @@ class _TopBar extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: appSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFD7E3F4)),
+                border: Border.all(color: appBorder),
               ),
-              child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+              child: const Icon(Icons.arrow_back_rounded, color: appText),
             ),
           ),
         ),
@@ -296,24 +278,25 @@ class _TopBar extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: accentColor.withOpacity(0.12),
+            color: appSurface,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: accentColor.withOpacity(0.24)),
+            border: Border.all(color: appBorder),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.asset(
-                boxOsLogoAsset,
+                _boxOsLogoAsset,
                 width: 22,
                 height: 22,
                 fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(Icons.fitness_center, size: 20, color: appPrimary),
               ),
               const SizedBox(width: 8),
               Text(
                 'BoxOS',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF0F172A),
+                  color: appText,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -343,56 +326,34 @@ class _HeroCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF3F8FF),
-            accentColor.withOpacity(0.14),
-          ],
-        ),
-        border: Border.all(color: const Color(0xFFD7E3F4)),
-      ),
-      child: Stack(
+      decoration: appHeroDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(right: -16, top: -16, child: _GlowOrb(color: accentColor, size: 92)),
-          Positioned(
-            right: 24,
-            bottom: -28,
-            child: _GlowOrb(color: const Color(0xFF93C5FD).withOpacity(0.45), size: 88),
+          Text(
+            title,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: accentColor,
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: accentColor,
-                  letterSpacing: 1.1,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                headline,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
-                  fontWeight: FontWeight.w900,
-                  height: 0.96,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                description,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
-                  height: 1.45,
-                ),
-              ),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            headline,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              color: appText,
+              fontWeight: FontWeight.w900,
+              height: 0.96,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            description,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: appMutedText,
+              height: 1.45,
+            ),
           ),
         ],
       ),
@@ -416,38 +377,11 @@ class _AccentBadge extends StatelessWidget {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withOpacity(0.20), color.withOpacity(0.08)],
-            ),
+            color: appSurfaceAlt,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.20)),
+            border: Border.all(color: appBorder),
           ),
           child: Icon(icon, color: color),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlowOrb extends StatelessWidget {
-  const _GlowOrb({required this.color, required this.size});
-
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withOpacity(0.34), color.withOpacity(0.0)],
-          ),
         ),
       ),
     );

@@ -318,7 +318,7 @@ class _NotificationCard extends StatelessWidget {
         border: Border.all(
           color: notification.readAt == null
               ? accentColor.withOpacity(0.28)
-              : Colors.white.withOpacity(0.07),
+              : const Color(0xFFF8FBFF),
         ),
         boxShadow: [
           BoxShadow(

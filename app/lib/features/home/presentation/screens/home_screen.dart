@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
@@ -76,11 +77,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F1727),
-        title: const Text('Delete announcement', style: TextStyle(color: Colors.white)),
+        backgroundColor: appSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: appBorder),
+        ),
+        title: const Text('Delete announcement', style: TextStyle(color: appText)),
         content: Text(
           'Delete "${announcement.title}"? This can’t be undone.',
-          style: const TextStyle(color: Color(0xFFD7E0EE)),
+          style: const TextStyle(color: appMutedText),
         ),
         actions: [
           TextButton(
@@ -212,17 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
 
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0A0F1E),
-            Color(0xFF111A2D),
-            Color(0xFF0D1324),
-          ],
-        ),
-      ),
+      decoration: appPageDecoration(),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
@@ -1377,11 +1372,11 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         widget.announcement.imageUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Container(
-                          color: const Color(0xFF0F1727),
+                          color: appSurfaceAlt,
                           alignment: Alignment.center,
                           child: const Icon(
                             Icons.broken_image_outlined,
-                            color: Color(0xFF8EA0BE),
+                            color: appSubtleText,
                           ),
                         ),
                       ),
@@ -1480,15 +1475,19 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     final saved = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F1727),
-        title: const Text('Edit comment', style: TextStyle(color: Colors.white)),
+        backgroundColor: appSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: appBorder),
+        ),
+        title: const Text('Edit comment', style: TextStyle(color: appText)),
         content: TextField(
           controller: controller,
           maxLines: 4,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: appText),
           decoration: const InputDecoration(
             hintText: 'Update your comment',
-            hintStyle: TextStyle(color: Color(0xFF8EA0BE)),
+            hintStyle: TextStyle(color: appSubtleText),
           ),
         ),
         actions: [
@@ -1606,10 +1605,10 @@ class _AnnouncementCommentComposer extends StatelessWidget {
             controller: controller,
             minLines: 1,
             maxLines: 4,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: appText),
             decoration: const InputDecoration(
               hintText: 'Add a comment',
-              hintStyle: TextStyle(color: Color(0xFF8EA0BE)),
+              hintStyle: TextStyle(color: appSubtleText),
               border: InputBorder.none,
             ),
           ),
@@ -1656,8 +1655,8 @@ class _AnnouncementCommentCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFF0F1727),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        color: appSurfaceAlt,
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1833,9 +1832,9 @@ class _ActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1727),
+        color: appSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD8E4F2)),
+        border: Border.all(color: appBorder),
       ),
       child: Material(
         color: Colors.transparent,
@@ -2116,10 +2115,14 @@ class _AnnouncementComposerDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF0F1727),
+      backgroundColor: appSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: appBorder),
+      ),
       title: Text(
         _isEditing ? 'Edit Announcement' : 'Create Announcement',
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(color: appText),
       ),
       content: SizedBox(
         width: 520,
@@ -2155,7 +2158,7 @@ class _AnnouncementComposerDialogState
                       const Text(
                         'Pick a photo from your phone. It will upload and attach automatically.',
                         style: TextStyle(
-                          color: Color(0xFFB8C4D9),
+                          color: appMutedText,
                           height: 1.4,
                         ),
                       ),
@@ -2219,7 +2222,7 @@ class _AnnouncementComposerDialogState
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _titleController,
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(color: appText),
                   decoration: const InputDecoration(
                     labelText: 'Title',
                     hintText: 'Saturday schedule update',
@@ -2236,7 +2239,7 @@ class _AnnouncementComposerDialogState
                   controller: _descriptionController,
                   minLines: 4,
                   maxLines: 7,
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(color: appText),
                   decoration: const InputDecoration(
                     labelText: 'Description',
                     hintText: 'Write the actual update athletes should read.',

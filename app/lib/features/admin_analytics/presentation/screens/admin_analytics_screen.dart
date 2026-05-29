@@ -354,7 +354,7 @@ class _OverviewContent extends StatelessWidget {
               ? Text(
                   'No waitlist-heavy or full classes are building pressure right now.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withOpacity(0.74),
+                    color: const Color(0xFF475569),
                     height: 1.5,
                   ),
                 )
@@ -378,7 +378,7 @@ class _OverviewContent extends StatelessWidget {
               ? Text(
                   'No completed classes crossed the low-attendance or high-no-show thresholds in this window.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withOpacity(0.74),
+                    color: const Color(0xFF475569),
                     height: 1.5,
                   ),
                 )
@@ -538,7 +538,7 @@ class _ForwardStat extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.white.withOpacity(0.7),
+            color: const Color(0xFF64748B),
           ),
         ),
       ],
@@ -616,12 +616,12 @@ class _WindowChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? const Color(0xFF7EE7C6).withOpacity(0.16)
-                : Colors.white.withOpacity(0.04),
+                : const Color(0xFFF8FBFF),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected
                   ? const Color(0xFF7EE7C6)
-                  : Colors.white.withOpacity(0.08),
+                  : const Color(0xFFD8E4F2),
             ),
           ),
           child: Text(
@@ -664,7 +664,7 @@ class _DailyRow extends StatelessWidget {
           child: Text(
             '${day.classes} classes · ${day.bookings} bookings · ${day.attended} attended · ${day.noShows} no-shows',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withOpacity(0.78),
+              color: const Color(0xFF475569),
             ),
           ),
         ),

@@ -571,7 +571,7 @@ class _MembershipCard extends StatelessWidget {
         border: Border.all(
           color: isCurrentGym
               ? const Color(0xFF7EE7C6).withOpacity(0.26)
-              : Colors.white.withOpacity(0.06),
+              : const Color(0xFFF8FBFF),
         ),
       ),
       child: Column(
