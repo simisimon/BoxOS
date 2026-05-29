@@ -97,7 +97,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           eyebrow: 'Inbox',
                           title: 'Live alert stream',
                           subtitle:
-                              'Operational updates, workout posts, and PR moments stay in one cleaner notification feed.',
+                              'Operational updates, workout posts, PR moments, and announcement activity stay in one cleaner notification feed.',
                           trailing: Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -111,8 +111,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                 color: Color(0xFF5FB2FF),
                               ),
                               const _HeroPill(
-                                label: 'PR Alerts',
-                                color: Color(0xFFB98CFF),
+                                label: 'Community',
+                                color: Color(0xFF7EE7C6),
                               ),
                             ],
                           ),
@@ -231,7 +231,7 @@ class _NotificationsHero extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Booking changes, WOD drops, waitlist moves, and PR alerts now sit in a cleaner inbox with stronger visibility for unread items.',
+                'Booking changes, WOD drops, waitlist moves, PR alerts, and announcement reactions now sit in a cleaner inbox with stronger visibility for unread items.',
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: const Color(0xFFD7E0EE),
                   height: 1.45,
@@ -302,7 +302,13 @@ class _NotificationCard extends StatelessWidget {
         '${createdAt.hour.toString().padLeft(2, '0')}:'
         '${createdAt.minute.toString().padLeft(2, '0')}';
     final isPr = notification.type == 'pr_achieved';
-    final accentColor = isPr ? const Color(0xFFFF6B2C) : const Color(0xFF5FB2FF);
+    final isAnnouncement = notification.type == 'announcement_liked' ||
+        notification.type == 'announcement_commented';
+    final accentColor = isPr
+        ? const Color(0xFFFF6B2C)
+        : isAnnouncement
+        ? const Color(0xFF7EE7C6)
+        : const Color(0xFF5FB2FF);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -328,6 +334,10 @@ class _NotificationCard extends StatelessWidget {
           _AccentBadge(
             icon: isPr
                 ? Icons.emoji_events_outlined
+                : notification.type == 'announcement_liked'
+                ? Icons.favorite_rounded
+                : notification.type == 'announcement_commented'
+                ? Icons.chat_bubble_outline_rounded
                 : Icons.notifications_active_outlined,
             color: accentColor,
           ),

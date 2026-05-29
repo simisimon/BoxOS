@@ -133,6 +133,7 @@ def init_db() -> None:
             notify_payment_issues integer not null default 1,
             notify_wod_posted integer not null default 1,
             notify_pr_achievements integer not null default 1,
+            notify_announcement_activity integer not null default 1,
             created_at text not null,
             updated_at text not null,
             deleted_at text,
@@ -402,6 +403,10 @@ def ensure_user_columns(connection: sqlite3.Connection) -> None:
     if "notify_pr_achievements" not in columns:
         connection.execute(
             "alter table users add column notify_pr_achievements integer not null default 1"
+        )
+    if "notify_announcement_activity" not in columns:
+        connection.execute(
+            "alter table users add column notify_announcement_activity integer not null default 1"
         )
     if "account_type" not in columns:
         connection.execute(
@@ -1447,7 +1452,8 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 notify_waitlist_promotions,
                 notify_payment_issues,
                 notify_wod_posted,
-                notify_pr_achievements
+                notify_pr_achievements,
+                notify_announcement_activity
             from users
             where id = ? and deleted_at is null
             """,
@@ -1471,6 +1477,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     notify_payment_issues = ?,
                     notify_wod_posted = ?,
                     notify_pr_achievements = ?,
+                    notify_announcement_activity = ?,
                     updated_at = ?
                 where id = ? and deleted_at is null
                 """,
@@ -1480,6 +1487,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     int(preferences["payment_issues"]),
                     int(preferences["wod_posted"]),
                     int(preferences["pr_achievements"]),
+                    int(preferences["announcement_activity"]),
                     isoformat(now_utc()),
                     session["user_id"],
                 ),
@@ -1491,7 +1499,8 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 notify_waitlist_promotions,
                 notify_payment_issues,
                 notify_wod_posted,
-                notify_pr_achievements
+                notify_pr_achievements,
+                notify_announcement_activity
             from users
             where id = ? and deleted_at is null
             """,
@@ -2120,7 +2129,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             connection.close()
             raise ApiError(HTTPStatus.NOT_FOUND, "Announcement not found.")
         with connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 insert or ignore into announcement_likes (
                   announcement_id, user_id, created_at
@@ -2128,6 +2137,15 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 """,
                 (announcement_id, session["user_id"], isoformat(now_utc())),
             )
+            if cursor.rowcount:
+                create_announcement_like_notification(
+                    connection,
+                    recipient_user_id=int(announcement["created_by_user_id"]),
+                    actor_user_id=int(session["user_id"]),
+                    gym_id=int(session["active_gym_id"]),
+                    announcement_id=announcement_id,
+                    announcement_title=str(announcement["title"]),
+                )
         payload = announcement_payload(
             connection,
             announcement,
@@ -2196,6 +2214,15 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             comment = get_announcement_comment_row(connection, int(cursor.lastrowid))
             if comment is None:
                 raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "Comment creation failed.")
+            create_announcement_comment_notification(
+                connection,
+                recipient_user_id=int(announcement["created_by_user_id"]),
+                actor_user_id=int(session["user_id"]),
+                gym_id=int(session["active_gym_id"]),
+                announcement_id=announcement_id,
+                announcement_title=str(announcement["title"]),
+                comment_body=comment_body,
+            )
             write_audit_log(
                 connection,
                 gym_id=session["active_gym_id"],
@@ -4387,6 +4414,7 @@ def notification_preferences_payload(row: sqlite3.Row) -> dict[str, bool]:
         "payment_issues": bool(row["notify_payment_issues"]),
         "wod_posted": bool(row["notify_wod_posted"]),
         "pr_achievements": bool(row["notify_pr_achievements"]),
+        "announcement_activity": bool(row["notify_announcement_activity"]),
     }
 
 
@@ -4403,16 +4431,31 @@ def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def preferred_user_name(
+    row: sqlite3.Row,
+    *,
+    display_name_key: str = "display_name",
+    nickname_key: str = "nickname",
+    email_key: str = "email",
+) -> str:
+    return (
+        str(row[display_name_key] or "").strip()
+        or str(row[nickname_key] or "").strip()
+        or str(row[email_key] or "").strip()
+    )
+
+
 def announcement_comment_payload(
     row: sqlite3.Row,
     *,
     current_user_id: int,
     session_role: str,
 ) -> dict[str, Any]:
-    author_name = (
-        str(row["author_display_name"] or "").strip()
-        or str(row["author_nickname"] or "").strip()
-        or str(row["author_email"] or "").strip()
+    author_name = preferred_user_name(
+        row,
+        display_name_key="author_display_name",
+        nickname_key="author_nickname",
+        email_key="author_email",
     )
     return {
         "id": row["id"],
@@ -4468,10 +4511,11 @@ def announcement_payload(
     current_user_id: int,
     session_role: str,
 ) -> dict[str, Any]:
-    author_name = (
-        str(row["author_display_name"] or "").strip()
-        or str(row["author_nickname"] or "").strip()
-        or str(row["author_email"] or "").strip()
+    author_name = preferred_user_name(
+        row,
+        display_name_key="author_display_name",
+        nickname_key="author_nickname",
+        email_key="author_email",
     )
     like_count = int(
         connection.execute(
@@ -4818,6 +4862,78 @@ def create_pr_achievement_notification(
     )
 
 
+def create_announcement_like_notification(
+    connection: sqlite3.Connection,
+    *,
+    recipient_user_id: int,
+    actor_user_id: int,
+    gym_id: int,
+    announcement_id: int,
+    announcement_title: str,
+) -> None:
+    if recipient_user_id == actor_user_id:
+        return
+    recipient = connection.execute(
+        "select notify_announcement_activity from users where id = ? and deleted_at is null",
+        (recipient_user_id,),
+    ).fetchone()
+    actor = connection.execute(
+        "select display_name, nickname, email from users where id = ? and deleted_at is null",
+        (actor_user_id,),
+    ).fetchone()
+    if recipient is None or actor is None or not bool(recipient["notify_announcement_activity"]):
+        return
+    actor_name = preferred_user_name(actor)
+    create_notification(
+        connection,
+        user_id=recipient_user_id,
+        gym_id=gym_id,
+        type="announcement_liked",
+        title="New like on your announcement",
+        body=f'{actor_name} liked "{announcement_title}".',
+        entity_type="announcement",
+        entity_id=announcement_id,
+    )
+
+
+def create_announcement_comment_notification(
+    connection: sqlite3.Connection,
+    *,
+    recipient_user_id: int,
+    actor_user_id: int,
+    gym_id: int,
+    announcement_id: int,
+    announcement_title: str,
+    comment_body: str,
+) -> None:
+    if recipient_user_id == actor_user_id:
+        return
+    recipient = connection.execute(
+        "select notify_announcement_activity from users where id = ? and deleted_at is null",
+        (recipient_user_id,),
+    ).fetchone()
+    actor = connection.execute(
+        "select display_name, nickname, email from users where id = ? and deleted_at is null",
+        (actor_user_id,),
+    ).fetchone()
+    if recipient is None or actor is None or not bool(recipient["notify_announcement_activity"]):
+        return
+    actor_name = preferred_user_name(actor)
+    snippet = comment_body.strip()
+    if len(snippet) > 80:
+        snippet = f"{snippet[:77].rstrip()}..."
+    create_notification(
+        connection,
+        user_id=recipient_user_id,
+        gym_id=gym_id,
+        type="announcement_commented",
+        title="New comment on your announcement",
+        body=f'{actor_name} commented on "{announcement_title}": {snippet}',
+        entity_type="announcement",
+        entity_id=announcement_id,
+    )
+
+
 def require_notification_preferences(body: dict[str, Any]) -> dict[str, bool]:
     required_keys = (
         "booking_confirmations",
@@ -4825,6 +4941,7 @@ def require_notification_preferences(body: dict[str, Any]) -> dict[str, bool]:
         "payment_issues",
         "wod_posted",
         "pr_achievements",
+        "announcement_activity",
     )
     preferences: dict[str, bool] = {}
     for key in required_keys:

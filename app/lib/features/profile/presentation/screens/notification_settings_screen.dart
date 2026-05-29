@@ -186,6 +186,21 @@ class _NotificationSettingsScreenState
                               );
                             },
                           ),
+                          const SizedBox(height: 12),
+                          _PreferenceCard(
+                            title: 'Announcement Activity',
+                            subtitle:
+                                'Likes and comments on announcements you posted.',
+                            accentColor: const Color(0xFF7EE7C6),
+                            value: currentPreferences.announcementActivity,
+                            onChanged: (value) {
+                              _updatePreferences(
+                                currentPreferences.copyWith(
+                                  announcementActivity: value,
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),

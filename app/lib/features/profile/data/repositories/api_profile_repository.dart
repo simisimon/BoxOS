@@ -70,6 +70,7 @@ class ApiProfileRepository implements ProfileRepository {
         'payment_issues': preferences.paymentIssues,
         'wod_posted': preferences.wodPosted,
         'pr_achievements': preferences.prAchievements,
+        'announcement_activity': preferences.announcementActivity,
       },
       options: Options(headers: await _authHeaders()),
     );
@@ -170,6 +171,7 @@ class ApiProfileRepository implements ProfileRepository {
         paymentIssues: true,
         wodPosted: true,
         prAchievements: true,
+        announcementActivity: true,
       ),
       activeGym: _gymFromJson(data['active_gym'] as Map<String, dynamic>?),
       memberships: _membershipsFromJson(data['memberships']),
@@ -188,6 +190,7 @@ class ApiProfileRepository implements ProfileRepository {
       paymentIssues: data['payment_issues'] as bool? ?? true,
       wodPosted: data['wod_posted'] as bool? ?? true,
       prAchievements: data['pr_achievements'] as bool? ?? true,
+      announcementActivity: data['announcement_activity'] as bool? ?? true,
     );
   }
 

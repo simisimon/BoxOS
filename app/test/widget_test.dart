@@ -155,6 +155,7 @@ class RecordingProfileRepository implements ProfileRepository {
       paymentIssues: true,
       wodPosted: true,
       prAchievements: true,
+      announcementActivity: true,
     ),
     activeGym: null,
     memberships: [],
@@ -162,6 +163,10 @@ class RecordingProfileRepository implements ProfileRepository {
   String? updatedDisplayName;
   String? updatedNickname;
   NotificationPreferences? updatedNotificationPreferences;
+  NotificationInbox inbox = const NotificationInbox(
+    unreadCount: 0,
+    notifications: [],
+  );
   List<RoleManagedUser> managedUsers = const [
     RoleManagedUser(
       id: 1,
@@ -237,12 +242,28 @@ class RecordingProfileRepository implements ProfileRepository {
 
   @override
   Future<NotificationInbox> fetchNotifications() async {
-    return const NotificationInbox(unreadCount: 0, notifications: []);
+    return inbox;
   }
 
   @override
   Future<NotificationInbox> markAllNotificationsRead() async {
-    return const NotificationInbox(unreadCount: 0, notifications: []);
+    inbox = NotificationInbox(
+      unreadCount: 0,
+      notifications: [
+        for (final notification in inbox.notifications)
+          AppNotification(
+            id: notification.id,
+            type: notification.type,
+            title: notification.title,
+            body: notification.body,
+            entityType: notification.entityType,
+            entityId: notification.entityId,
+            readAt: notification.readAt ?? DateTime.utc(2026, 5, 29, 10),
+            createdAt: notification.createdAt,
+          ),
+      ],
+    );
+    return inbox;
   }
 
   @override
@@ -1420,6 +1441,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -1513,6 +1535,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -1642,6 +1665,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -1730,6 +1754,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -1809,6 +1834,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -1946,6 +1972,50 @@ void main() {
     expect(find.byTooltip('Back'), findsOneWidget);
   });
 
+  testWidgets('Notifications screen shows announcement activity items', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository()
+      ..inbox = NotificationInbox(
+        unreadCount: 2,
+        notifications: [
+          AppNotification(
+            id: 1,
+            type: 'announcement_commented',
+            title: 'New comment on your announcement',
+            body: 'Demo Athlete commented on "Friday throwdown": I will scale volume but keep the pace.',
+            entityType: 'announcement',
+            entityId: 7,
+            readAt: null,
+            createdAt: DateTime.utc(2026, 5, 29, 10),
+          ),
+          AppNotification(
+            id: 2,
+            type: 'announcement_liked',
+            title: 'New like on your announcement',
+            body: 'Demo Athlete liked "Friday throwdown".',
+            entityType: 'announcement',
+            entityId: 7,
+            readAt: null,
+            createdAt: DateTime.utc(2026, 5, 29, 9, 30),
+          ),
+        ],
+      );
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/notifications',
+    );
+
+    expect(find.text('New comment on your announcement'), findsOneWidget);
+    expect(find.text('New like on your announcement'), findsOneWidget);
+    expect(find.text('Community'), findsOneWidget);
+    expect(find.text('Mark all read'), findsOneWidget);
+  });
+
   testWidgets('Footer routes between home profile and calendar pages', (
     WidgetTester tester,
   ) async {
@@ -1964,6 +2034,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2029,6 +2100,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2081,6 +2153,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2176,6 +2249,7 @@ void main() {
             paymentIssues: true,
             wodPosted: true,
             prAchievements: true,
+            announcementActivity: true,
           ),
           activeGym: GymSummary(
             id: 1,
@@ -2271,6 +2345,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2361,6 +2436,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2426,6 +2502,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2519,6 +2596,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: null,
         memberships: [],
@@ -2611,6 +2689,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2710,6 +2789,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2783,6 +2863,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: null,
         memberships: [],
@@ -2818,6 +2899,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,
@@ -2868,6 +2950,7 @@ void main() {
           paymentIssues: true,
           wodPosted: true,
           prAchievements: true,
+          announcementActivity: true,
         ),
         activeGym: GymSummary(
           id: 1,

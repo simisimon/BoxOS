@@ -5,6 +5,7 @@ class NotificationPreferences {
     required this.paymentIssues,
     required this.wodPosted,
     required this.prAchievements,
+    required this.announcementActivity,
   });
 
   final bool bookingConfirmations;
@@ -12,6 +13,7 @@ class NotificationPreferences {
   final bool paymentIssues;
   final bool wodPosted;
   final bool prAchievements;
+  final bool announcementActivity;
 
   NotificationPreferences copyWith({
     bool? bookingConfirmations,
@@ -19,6 +21,7 @@ class NotificationPreferences {
     bool? paymentIssues,
     bool? wodPosted,
     bool? prAchievements,
+    bool? announcementActivity,
   }) {
     return NotificationPreferences(
       bookingConfirmations: bookingConfirmations ?? this.bookingConfirmations,
@@ -26,6 +29,7 @@ class NotificationPreferences {
       paymentIssues: paymentIssues ?? this.paymentIssues,
       wodPosted: wodPosted ?? this.wodPosted,
       prAchievements: prAchievements ?? this.prAchievements,
+      announcementActivity: announcementActivity ?? this.announcementActivity,
     );
   }
 }

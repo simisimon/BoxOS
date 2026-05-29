@@ -3771,6 +3771,122 @@ class BackendServerTests(unittest.TestCase):
             urllib.request.urlopen(delete_request)
         self.assertEqual(delete_error.exception.code, 403)
 
+    def test_announcement_comment_creates_notification_for_author(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Notify Gym",
+                "logo_url": "https://example.com/announcement-notify.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Friday throwdown",
+                "description": "Drop your game plan below.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+
+        self.post_json_with_auth(
+            "/announcements/comments",
+            {
+                "announcement_id": created["announcement"]["id"],
+                "body": "I will scale volume but keep the pace.",
+            },
+            access_token=athlete_login["access_token"],
+        )
+
+        notifications = self.get_json_with_auth(
+            "/notifications",
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(notifications["unread_count"], 1)
+        self.assertEqual(
+            notifications["notifications"][0]["type"],
+            "announcement_commented",
+        )
+        self.assertEqual(
+            notifications["notifications"][0]["entity_type"],
+            "announcement",
+        )
+        self.assertEqual(
+            notifications["notifications"][0]["entity_id"],
+            created["announcement"]["id"],
+        )
+        self.assertIn("Demo Athlete", notifications["notifications"][0]["body"])
+
+    def test_announcement_like_respects_notification_preferences(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Like Notify Gym",
+                "logo_url": "https://example.com/announcement-like.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Like check",
+                "description": "See who taps the heart.",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        self.patch_json(
+            "/profile/notifications",
+            {
+                "booking_confirmations": True,
+                "waitlist_promotions": True,
+                "payment_issues": True,
+                "wod_posted": True,
+                "pr_achievements": True,
+                "announcement_activity": False,
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.post_json_with_auth(
+            "/announcements/likes",
+            {"announcement_id": created["announcement"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+
+        notifications = self.get_json_with_auth(
+            "/notifications",
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(notifications["notifications"], [])
+
     def test_admin_and_author_trainer_can_update_and_delete_announcements(self) -> None:
         admin_login = self.post_json(
             "/auth/login",
@@ -4806,6 +4922,7 @@ class BackendServerTests(unittest.TestCase):
 
         self.assertTrue(preferences["booking_confirmations"])
         self.assertTrue(preferences["wod_posted"])
+        self.assertTrue(preferences["announcement_activity"])
 
         updated = self.patch_json(
             "/profile/notifications",
@@ -4815,6 +4932,7 @@ class BackendServerTests(unittest.TestCase):
                 "payment_issues": True,
                 "wod_posted": False,
                 "pr_achievements": False,
+                "announcement_activity": False,
             },
             access_token=login_response["access_token"],
         )
@@ -4822,6 +4940,7 @@ class BackendServerTests(unittest.TestCase):
         self.assertFalse(updated["booking_confirmations"])
         self.assertFalse(updated["wod_posted"])
         self.assertFalse(updated["pr_achievements"])
+        self.assertFalse(updated["announcement_activity"])
 
     def test_workout_post_creates_notifications_for_active_members(self) -> None:
         admin_login = self.post_json(
@@ -4938,6 +5057,7 @@ class BackendServerTests(unittest.TestCase):
                 "payment_issues": True,
                 "wod_posted": True,
                 "pr_achievements": False,
+                "announcement_activity": True,
             },
             access_token=athlete_login["access_token"],
         )
@@ -4968,6 +5088,7 @@ class BackendServerTests(unittest.TestCase):
                 "payment_issues": True,
                 "wod_posted": True,
                 "pr_achievements": True,
+                "announcement_activity": True,
             },
             access_token=athlete_login["access_token"],
         )
