@@ -16,7 +16,9 @@ final notificationPreferencesProvider = FutureProvider<NotificationPreferences>(
   },
 );
 
-final notificationInboxProvider = FutureProvider<NotificationInbox>((ref) async {
+final notificationInboxProvider = FutureProvider<NotificationInbox>((
+  ref,
+) async {
   final repository = ref.read(profileRepositoryProvider);
   return repository.fetchNotifications();
 });

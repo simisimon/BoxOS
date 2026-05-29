@@ -25,7 +25,9 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
   final TokenStorage _tokenStorage;
 
   @override
-  Future<AdminAnalyticsOverview> fetchOverview({required int windowDays}) async {
+  Future<AdminAnalyticsOverview> fetchOverview({
+    required int windowDays,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/analytics',
       queryParameters: {'window_days': windowDays},
@@ -54,7 +56,8 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
     final pressure = data['pressure_classes'] as List<dynamic>? ?? const [];
     final problems = data['problem_classes'] as List<dynamic>? ?? const [];
     final recentMembers = data['recent_members'] as List<dynamic>? ?? const [];
-    final roleMix = data['overview']?['role_mix'] as Map<String, dynamic>? ?? const {};
+    final roleMix =
+        data['overview']?['role_mix'] as Map<String, dynamic>? ?? const {};
     return AdminAnalyticsOverview(
       windowDays: overview['window_days'] as int? ?? 14,
       activeMembers: overview['active_members'] as int? ?? 0,
@@ -67,9 +70,7 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
         adminCapable: roleMix['admin_capable'] as int? ?? 0,
       ),
       recentMembers: recentMembers
-          .map(
-            (item) => _recentMemberFromJson(item as Map<String, dynamic>),
-          )
+          .map((item) => _recentMemberFromJson(item as Map<String, dynamic>))
           .toList(),
       classesInWindow: overview['classes_in_window'] as int? ?? 0,
       bookingsInWindow: overview['bookings_in_window'] as int? ?? 0,
@@ -79,8 +80,8 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
           (overview['attendance_rate_in_window'] as num? ?? 0).toDouble(),
       utilizationRateInWindow:
           (overview['utilization_rate_in_window'] as num? ?? 0).toDouble(),
-      noShowRateInWindow:
-          (overview['no_show_rate_in_window'] as num? ?? 0).toDouble(),
+      noShowRateInWindow: (overview['no_show_rate_in_window'] as num? ?? 0)
+          .toDouble(),
       upcomingClassesNext7Days:
           overview['upcoming_classes_next_7_days'] as int? ?? 0,
       upcomingBookingsNext7Days:
@@ -94,26 +95,18 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
       upcomingFullClassesNext7Days:
           overview['upcoming_full_classes_next_7_days'] as int? ?? 0,
       dailyAttendance: daily
-          .map(
-            (item) => _dailyAttendanceFromJson(item as Map<String, dynamic>),
-          )
+          .map((item) => _dailyAttendanceFromJson(item as Map<String, dynamic>))
           .toList(),
       pressureClasses: pressure
-          .map(
-            (item) => _pressureClassFromJson(item as Map<String, dynamic>),
-          )
+          .map((item) => _pressureClassFromJson(item as Map<String, dynamic>))
           .toList(),
       problemClasses: problems
-          .map(
-            (item) => _problemClassFromJson(item as Map<String, dynamic>),
-          )
+          .map((item) => _problemClassFromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }
 
-  AdminAnalyticsRecentMember _recentMemberFromJson(
-    Map<String, dynamic> data,
-  ) {
+  AdminAnalyticsRecentMember _recentMemberFromJson(Map<String, dynamic> data) {
     return AdminAnalyticsRecentMember(
       membershipId: data['membership_id'] as int? ?? 0,
       userId: data['user_id'] as int? ?? 0,
@@ -153,9 +146,7 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
     );
   }
 
-  AdminAnalyticsProblemClass _problemClassFromJson(
-    Map<String, dynamic> data,
-  ) {
+  AdminAnalyticsProblemClass _problemClassFromJson(Map<String, dynamic> data) {
     return AdminAnalyticsProblemClass(
       id: data['id'] as int? ?? 0,
       title: data['title'] as String? ?? '',

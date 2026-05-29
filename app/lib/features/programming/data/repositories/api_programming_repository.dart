@@ -13,9 +13,11 @@ final programmingRepositoryProvider = Provider<ProgrammingRepository>((ref) {
 });
 
 class ApiProgrammingRepository implements ProgrammingRepository {
-  ApiProgrammingRepository({required Dio dio, required TokenStorage tokenStorage})
-    : _dio = dio,
-      _tokenStorage = tokenStorage;
+  ApiProgrammingRepository({
+    required Dio dio,
+    required TokenStorage tokenStorage,
+  }) : _dio = dio,
+       _tokenStorage = tokenStorage;
 
   final Dio _dio;
   final TokenStorage _tokenStorage;
@@ -119,15 +121,20 @@ class ApiProgrammingRepository implements ProgrammingRepository {
       metconText: data['metcon_text'] as String? ?? '',
       notesText: data['notes_text'] as String? ?? '',
       canEdit: data['can_edit'] as bool? ?? false,
-      whiteboardResults: (data['whiteboard_results'] as List<dynamic>? ?? const [])
-          .map((item) => _whiteboardFromJson(item as Map<String, dynamic>?))
-          .toList(),
+      whiteboardResults:
+          (data['whiteboard_results'] as List<dynamic>? ?? const [])
+              .map((item) => _whiteboardFromJson(item as Map<String, dynamic>?))
+              .toList(),
       myWhiteboardResult: data['my_whiteboard_result'] == null
           ? null
-          : _whiteboardFromJson(data['my_whiteboard_result'] as Map<String, dynamic>?),
+          : _whiteboardFromJson(
+              data['my_whiteboard_result'] as Map<String, dynamic>?,
+            ),
       myWorkoutLog: data['my_workout_log'] == null
           ? null
-          : _workoutLogSummaryFromJson(data['my_workout_log'] as Map<String, dynamic>?),
+          : _workoutLogSummaryFromJson(
+              data['my_workout_log'] as Map<String, dynamic>?,
+            ),
     );
   }
 
@@ -147,7 +154,9 @@ class ApiProgrammingRepository implements ProgrammingRepository {
     );
   }
 
-  WorkoutLogEntrySummary _workoutLogSummaryFromJson(Map<String, dynamic>? data) {
+  WorkoutLogEntrySummary _workoutLogSummaryFromJson(
+    Map<String, dynamic>? data,
+  ) {
     if (data == null) {
       throw Exception('Missing workout log summary data.');
     }

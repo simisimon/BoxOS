@@ -128,132 +128,91 @@ class _ShellHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
         child: MobileContent(
           padding: EdgeInsets.zero,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: _shellSurface,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: _shellBorder),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x120F172A),
-                  blurRadius: 28,
-                  offset: Offset(0, 14),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                _LogoBadge(accentColor: accentColor),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'BoxOS',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: _shellText,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        titleLine,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: _shellMuted),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _HeaderChip(label: roleLabel, color: accentColor),
-                          _HeaderChip(
-                            label: unreadNotifications > 0
-                                ? '$unreadNotifications unread'
-                                : 'Inbox clear',
-                            color: appPrimary,
-                            outlined: true,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
+          child: Row(
+            children: [
+              _LogoBadge(accentColor: accentColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (availableRoles.length > 1)
-                      _HeaderIconButton(
-                        icon: Icons.swap_horiz_rounded,
-                        tooltip: 'Switch Role',
-                        onTap: () async {
-                          final renderBox =
-                              context.findRenderObject() as RenderBox?;
-                          final position = renderBox == null
-                              ? const RelativeRect.fromLTRB(0, 0, 0, 0)
-                              : RelativeRect.fromRect(
-                                  Rect.fromPoints(
-                                    renderBox.localToGlobal(Offset.zero),
-                                    renderBox.localToGlobal(
-                                      renderBox.size.bottomRight(Offset.zero),
-                                    ),
-                                  ),
-                                  Offset.zero & MediaQuery.of(context).size,
-                                );
-                          final selected = await showMenu<UserRole>(
-                            context: context,
-                            position: position,
-                            items: availableRoles
-                                .map(
-                                  (role) => PopupMenuItem<UserRole>(
-                                    value: role,
-                                    child: Text(role.label),
-                                  ),
-                                )
-                                .toList(),
-                          );
-                          if (selected != null) {
-                            onRoleSelected(selected);
-                          }
-                        },
+                    Text(
+                      'BoxOS',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: _shellText,
+                        fontWeight: FontWeight.w800,
                       ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _HeaderIconButton(
-                          icon: Icons.notifications_none_rounded,
-                          tooltip: 'Notifications',
-                          badge: unreadNotifications,
-                          onTap: onNotificationsTap,
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: onProfileTap,
-                          child: CircleAvatar(
-                            radius: 22,
-                            backgroundColor: accentColor.withOpacity(0.14),
-                            child: Text(
-                              _initials(displayName),
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(
-                                    color: _shellText,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    ),
+                    Text(
+                      titleLine,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: _shellMuted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
+              ),
+              if (availableRoles.length > 1) ...[
+                _HeaderIconButton(
+                  icon: Icons.swap_horiz_rounded,
+                  tooltip: 'Switch Role',
+                  onTap: () async {
+                    final renderBox = context.findRenderObject() as RenderBox?;
+                    final position = renderBox == null
+                        ? const RelativeRect.fromLTRB(0, 0, 0, 0)
+                        : RelativeRect.fromRect(
+                            Rect.fromPoints(
+                              renderBox.localToGlobal(Offset.zero),
+                              renderBox.localToGlobal(
+                                renderBox.size.bottomRight(Offset.zero),
+                              ),
+                            ),
+                            Offset.zero & MediaQuery.of(context).size,
+                          );
+                    final selected = await showMenu<UserRole>(
+                      context: context,
+                      position: position,
+                      items: availableRoles
+                          .map(
+                            (role) => PopupMenuItem<UserRole>(
+                              value: role,
+                              child: Text(role.label),
+                            ),
+                          )
+                          .toList(),
+                    );
+                    if (selected != null) {
+                      onRoleSelected(selected);
+                    }
+                  },
+                ),
+                const SizedBox(width: 4),
               ],
-            ),
+              _HeaderIconButton(
+                icon: Icons.notifications_none_rounded,
+                tooltip: 'Notifications',
+                badge: unreadNotifications,
+                onTap: onNotificationsTap,
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: onProfileTap,
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: accentColor.withOpacity(0.14),
+                  child: Text(
+                    _initials(displayName),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: _shellText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -421,22 +380,10 @@ class _ShellFooter extends StatelessWidget {
               16 + horizontalPadding,
               12,
             ),
-            child: Container(
-              decoration: BoxDecoration(
-                color: _shellSurface,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: _shellBorder),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x120F172A),
-                    blurRadius: 24,
-                    offset: Offset(0, 12),
-                  ),
-                ],
-              ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
               child: NavigationBarTheme(
                 data: NavigationBarThemeData(
-                  backgroundColor: Colors.transparent,
                   indicatorColor: const Color(0x1F2563EB),
                   labelTextStyle: WidgetStateProperty.resolveWith((states) {
                     final selected = states.contains(WidgetState.selected);
@@ -453,7 +400,6 @@ class _ShellFooter extends StatelessWidget {
                   }),
                 ),
                 child: NavigationBar(
-                  height: 74,
                   selectedIndex: selectedIndex,
                   labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                   onDestinationSelected: (index) {

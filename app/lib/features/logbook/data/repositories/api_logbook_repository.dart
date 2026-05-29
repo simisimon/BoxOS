@@ -27,7 +27,9 @@ class ApiLogbookRepository implements LogbookRepository {
       options: Options(headers: await _authHeaders()),
     );
     final items = response.data?['entries'] as List<dynamic>? ?? const [];
-    return items.map((item) => _fromJson(item as Map<String, dynamic>?)).toList();
+    return items
+        .map((item) => _fromJson(item as Map<String, dynamic>?))
+        .toList();
   }
 
   @override

@@ -16,9 +16,10 @@ class AdminAnalyticsWindowDaysNotifier extends Notifier<int> {
   }
 }
 
-final adminAnalyticsOverviewProvider =
-    FutureProvider<AdminAnalyticsOverview>((ref) async {
-      final repository = ref.read(adminAnalyticsRepositoryProvider);
-      final windowDays = ref.watch(adminAnalyticsWindowDaysProvider);
-      return repository.fetchOverview(windowDays: windowDays);
-    });
+final adminAnalyticsOverviewProvider = FutureProvider<AdminAnalyticsOverview>((
+  ref,
+) async {
+  final repository = ref.read(adminAnalyticsRepositoryProvider);
+  final windowDays = ref.watch(adminAnalyticsWindowDaysProvider);
+  return repository.fetchOverview(windowDays: windowDays);
+});

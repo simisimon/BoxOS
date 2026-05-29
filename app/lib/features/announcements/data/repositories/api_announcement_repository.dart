@@ -67,11 +67,7 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/announcements',
-      data: {
-        'title': title,
-        'description': description,
-        'image_url': imageUrl,
-      },
+      data: {'title': title, 'description': description, 'image_url': imageUrl},
       options: Options(headers: await _authHeaders()),
     );
     return _announcementFromJson(
@@ -141,10 +137,7 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/announcements/comments',
-      data: {
-        'announcement_id': announcementId,
-        'body': body,
-      },
+      data: {'announcement_id': announcementId, 'body': body},
       options: Options(headers: await _authHeaders()),
     );
     return _commentFromJson(response.data?['comment'] as Map<String, dynamic>?);
@@ -157,10 +150,7 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/announcements/comments',
-      data: {
-        'id': commentId,
-        'body': body,
-      },
+      data: {'id': commentId, 'body': body},
       options: Options(headers: await _authHeaders()),
     );
     return _commentFromJson(response.data?['comment'] as Map<String, dynamic>?);

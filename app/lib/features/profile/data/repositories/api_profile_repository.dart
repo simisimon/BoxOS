@@ -202,7 +202,9 @@ class ApiProfileRepository implements ProfileRepository {
     return NotificationInbox(
       unreadCount: data['unread_count'] as int? ?? 0,
       notifications: items
-          .map((item) => _appNotificationFromJson(item as Map<String, dynamic>?))
+          .map(
+            (item) => _appNotificationFromJson(item as Map<String, dynamic>?),
+          )
           .toList(),
     );
   }
