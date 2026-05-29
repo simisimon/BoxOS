@@ -47,9 +47,10 @@ class AuthenticatedScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _shellBackground,
-      extendBody: true,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(132),
+        // Status-bar inset + content height (12 + 56 row + 12). Sizing to
+        // content avoids the dead gap a fixed height used to leave below it.
+        preferredSize: Size.fromHeight(MediaQuery.of(context).padding.top + 80),
         child: _ShellHeader(
           displayName: displayName,
           roleLabel: roleLabel,
@@ -122,97 +123,108 @@ class _ShellHeader extends StatelessWidget {
         ? roleLabel
         : '$displayName • $roleLabel';
 
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: MobileContent(
-          padding: EdgeInsets.zero,
-          child: Row(
-            children: [
-              _LogoBadge(accentColor: accentColor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'BoxOS',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: _shellText,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      titleLine,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: _shellMuted),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (availableRoles.length > 1) ...[
-                _HeaderIconButton(
-                  icon: Icons.swap_horiz_rounded,
-                  tooltip: 'Switch Role',
-                  onTap: () async {
-                    final renderBox = context.findRenderObject() as RenderBox?;
-                    final position = renderBox == null
-                        ? const RelativeRect.fromLTRB(0, 0, 0, 0)
-                        : RelativeRect.fromRect(
-                            Rect.fromPoints(
-                              renderBox.localToGlobal(Offset.zero),
-                              renderBox.localToGlobal(
-                                renderBox.size.bottomRight(Offset.zero),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: appSurface,
+            border: Border(bottom: BorderSide(color: _shellBorder)),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: [
+                  _LogoBadge(accentColor: accentColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'BoxOS',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: _shellText,
+                                fontWeight: FontWeight.w800,
                               ),
-                            ),
-                            Offset.zero & MediaQuery.of(context).size,
-                          );
-                    final selected = await showMenu<UserRole>(
-                      context: context,
-                      position: position,
-                      items: availableRoles
-                          .map(
-                            (role) => PopupMenuItem<UserRole>(
-                              value: role,
-                              child: Text(role.label),
-                            ),
-                          )
-                          .toList(),
-                    );
-                    if (selected != null) {
-                      onRoleSelected(selected);
-                    }
-                  },
-                ),
-                const SizedBox(width: 4),
-              ],
-              _HeaderIconButton(
-                icon: Icons.notifications_none_rounded,
-                tooltip: 'Notifications',
-                badge: unreadNotifications,
-                onTap: onNotificationsTap,
-              ),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: onProfileTap,
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: accentColor.withOpacity(0.14),
-                  child: Text(
-                    _initials(displayName),
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: _shellText,
-                      fontWeight: FontWeight.w800,
+                        ),
+                        Text(
+                          titleLine,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: _shellMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                ),
+                  if (availableRoles.length > 1) ...[
+                    _HeaderIconButton(
+                      icon: Icons.swap_horiz_rounded,
+                      tooltip: 'Switch Role',
+                      onTap: () async {
+                        final renderBox =
+                            context.findRenderObject() as RenderBox?;
+                        final position = renderBox == null
+                            ? const RelativeRect.fromLTRB(0, 0, 0, 0)
+                            : RelativeRect.fromRect(
+                                Rect.fromPoints(
+                                  renderBox.localToGlobal(Offset.zero),
+                                  renderBox.localToGlobal(
+                                    renderBox.size.bottomRight(Offset.zero),
+                                  ),
+                                ),
+                                Offset.zero & MediaQuery.of(context).size,
+                              );
+                        final selected = await showMenu<UserRole>(
+                          context: context,
+                          position: position,
+                          items: availableRoles
+                              .map(
+                                (role) => PopupMenuItem<UserRole>(
+                                  value: role,
+                                  child: Text(role.label),
+                                ),
+                              )
+                              .toList(),
+                        );
+                        if (selected != null) {
+                          onRoleSelected(selected);
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  _HeaderIconButton(
+                    icon: Icons.notifications_none_rounded,
+                    tooltip: 'Notifications',
+                    badge: unreadNotifications,
+                    onTap: onNotificationsTap,
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: onProfileTap,
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: accentColor.withOpacity(0.14),
+                      child: Text(
+                        _initials(displayName),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: _shellText,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -366,85 +378,85 @@ class _ShellFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final horizontalPadding = constraints.maxWidth > mobileContentMaxWidth
-              ? (constraints.maxWidth - mobileContentMaxWidth) / 2
-              : 0.0;
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              16 + horizontalPadding,
-              8,
-              16 + horizontalPadding,
-              12,
+    // Flat footer matching the header: white surface with a top border,
+    // capped to the same width as the main content and centered. heightFactor
+    // keeps the footer at its intrinsic height instead of filling the slot.
+    // The NavigationBar is transparent so the surrounding white shows through
+    // (incl. the bottom safe-area inset the bar manages itself).
+    return Align(
+      alignment: Alignment.bottomCenter,
+      heightFactor: 1,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: appSurface,
+            border: Border(top: BorderSide(color: _shellBorder)),
+          ),
+          child: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              indicatorColor: const Color(0x1F2563EB),
+              labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                final selected = states.contains(WidgetState.selected);
+                return TextStyle(
+                  color: selected ? _shellBlue : _shellMuted,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                );
+              }),
+              iconTheme: WidgetStateProperty.resolveWith((states) {
+                final selected = states.contains(WidgetState.selected);
+                return IconThemeData(
+                  color: selected ? _shellBlue : _shellMuted,
+                );
+              }),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: NavigationBarTheme(
-                data: NavigationBarThemeData(
-                  indicatorColor: const Color(0x1F2563EB),
-                  labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                    final selected = states.contains(WidgetState.selected);
-                    return TextStyle(
-                      color: selected ? _shellBlue : _shellMuted,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    );
-                  }),
-                  iconTheme: WidgetStateProperty.resolveWith((states) {
-                    final selected = states.contains(WidgetState.selected);
-                    return IconThemeData(
-                      color: selected ? _shellBlue : _shellMuted,
-                    );
-                  }),
+            child: NavigationBar(
+              selectedIndex: selectedIndex,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              onDestinationSelected: (index) {
+                switch (index) {
+                  case 0:
+                    onHomeTap();
+                    break;
+                  case 1:
+                    onMyBoxTap();
+                    break;
+                  case 2:
+                    onLogbookTap();
+                    break;
+                  case 3:
+                    onProfileTap();
+                    break;
+                }
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Home',
                 ),
-                child: NavigationBar(
-                  selectedIndex: selectedIndex,
-                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                  onDestinationSelected: (index) {
-                    switch (index) {
-                      case 0:
-                        onHomeTap();
-                        break;
-                      case 1:
-                        onMyBoxTap();
-                        break;
-                      case 2:
-                        onLogbookTap();
-                        break;
-                      case 3:
-                        onProfileTap();
-                        break;
-                    }
-                  },
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home_rounded),
-                      label: 'Home',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.fitness_center_outlined),
-                      selectedIcon: Icon(Icons.fitness_center_rounded),
-                      label: 'MyBox',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.menu_book_outlined),
-                      selectedIcon: Icon(Icons.menu_book_rounded),
-                      label: 'Logbook',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.person_outline_rounded),
-                      selectedIcon: Icon(Icons.person_rounded),
-                      label: 'Profile',
-                    ),
-                  ],
+                NavigationDestination(
+                  icon: Icon(Icons.fitness_center_outlined),
+                  selectedIcon: Icon(Icons.fitness_center_rounded),
+                  label: 'MyBox',
                 ),
-              ),
+                NavigationDestination(
+                  icon: Icon(Icons.menu_book_outlined),
+                  selectedIcon: Icon(Icons.menu_book_rounded),
+                  label: 'Logbook',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: 'Profile',
+                ),
+              ],
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
