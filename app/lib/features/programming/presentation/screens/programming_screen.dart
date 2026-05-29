@@ -59,7 +59,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
     final gymName = activeGym?.name;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF09111E),
+      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(title: const Text('Programming')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
@@ -76,9 +76,9 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF09111E),
-              Color(0xFF0F1828),
-              Color(0xFF0B1320),
+              Color(0xFFF5F9FF),
+              Color(0xFFEAF2FF),
+              Color(0xFFF9FBFF),
             ],
           ),
         ),
@@ -217,11 +217,11 @@ class _ProgrammingHero extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             accentColor.withOpacity(0.24),
-            const Color(0xFF11192A),
-            const Color(0xFF070B12),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFF3F8FF),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -264,7 +264,7 @@ class _ProgrammingHero extends StatelessWidget {
               Text(
                 'Programming',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFE8EEF8),
+                  color: const Color(0xFF2563EB),
                   letterSpacing: 1.1,
                 ),
               ),
@@ -274,7 +274,7 @@ class _ProgrammingHero extends StatelessWidget {
                     ? 'Shape the training week.'
                     : 'See the next training hit.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -285,7 +285,7 @@ class _ProgrammingHero extends StatelessWidget {
                     ? 'Build each daily WOD with cleaner structure, stronger hierarchy, and faster access to whiteboard and athlete logs.'
                     : 'Track the current WOD, whiteboard standings, and your own result history in one tighter workout stream.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
@@ -352,7 +352,7 @@ class _InfoBand extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +362,7 @@ class _InfoBand extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -370,7 +370,7 @@ class _InfoBand extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFFB8C4D9),
+              color: const Color(0xFF64748B),
               height: 1.4,
             ),
           ),
@@ -401,7 +401,7 @@ class _ProgrammingStateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +415,7 @@ class _ProgrammingStateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -423,7 +423,7 @@ class _ProgrammingStateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                     height: 1.45,
                   ),
                 ),
@@ -464,7 +464,7 @@ class _WorkoutCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF5FB2FF).withOpacity(0.08),
@@ -495,7 +495,7 @@ class _WorkoutCard extends StatelessWidget {
                     Text(
                       workout.title,
                       style: theme.textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
+                        color: const Color(0xFF0F172A),
                         fontWeight: FontWeight.w800,
                         height: 1.0,
                       ),
@@ -580,9 +580,9 @@ class _PanelSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
+        color: const Color(0xFFF8FBFF),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: child,
     );
@@ -612,7 +612,7 @@ class _WorkoutLogSection extends StatelessWidget {
               child: Text(
                 'My log',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -632,7 +632,7 @@ class _WorkoutLogSection extends StatelessWidget {
           Text(
             'No personal workout log yet.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFB8C4D9),
+              color: const Color(0xFF64748B),
             ),
           )
         else
@@ -651,7 +651,7 @@ class _WorkoutLogSection extends StatelessWidget {
                       child: Text(
                         '${workout.myWorkoutLog!.scoreLabel} (${_scoreTypeLabel(workout.myWorkoutLog!.scoreType)})',
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -665,7 +665,7 @@ class _WorkoutLogSection extends StatelessWidget {
                   Text(
                     workout.myWorkoutLog!.notesText,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFB8C4D9),
+                      color: const Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -710,7 +710,7 @@ class _WhiteboardSection extends StatelessWidget {
               child: Text(
                 'Whiteboard',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -741,7 +741,7 @@ class _WhiteboardSection extends StatelessWidget {
                 Text(
                   'My result: ${workout.myWhiteboardResult!.scoreLabel} (${_scoreTypeLabel(workout.myWhiteboardResult!.scoreType)})',
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -750,7 +750,7 @@ class _WhiteboardSection extends StatelessWidget {
                   Text(
                     workout.myWhiteboardResult!.notesText,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFB8C4D9),
+                      color: const Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -763,7 +763,7 @@ class _WhiteboardSection extends StatelessWidget {
           Text(
             'No whiteboard results yet.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFB8C4D9),
+              color: const Color(0xFF64748B),
             ),
           )
         else
@@ -779,7 +779,7 @@ class _WhiteboardSection extends StatelessWidget {
                         child: Text(
                           '${result.rank}',
                           style: theme.textTheme.labelLarge?.copyWith(
-                            color: Colors.white,
+                            color: const Color(0xFF0F172A),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -792,7 +792,7 @@ class _WhiteboardSection extends StatelessWidget {
                             Text(
                               result.athleteName,
                               style: theme.textTheme.titleSmall?.copyWith(
-                                color: Colors.white,
+                                color: const Color(0xFF0F172A),
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -802,7 +802,7 @@ class _WhiteboardSection extends StatelessWidget {
                                   ? _scoreTypeLabel(result.scoreType)
                                   : '${_scoreTypeLabel(result.scoreType)} • ${result.notesText}',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFFB8C4D9),
+                                color: const Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -859,7 +859,7 @@ class _WorkoutPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Colors.white,
+          color: const Color(0xFF0F172A),
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -904,7 +904,7 @@ class _WorkoutSection extends StatelessWidget {
           Text(
             value,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               height: 1.45,
             ),
           ),
@@ -937,7 +937,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Colors.white,
+          color: const Color(0xFF0F172A),
           fontWeight: FontWeight.w700,
         ),
       ),

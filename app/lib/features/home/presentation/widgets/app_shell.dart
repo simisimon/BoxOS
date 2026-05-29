@@ -1,10 +1,14 @@
-import 'dart:ui';
-
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 
 const boxOsLogoAsset = 'assets/images/boxOS_logo.png';
+const _shellBlue = Color(0xFF2563EB);
+const _shellBackground = Color(0xFFF5F9FF);
+const _shellSurface = Colors.white;
+const _shellBorder = Color(0xFFD8E4F2);
+const _shellText = Color(0xFF0F172A);
+const _shellMuted = Color(0xFF64748B);
 
 class AuthenticatedScaffold extends StatelessWidget {
   const AuthenticatedScaffold({
@@ -41,10 +45,10 @@ class AuthenticatedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF09111E),
+      backgroundColor: _shellBackground,
       extendBody: true,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(96),
+        preferredSize: const Size.fromHeight(132),
         child: _ShellHeader(
           displayName: displayName,
           roleLabel: roleLabel,
@@ -61,9 +65,9 @@ class AuthenticatedScaffold extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF09111E),
-              Color(0xFF10192A),
-              Color(0xFF0B1320),
+              _shellBackground,
+              Color(0xFFEAF2FF),
+              Color(0xFFF9FBFF),
             ],
           ),
         ),
@@ -121,141 +125,127 @@ class _ShellHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
         child: MobileContent(
           padding: EdgeInsets.zero,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      accentColor.withOpacity(0.16),
-                      const Color(0xCC11192A),
-                      const Color(0xE6080D15),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accentColor.withOpacity(0.12),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: _shellSurface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: _shellBorder),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x120F172A),
+                  blurRadius: 28,
+                  offset: Offset(0, 14),
                 ),
-                child: Row(
-                  children: [
-                    _LogoBadge(accentColor: accentColor),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+            child: Row(
+              children: [
+                _LogoBadge(accentColor: accentColor),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'BoxOS',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: _shellText,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        titleLine,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: _shellMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Text(
-                            'BoxOS',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            titleLine,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFFB8C4D9),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _HeaderChip(label: roleLabel, color: accentColor),
-                              _HeaderChip(
-                                label: unreadNotifications > 0
-                                    ? '$unreadNotifications unread'
-                                    : 'Inbox clear',
-                                color: const Color(0xFF7EE7C6),
-                                outlined: true,
-                              ),
-                            ],
+                          _HeaderChip(label: roleLabel, color: accentColor),
+                          _HeaderChip(
+                            label: unreadNotifications > 0
+                                ? '$unreadNotifications unread'
+                                : 'Inbox clear',
+                            color: const Color(0xFF0EA5A4),
+                            outlined: true,
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      children: [
-                        if (availableRoles.length > 1)
-                          _HeaderIconButton(
-                            icon: Icons.swap_horiz_rounded,
-                            tooltip: 'Switch Role',
-                            onTap: () async {
-                              final renderBox = context.findRenderObject() as RenderBox?;
-                              final position = renderBox == null
-                                  ? const RelativeRect.fromLTRB(0, 0, 0, 0)
-                                  : RelativeRect.fromRect(
-                                      Rect.fromPoints(
-                                        renderBox.localToGlobal(Offset.zero),
-                                        renderBox.localToGlobal(renderBox.size.bottomRight(Offset.zero)),
-                                      ),
-                                      Offset.zero & MediaQuery.of(context).size,
-                                    );
-                              final selected = await showMenu<UserRole>(
-                                context: context,
-                                position: position,
-                                items: availableRoles
-                                    .map(
-                                      (role) => PopupMenuItem<UserRole>(
-                                        value: role,
-                                        child: Text(role.label),
-                                      ),
-                                    )
-                                    .toList(),
-                              );
-                              if (selected != null) {
-                                onRoleSelected(selected);
-                              }
-                            },
-                          ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _HeaderIconButton(
-                              icon: Icons.notifications_none_rounded,
-                              tooltip: 'Notifications',
-                              badge: unreadNotifications,
-                              onTap: onNotificationsTap,
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: onProfileTap,
-                              child: CircleAvatar(
-                                radius: 22,
-                                backgroundColor: accentColor.withOpacity(0.24),
-                                child: Text(
-                                  _initials(displayName),
-                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  children: [
+                    if (availableRoles.length > 1)
+                      _HeaderIconButton(
+                        icon: Icons.swap_horiz_rounded,
+                        tooltip: 'Switch Role',
+                        onTap: () async {
+                          final renderBox = context.findRenderObject() as RenderBox?;
+                          final position = renderBox == null
+                              ? const RelativeRect.fromLTRB(0, 0, 0, 0)
+                              : RelativeRect.fromRect(
+                                  Rect.fromPoints(
+                                    renderBox.localToGlobal(Offset.zero),
+                                    renderBox.localToGlobal(renderBox.size.bottomRight(Offset.zero)),
                                   ),
-                                ),
+                                  Offset.zero & MediaQuery.of(context).size,
+                                );
+                          final selected = await showMenu<UserRole>(
+                            context: context,
+                            position: position,
+                            items: availableRoles
+                                .map(
+                                  (role) => PopupMenuItem<UserRole>(
+                                    value: role,
+                                    child: Text(role.label),
+                                  ),
+                                )
+                                .toList(),
+                          );
+                          if (selected != null) {
+                            onRoleSelected(selected);
+                          }
+                        },
+                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _HeaderIconButton(
+                          icon: Icons.notifications_none_rounded,
+                          tooltip: 'Notifications',
+                          badge: unreadNotifications,
+                          onTap: onNotificationsTap,
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: onProfileTap,
+                          child: CircleAvatar(
+                            radius: 22,
+                            backgroundColor: accentColor.withOpacity(0.14),
+                            child: Text(
+                              _initials(displayName),
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: _shellText,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -272,18 +262,17 @@ class _ShellHeader extends StatelessWidget {
     if (parts.length == 1) {
       return parts.first.substring(0, 1).toUpperCase();
     }
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
   }
 
   static Color _accentForRole(String roleLabel) {
     switch (roleLabel.toLowerCase()) {
       case 'admin':
-        return const Color(0xFFFF6B2C);
+        return const Color(0xFFEA580C);
       case 'trainer':
-        return const Color(0xFF5FB2FF);
+        return _shellBlue;
       default:
-        return const Color(0xFF7EE7C6);
+        return const Color(0xFF0EA5A4);
     }
   }
 }
@@ -304,11 +293,11 @@ class _LogoBadge extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            accentColor.withOpacity(0.28),
-            const Color(0xFF151F31),
+            Colors.white,
+            accentColor.withOpacity(0.12),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: _shellBorder),
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -335,14 +324,14 @@ class _HeaderChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withOpacity(0.16),
+        color: outlined ? Colors.white : color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(outlined ? 0.48 : 0.3)),
+        border: Border.all(color: color.withOpacity(outlined ? 0.32 : 0.20)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white,
+          color: outlined ? color : _shellText,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -374,11 +363,11 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
+            color: const Color(0xFFF8FBFF),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            border: Border.all(color: _shellBorder),
           ),
-          child: Icon(icon, color: Colors.white),
+          child: Icon(icon, color: _shellText),
         ),
       ),
     );
@@ -428,86 +417,79 @@ class _ShellFooter extends StatelessWidget {
               16 + horizontalPadding,
               12,
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xCC141E31),
-                        Color(0xEE0E1523),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+            child: Container(
+              decoration: BoxDecoration(
+                color: _shellSurface,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: _shellBorder),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x120F172A),
+                    blurRadius: 24,
+                    offset: Offset(0, 12),
                   ),
-                  child: NavigationBarTheme(
-                    data: NavigationBarThemeData(
-                      backgroundColor: Colors.transparent,
-                      indicatorColor: const Color(0x22FF6B2C),
-                      labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                        final selected = states.contains(WidgetState.selected);
-                        return TextStyle(
-                          color: selected ? Colors.white : const Color(0xFF95A4BC),
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        );
-                      }),
-                      iconTheme: WidgetStateProperty.resolveWith((states) {
-                        final selected = states.contains(WidgetState.selected);
-                        return IconThemeData(
-                          color: selected ? Colors.white : const Color(0xFF95A4BC),
-                        );
-                      }),
+                ],
+              ),
+              child: NavigationBarTheme(
+                data: NavigationBarThemeData(
+                  backgroundColor: Colors.transparent,
+                  indicatorColor: const Color(0x1F2563EB),
+                  labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                    final selected = states.contains(WidgetState.selected);
+                    return TextStyle(
+                      color: selected ? _shellBlue : _shellMuted,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    );
+                  }),
+                  iconTheme: WidgetStateProperty.resolveWith((states) {
+                    final selected = states.contains(WidgetState.selected);
+                    return IconThemeData(
+                      color: selected ? _shellBlue : _shellMuted,
+                    );
+                  }),
+                ),
+                child: NavigationBar(
+                  height: 74,
+                  selectedIndex: selectedIndex,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  onDestinationSelected: (index) {
+                    switch (index) {
+                      case 0:
+                        onHomeTap();
+                        break;
+                      case 1:
+                        onMyBoxTap();
+                        break;
+                      case 2:
+                        onLogbookTap();
+                        break;
+                      case 3:
+                        onProfileTap();
+                        break;
+                    }
+                  },
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: 'Home',
                     ),
-                    child: NavigationBar(
-                      height: 74,
-                      selectedIndex: selectedIndex,
-                      labelBehavior:
-                          NavigationDestinationLabelBehavior.alwaysShow,
-                      onDestinationSelected: (index) {
-                        switch (index) {
-                          case 0:
-                            onHomeTap();
-                            break;
-                          case 1:
-                            onMyBoxTap();
-                            break;
-                          case 2:
-                            onLogbookTap();
-                            break;
-                          case 3:
-                            onProfileTap();
-                            break;
-                        }
-                      },
-                      destinations: const [
-                        NavigationDestination(
-                          icon: Icon(Icons.home_outlined),
-                          selectedIcon: Icon(Icons.home_rounded),
-                          label: 'Home',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.fitness_center_outlined),
-                          selectedIcon: Icon(Icons.fitness_center_rounded),
-                          label: 'MyBox',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.menu_book_outlined),
-                          selectedIcon: Icon(Icons.menu_book_rounded),
-                          label: 'Logbook',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.person_outline_rounded),
-                          selectedIcon: Icon(Icons.person_rounded),
-                          label: 'Profile',
-                        ),
-                      ],
+                    NavigationDestination(
+                      icon: Icon(Icons.fitness_center_outlined),
+                      selectedIcon: Icon(Icons.fitness_center_rounded),
+                      label: 'MyBox',
                     ),
-                  ),
+                    NavigationDestination(
+                      icon: Icon(Icons.menu_book_outlined),
+                      selectedIcon: Icon(Icons.menu_book_rounded),
+                      label: 'Logbook',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.person_outline_rounded),
+                      selectedIcon: Icon(Icons.person_rounded),
+                      label: 'Profile',
+                    ),
+                  ],
                 ),
               ),
             ),

@@ -20,7 +20,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
     final hasAccess = profile?.role == UserRole.admin && profile?.activeGym != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF09111E),
+      backgroundColor: const Color(0xFFF5F9FF),
       body: SafeArea(
         child: DecoratedBox(
           decoration: const BoxDecoration(
@@ -28,9 +28,9 @@ class AdminAnalyticsScreen extends ConsumerWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF09111E),
-                Color(0xFF10192A),
-                Color(0xFF0B1320),
+                Color(0xFFF5F9FF),
+                Color(0xFFEAF2FF),
+                Color(0xFFF9FBFF),
               ],
             ),
           ),
@@ -42,7 +42,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
                   IconButton(
                     onPressed: () => context.go('/profile'),
                     icon: const Icon(Icons.arrow_back),
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
@@ -106,7 +106,7 @@ class _HeaderBlock extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
+            color: const Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -114,7 +114,7 @@ class _HeaderBlock extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.white.withOpacity(0.72),
+            color: const Color(0xFF475569),
             height: 1.45,
           ),
         ),
@@ -220,7 +220,7 @@ class _OverviewContent extends StatelessWidget {
                 child: Text(
                   'Recent members',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -232,7 +232,7 @@ class _OverviewContent extends StatelessWidget {
                   child: Text(
                     'No recent memberships in this gym yet.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.72),
+                      color: const Color(0xFF475569),
                     ),
                   ),
                 )
@@ -456,7 +456,7 @@ class _MetricCard extends StatelessWidget {
                 Text(
                   value,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -504,7 +504,7 @@ class _Panel extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -530,7 +530,7 @@ class _ForwardStat extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
+            color: const Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -566,7 +566,7 @@ class _RecentMemberRow extends StatelessWidget {
               Text(
                 item.displayName,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -574,7 +574,7 @@ class _RecentMemberRow extends StatelessWidget {
               Text(
                 '${item.email} · ${item.activeRole}',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withOpacity(0.72),
+                  color: const Color(0xFF475569),
                 ),
               ),
             ],
@@ -655,7 +655,7 @@ class _DailyRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -701,7 +701,7 @@ class _PressureClassRow extends StatelessWidget {
               Text(
                 item.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -709,7 +709,7 @@ class _PressureClassRow extends StatelessWidget {
               Text(
                 '$dateLabel · ${item.bookings}/${item.capacity} booked',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withOpacity(0.72),
+                  color: const Color(0xFF475569),
                 ),
               ),
             ],
@@ -761,7 +761,7 @@ class _ProblemClassRow extends StatelessWidget {
               Text(
                 item.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -769,7 +769,7 @@ class _ProblemClassRow extends StatelessWidget {
               Text(
                 '$dateLabel · ${item.bookings}/${item.capacity} booked · ${item.attended} attended · ${item.noShows} no-shows',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withOpacity(0.72),
+                  color: const Color(0xFF475569),
                 ),
               ),
             ],

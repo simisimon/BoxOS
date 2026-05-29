@@ -343,7 +343,7 @@ class _SectionTitle extends StatelessWidget {
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: Colors.white,
+            color: const Color(0xFF0F172A),
             height: 0.96,
           ),
         ),
@@ -351,7 +351,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFFB8C4D9),
+            color: const Color(0xFF64748B),
             height: 1.4,
           ),
         ),
@@ -393,7 +393,7 @@ class _HeroPanel extends StatelessWidget {
             const Color(0xFF06090F),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: accent.withOpacity(0.18),
@@ -436,7 +436,7 @@ class _HeroPanel extends StatelessWidget {
               Text(
                 'News',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFE8EEF8),
+                  color: const Color(0xFF2563EB),
                   letterSpacing: 1.1,
                 ),
               ),
@@ -444,7 +444,7 @@ class _HeroPanel extends StatelessWidget {
               Text(
                 'Built for the next training block.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w900,
                   height: 0.95,
                 ),
@@ -453,7 +453,7 @@ class _HeroPanel extends StatelessWidget {
               Text(
                 'Welcome back, $greeting. BoxOS now starts with a sharper operational snapshot instead of a generic dashboard.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
@@ -513,9 +513,9 @@ class _MetricBand extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
+            color: const Color(0xFFF8FBFF),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            border: Border.all(color: const Color(0xFFD8E4F2)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -531,7 +531,7 @@ class _MetricBand extends StatelessWidget {
               Text(
                 value,
                 style: theme.textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -592,7 +592,7 @@ class _HeroChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Colors.white,
+          color: const Color(0xFF0F172A),
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -673,7 +673,7 @@ class _FeatureCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101827),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.12),
@@ -703,7 +703,7 @@ class _FeatureCard extends StatelessWidget {
                 Text(
                   headline,
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -711,7 +711,7 @@ class _FeatureCard extends StatelessWidget {
                 Text(
                   body,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                     height: 1.45,
                   ),
                 ),
@@ -870,13 +870,13 @@ class _BookingLauncherCard extends StatelessWidget {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: Color(0x22FFFFFF),
-                    child: Icon(Icons.add_rounded, color: Colors.white, size: 26),
+                    child: Icon(Icons.add_rounded, color: const Color(0xFF0F172A), size: 26),
                   ),
                   Spacer(),
                   Text(
                     'Book a class',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: const Color(0xFF0F172A),
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -909,7 +909,7 @@ class _BookingPlaceholderCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         color: const Color(0xFF101827),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: const SingleChildScrollView(
         physics: NeverScrollableScrollPhysics(),
@@ -928,7 +928,7 @@ class _BookingPlaceholderCard extends StatelessWidget {
               Text(
                 'No class booked yet',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
                 ),
@@ -979,7 +979,7 @@ class _BookedClassCard extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [Color(0xFF141E31), Color(0xFF101827)],
               ),
-              border: Border.all(color: Colors.white.withOpacity(0.07)),
+              border: Border.all(color: const Color(0xFFD8E4F2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1016,7 +1016,7 @@ class _BookedClassCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w900,
                     fontSize: 20,
                   ),
@@ -1027,7 +1027,7 @@ class _BookedClassCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFD7E0EE),
+                    color: const Color(0xFF475569),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1177,7 +1177,7 @@ class _AnnouncementComposerBanner extends StatelessWidget {
           ),
           title: const Text(
             'Post a new announcement',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+            style: TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.w800),
           ),
           subtitle: const Text(
             'Share schedule changes, event reminders, or coach notes right on the home feed.',
@@ -1218,7 +1218,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [Color(0xFF141E31), Color(0xFF101827)],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1228,7 +1228,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1236,7 +1236,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFB8C4D9),
+              color: const Color(0xFF64748B),
               height: 1.45,
             ),
           ),
@@ -1303,7 +1303,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
           end: Alignment.bottomRight,
           colors: [Color(0xFF141E31), Color(0xFF101827)],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -1326,7 +1326,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     Text(
                       widget.announcement.title,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
+                        color: const Color(0xFF0F172A),
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1409,7 +1409,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               child: Text(
                 widget.announcement.description,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.55,
                 ),
               ),
@@ -1543,7 +1543,7 @@ class _AnnouncementMetricButton extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: accent),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              Text(label, style: const TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -1564,15 +1564,15 @@ class _AnnouncementStaticPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: Colors.white.withOpacity(0.06),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: const Color(0xFFF8FBFF),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 18, color: const Color(0xFF8EA0BE)),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          Text(label, style: const TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -1596,8 +1596,8 @@ class _AnnouncementCommentComposer extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withOpacity(0.04),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: const Color(0xFFF8FBFF),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1657,7 +1657,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: const Color(0xFF0F1727),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1672,7 +1672,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
                     Text(
                       comment.authorName,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
+                        color: const Color(0xFF0F172A),
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1708,7 +1708,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
           Text(
             comment.body,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFD7E0EE),
+              color: const Color(0xFF475569),
               height: 1.5,
             ),
           ),
@@ -1835,7 +1835,7 @@ class _ActionTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0F1727),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -1855,7 +1855,7 @@ class _ActionTile extends StatelessWidget {
                       Text(
                         action.title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1863,7 +1863,7 @@ class _ActionTile extends StatelessWidget {
                       Text(
                         action.subtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFB8C4D9),
+                          color: const Color(0xFF64748B),
                           height: 1.45,
                         ),
                       ),
@@ -1930,7 +1930,7 @@ class _ActionSpotlight extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1938,7 +1938,7 @@ class _ActionSpotlight extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFD7E0EE),
+                    color: const Color(0xFF475569),
                     height: 1.45,
                   ),
                 ),
@@ -2139,7 +2139,7 @@ class _AnnouncementComposerDialogState
                       end: Alignment.bottomRight,
                       colors: [Color(0x2218D2A8), Color(0x22FF6B2C)],
                     ),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    border: Border.all(color: const Color(0xFFD8E4F2)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2147,7 +2147,7 @@ class _AnnouncementComposerDialogState
                       const Text(
                         'Add a gallery image',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2189,7 +2189,7 @@ class _AnnouncementComposerDialogState
                                     height: 16,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: const Color(0xFF0F172A),
                                     ),
                                   )
                                 : const Icon(Icons.photo_library_outlined),

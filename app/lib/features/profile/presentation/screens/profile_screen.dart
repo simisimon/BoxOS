@@ -29,9 +29,9 @@ class ProfileScreen extends ConsumerWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF09111E),
-            Color(0xFF10192A),
-            Color(0xFF0B1320),
+            Color(0xFFF5F9FF),
+            Color(0xFFEAF2FF),
+            Color(0xFFF9FBFF),
           ],
         ),
       ),
@@ -241,11 +241,11 @@ class _ProfileHero extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             accentColor.withOpacity(0.24),
-            const Color(0xFF11192A),
-            const Color(0xFF070B12),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFF3F8FF),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -288,7 +288,7 @@ class _ProfileHero extends StatelessWidget {
               Text(
                 'Profile',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFE8EEF8),
+                  color: const Color(0xFF2563EB),
                   letterSpacing: 1.1,
                 ),
               ),
@@ -296,7 +296,7 @@ class _ProfileHero extends StatelessWidget {
               Text(
                 displayName,
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -306,7 +306,7 @@ class _ProfileHero extends StatelessWidget {
                 Text(
                   '@$nickname',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -314,7 +314,7 @@ class _ProfileHero extends StatelessWidget {
               Text(
                 email ?? 'No email loaded',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
@@ -358,7 +358,7 @@ class _ActionSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,7 +375,7 @@ class _ActionSection extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w800,
               height: 0.96,
             ),
@@ -384,7 +384,7 @@ class _ActionSection extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFB8C4D9),
+              color: const Color(0xFF64748B),
               height: 1.4,
             ),
           ),
@@ -447,7 +447,7 @@ class _PrimaryActionTile extends StatelessWidget {
                       Text(
                         title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -455,7 +455,7 @@ class _PrimaryActionTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFD7E0EE),
+                          color: const Color(0xFF475569),
                           height: 1.45,
                         ),
                       ),
@@ -501,7 +501,7 @@ class _SecondaryActionTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF151F31),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -521,7 +521,7 @@ class _SecondaryActionTile extends StatelessWidget {
                       Text(
                         title,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -529,7 +529,7 @@ class _SecondaryActionTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFB8C4D9),
+                          color: const Color(0xFF64748B),
                           height: 1.45,
                         ),
                       ),
@@ -583,7 +583,7 @@ class _MembershipCard extends StatelessWidget {
                 child: Text(
                   membership.gym.name,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -599,14 +599,14 @@ class _MembershipCard extends StatelessWidget {
           Text(
             'Active role here: ${membership.role.label}',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFD7E0EE),
+              color: const Color(0xFF475569),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Timezone: ${membership.gym.timezone}',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFB8C4D9),
+              color: const Color(0xFF64748B),
             ),
           ),
           if (!isCurrentGym) ...[
@@ -645,7 +645,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Colors.white,
+          color: const Color(0xFF0F172A),
           fontWeight: FontWeight.w700,
         ),
       ),

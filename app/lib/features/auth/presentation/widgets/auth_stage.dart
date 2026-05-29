@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:app/features/home/presentation/widgets/app_shell.dart';
 import 'package:flutter/material.dart';
 
 class AuthStage extends StatelessWidget {
@@ -11,8 +12,8 @@ class AuthStage extends StatelessWidget {
     required this.child,
     this.eyebrow,
     this.footer,
-    this.accentColor = const Color(0xFF5FB2FF),
-    this.backgroundColor = const Color(0xFF09111E),
+    this.accentColor = const Color(0xFF2563EB),
+    this.backgroundColor = const Color(0xFFF4F8FF),
   });
 
   final String title;
@@ -36,8 +37,8 @@ class AuthStage extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [
               backgroundColor,
-              const Color(0xFF10192A),
-              const Color(0xFF0B1320),
+              const Color(0xFFEAF2FF),
+              const Color(0xFFF8FBFF),
             ],
           ),
         ),
@@ -69,9 +70,16 @@ class AuthStage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF101826),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: Colors.white.withOpacity(0.07)),
+                    border: Border.all(color: const Color(0xFFD7E3F4)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x140F172A),
+                        blurRadius: 24,
+                        offset: Offset(0, 12),
+                      ),
+                    ],
                   ),
                   child: child,
                 ),
@@ -95,7 +103,7 @@ class AuthFieldGroup extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
-    this.accentColor = const Color(0xFF5FB2FF),
+    this.accentColor = const Color(0xFF2563EB),
   });
 
   final IconData icon;
@@ -107,41 +115,70 @@ class AuthFieldGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _AccentBadge(icon: icon, color: accentColor),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFB8C4D9),
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+    final inputTheme = theme.inputDecorationTheme;
+
+    return Theme(
+      data: theme.copyWith(
+        inputDecorationTheme: inputTheme.copyWith(
+          filled: true,
+          fillColor: const Color(0xFFF8FBFF),
+          labelStyle: const TextStyle(color: Color(0xFF475569)),
+          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+          floatingLabelStyle: TextStyle(color: accentColor),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFD7E3F4)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: accentColor, width: 1.6),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFDC2626)),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.6),
+          ),
         ),
-        const SizedBox(height: 14),
-        child,
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AccentBadge(icon: icon, color: accentColor),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF475569),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -164,7 +201,7 @@ class AuthNoteCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: accentColor.withOpacity(0.08),
+        color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: accentColor.withOpacity(0.22)),
       ),
@@ -174,7 +211,7 @@ class AuthNoteCard extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -182,7 +219,7 @@ class AuthNoteCard extends StatelessWidget {
           Text(
             body,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFD7E0EE),
+              color: const Color(0xFF334155),
               height: 1.5,
             ),
           ),
@@ -203,14 +240,14 @@ class AuthInlineError extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFF7A7A).withOpacity(0.1),
+        color: const Color(0xFFFFE4E6),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFF7A7A).withOpacity(0.24)),
+        border: Border.all(color: const Color(0xFFFDA4AF)),
       ),
       child: Text(
         message,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: const Color(0xFFFFC1C1),
+          color: const Color(0xFF991B1B),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -247,11 +284,11 @@ class _TopBar extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
+                border: Border.all(color: const Color(0xFFD7E3F4)),
               ),
-              child: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
             ),
           ),
         ),
@@ -259,16 +296,28 @@ class _TopBar extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: accentColor.withOpacity(0.16),
+            color: accentColor.withOpacity(0.12),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: accentColor.withOpacity(0.3)),
+            border: Border.all(color: accentColor.withOpacity(0.24)),
           ),
-          child: Text(
-            'BoxOS',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                boxOsLogoAsset,
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'BoxOS',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -300,12 +349,12 @@ class _HeroCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            accentColor.withOpacity(0.22),
-            const Color(0xFF11192A),
-            const Color(0xFF070B12),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFF3F8FF),
+            accentColor.withOpacity(0.14),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFD7E3F4)),
       ),
       child: Stack(
         children: [
@@ -313,7 +362,7 @@ class _HeroCard extends StatelessWidget {
           Positioned(
             right: 24,
             bottom: -28,
-            child: _GlowOrb(color: const Color(0xFFB98CFF).withOpacity(0.52), size: 88),
+            child: _GlowOrb(color: const Color(0xFF93C5FD).withOpacity(0.45), size: 88),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,15 +370,16 @@ class _HeroCard extends StatelessWidget {
               Text(
                 title,
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFE8EEF8),
+                  color: accentColor,
                   letterSpacing: 1.1,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 headline,
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -338,7 +388,7 @@ class _HeroCard extends StatelessWidget {
               Text(
                 description,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
@@ -369,10 +419,10 @@ class _AccentBadge extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
+              colors: [color.withOpacity(0.20), color.withOpacity(0.08)],
             ),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.28)),
+            border: Border.all(color: color.withOpacity(0.20)),
           ),
           child: Icon(icon, color: color),
         ),
@@ -396,7 +446,7 @@ class _GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
+            colors: [color.withOpacity(0.34), color.withOpacity(0.0)],
           ),
         ),
       ),

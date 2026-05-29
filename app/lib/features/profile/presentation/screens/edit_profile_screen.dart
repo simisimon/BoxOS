@@ -101,16 +101,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final profileAsync = ref.watch(currentProfileProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF09111E),
+      backgroundColor: const Color(0xFFF5F9FF),
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF09111E),
-              Color(0xFF10192A),
-              Color(0xFF0B1320),
+              Color(0xFFF5F9FF),
+              Color(0xFFEAF2FF),
+              Color(0xFFF9FBFF),
             ],
           ),
         ),
@@ -234,11 +234,11 @@ class _EditProfileHero extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             accentColor.withOpacity(0.24),
-            const Color(0xFF11192A),
-            const Color(0xFF070B12),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFF3F8FF),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -280,7 +280,7 @@ class _EditProfileHero extends StatelessWidget {
               Text(
                 'Edit Profile',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFE8EEF8),
+                  color: const Color(0xFF2563EB),
                   letterSpacing: 1.1,
                 ),
               ),
@@ -288,7 +288,7 @@ class _EditProfileHero extends StatelessWidget {
               Text(
                 'Sharpen how you show up.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -297,7 +297,7 @@ class _EditProfileHero extends StatelessWidget {
               Text(
                 'Update the identity details that teammates, coaches, and gym admins see throughout BoxOS.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
@@ -330,7 +330,7 @@ class _FieldCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,7 +344,7 @@ class _FieldCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -352,7 +352,7 @@ class _FieldCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                     height: 1.45,
                   ),
                 ),
@@ -396,7 +396,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
+            color: const Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
             height: 0.96,
           ),
@@ -405,7 +405,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFFB8C4D9),
+            color: const Color(0xFF64748B),
             height: 1.4,
           ),
         ),
@@ -435,7 +435,7 @@ class _StateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,7 +449,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -457,7 +457,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                     height: 1.45,
                   ),
                 ),
@@ -491,7 +491,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Colors.white,
+          color: const Color(0xFF0F172A),
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -521,9 +521,9 @@ class _HeaderIconButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
+            color: const Color(0xFFF8FBFF),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            border: Border.all(color: const Color(0xFFD8E4F2)),
           ),
           child: Icon(icon, color: Colors.white),
         ),

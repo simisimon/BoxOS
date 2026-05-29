@@ -45,9 +45,9 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF09111E),
-            Color(0xFF10192A),
-            Color(0xFF0B1320),
+            Color(0xFFF5F9FF),
+            Color(0xFFEAF2FF),
+            Color(0xFFF9FBFF),
           ],
         ),
       ),
@@ -156,11 +156,11 @@ class _LogbookHero extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             accentColor.withOpacity(0.24),
-            const Color(0xFF11192A),
-            const Color(0xFF070B12),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFF3F8FF),
           ],
         ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(0.14),
@@ -203,7 +203,7 @@ class _LogbookHero extends StatelessWidget {
               Text(
                 'Logbook',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFE8EEF8),
+                  color: const Color(0xFF2563EB),
                   letterSpacing: 1.1,
                 ),
               ),
@@ -211,7 +211,7 @@ class _LogbookHero extends StatelessWidget {
               Text(
                 'Your training block, archived cleanly.',
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w900,
                   height: 0.96,
                 ),
@@ -220,7 +220,7 @@ class _LogbookHero extends StatelessWidget {
               Text(
                 'Track workout history, result quality, class context, and PR momentum in one more readable performance stream.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFFD7E0EE),
+                  color: const Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
@@ -271,7 +271,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
+            color: const Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
             height: 0.96,
           ),
@@ -280,7 +280,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFFB8C4D9),
+            color: const Color(0xFF64748B),
             height: 1.4,
           ),
         ),
@@ -391,7 +391,7 @@ class _SnapshotStat extends StatelessWidget {
           Text(
             value,
             style: theme.textTheme.titleLarge?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -415,7 +415,7 @@ class _HistoryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF5FB2FF).withOpacity(0.08),
@@ -439,7 +439,7 @@ class _HistoryCard extends StatelessWidget {
                 Text(
                   entry.workoutTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -462,7 +462,7 @@ class _HistoryCard extends StatelessWidget {
                 Text(
                   dateLabel,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                   ),
                 ),
                 if (entry.classTitle != null && entry.classTitle!.isNotEmpty) ...[
@@ -470,7 +470,7 @@ class _HistoryCard extends StatelessWidget {
                   Text(
                     'Class: ${entry.classTitle!}',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFD7E0EE),
+                      color: const Color(0xFF475569),
                     ),
                   ),
                 ],
@@ -480,14 +480,14 @@ class _HistoryCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.03),
+                      color: const Color(0xFFF8FBFF),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                      border: Border.all(color: const Color(0xFFD8E4F2)),
                     ),
                     child: Text(
                       entry.notesText,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
+                        color: const Color(0xFF0F172A),
                         height: 1.45,
                       ),
                     ),
@@ -523,7 +523,7 @@ class _StateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101826),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: const Color(0xFFD8E4F2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,7 +537,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -545,7 +545,7 @@ class _StateCard extends StatelessWidget {
                 Text(
                   message,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
+                    color: const Color(0xFF64748B),
                     height: 1.45,
                   ),
                 ),
@@ -581,7 +581,7 @@ class _HeroPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Colors.white,
+          color: const Color(0xFF0F172A),
           fontWeight: FontWeight.w700,
         ),
       ),
