@@ -120,6 +120,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _toggleAnnouncementLike(Announcement announcement) async {
+    try {
+      final repository = ref.read(announcementRepositoryProvider);
+      if (announcement.likedByMe) {
+        await repository.unlikeAnnouncement(announcementId: announcement.id);
+      } else {
+        await repository.likeAnnouncement(announcementId: announcement.id);
+      }
+      if (!mounted) {
+        return;
+      }
+      await _refreshAnnouncements();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Like update failed.'))),
+      );
+    }
+  }
+
+  Future<void> _createAnnouncementComment(Announcement announcement, String body) async {
+    try {
+      await ref.read(announcementRepositoryProvider).createComment(
+        announcementId: announcement.id,
+        body: body,
+      );
+      if (!mounted) {
+        return;
+      }
+      await _refreshAnnouncements();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Comment could not be posted.'))),
+      );
+    }
+  }
+
+  Future<void> _editAnnouncementComment(AnnouncementComment comment, String body) async {
+    try {
+      await ref.read(announcementRepositoryProvider).updateComment(
+        commentId: comment.id,
+        body: body,
+      );
+      if (!mounted) {
+        return;
+      }
+      await _refreshAnnouncements();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Comment could not be updated.'))),
+      );
+    }
+  }
+
+  Future<void> _deleteAnnouncementComment(AnnouncementComment comment) async {
+    try {
+      await ref.read(announcementRepositoryProvider).deleteComment(commentId: comment.id);
+      if (!mounted) {
+        return;
+      }
+      await _refreshAnnouncements();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessageFrom(error, fallback: 'Comment could not be deleted.'))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
@@ -180,6 +259,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onCreateAnnouncement: _openAnnouncementComposer,
             onEditAnnouncement: _openAnnouncementEditor,
             onDeleteAnnouncement: _deleteAnnouncement,
+            onToggleLike: _toggleAnnouncementLike,
+            onCreateComment: _createAnnouncementComment,
+            onEditComment: _editAnnouncementComment,
+            onDeleteComment: _deleteAnnouncementComment,
           ),
           const SizedBox(height: 20),
           const _SectionTitle(
@@ -976,6 +1059,10 @@ class _AnnouncementRail extends StatelessWidget {
     required this.onCreateAnnouncement,
     required this.onEditAnnouncement,
     required this.onDeleteAnnouncement,
+    required this.onToggleLike,
+    required this.onCreateComment,
+    required this.onEditComment,
+    required this.onDeleteComment,
   });
 
   final Future<List<Announcement>> announcementsFuture;
@@ -984,6 +1071,10 @@ class _AnnouncementRail extends StatelessWidget {
   final Future<void> Function() onCreateAnnouncement;
   final Future<void> Function(Announcement announcement) onEditAnnouncement;
   final Future<void> Function(Announcement announcement) onDeleteAnnouncement;
+  final Future<void> Function(Announcement announcement) onToggleLike;
+  final Future<void> Function(Announcement announcement, String body) onCreateComment;
+  final Future<void> Function(AnnouncementComment comment, String body) onEditComment;
+  final Future<void> Function(AnnouncementComment comment) onDeleteComment;
 
   @override
   Widget build(BuildContext context) {
@@ -1042,9 +1133,13 @@ class _AnnouncementRail extends StatelessWidget {
             for (final (index, announcement) in announcements.indexed) ...[
               _AnnouncementCard(
                 announcement: announcement,
-                canManage: canManageAnnouncements,
+                canManage: announcement.canManage,
                 onEdit: () => onEditAnnouncement(announcement),
                 onDelete: () => onDeleteAnnouncement(announcement),
+                onToggleLike: () => onToggleLike(announcement),
+                onCreateComment: (body) => onCreateComment(announcement, body),
+                onEditComment: onEditComment,
+                onDeleteComment: onDeleteComment,
               ),
               if (index < announcements.length - 1) const SizedBox(height: 12),
             ],
@@ -1162,18 +1257,40 @@ class _AnnouncementEmptyState extends StatelessWidget {
   }
 }
 
-class _AnnouncementCard extends StatelessWidget {
+class _AnnouncementCard extends StatefulWidget {
   const _AnnouncementCard({
     required this.announcement,
     required this.canManage,
     required this.onEdit,
     required this.onDelete,
+    required this.onToggleLike,
+    required this.onCreateComment,
+    required this.onEditComment,
+    required this.onDeleteComment,
   });
 
   final Announcement announcement;
   final bool canManage;
   final Future<void> Function() onEdit;
   final Future<void> Function() onDelete;
+  final Future<void> Function() onToggleLike;
+  final Future<void> Function(String body) onCreateComment;
+  final Future<void> Function(AnnouncementComment comment, String body) onEditComment;
+  final Future<void> Function(AnnouncementComment comment) onDeleteComment;
+
+  @override
+  State<_AnnouncementCard> createState() => _AnnouncementCardState();
+}
+
+class _AnnouncementCardState extends State<_AnnouncementCard> {
+  final TextEditingController _commentController = TextEditingController();
+  bool _commentSubmitting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1207,7 +1324,7 @@ class _AnnouncementCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      announcement.title,
+                      widget.announcement.title,
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -1215,7 +1332,7 @@ class _AnnouncementCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Posted by ${announcement.authorName} · ${_formatAnnouncementDate(announcement.createdAt)}',
+                      'Posted by ${widget.announcement.authorName} · ${_formatAnnouncementDate(widget.announcement.createdAt)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: const Color(0xFF8EA0BE),
                       ),
@@ -1223,15 +1340,15 @@ class _AnnouncementCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (canManage)
+              if (widget.canManage)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz, color: Color(0xFFB8C4D9)),
                   color: const Color(0xFF141E31),
                   onSelected: (value) {
                     if (value == 'edit') {
-                      onEdit();
+                      widget.onEdit();
                     } else if (value == 'delete') {
-                      onDelete();
+                      widget.onDelete();
                     }
                   },
                   itemBuilder: (context) => const [
@@ -1248,7 +1365,7 @@ class _AnnouncementCard extends StatelessWidget {
               const SizedBox(width: 8),
             ],
           ),
-          subtitle: announcement.imageUrl == null
+          subtitle: widget.announcement.imageUrl == null
               ? null
               : Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -1257,7 +1374,7 @@ class _AnnouncementCard extends StatelessWidget {
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
                       child: Image.network(
-                        announcement.imageUrl!,
+                        widget.announcement.imageUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Container(
                           color: const Color(0xFF0F1727),
@@ -1272,13 +1389,13 @@ class _AnnouncementCard extends StatelessWidget {
                   ),
                 ),
           children: [
-            if (announcement.updatedAt.isAfter(announcement.createdAt)) ...[
+            if (widget.announcement.updatedAt.isAfter(widget.announcement.createdAt)) ...[
               Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
-                    'Last updated ${_formatAnnouncementDate(announcement.updatedAt)}',
+                    'Last updated ${_formatAnnouncementDate(widget.announcement.updatedAt)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF8EA0BE),
                       fontStyle: FontStyle.italic,
@@ -1290,15 +1407,312 @@ class _AnnouncementCard extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                announcement.description,
+                widget.announcement.description,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFFD7E0EE),
                   height: 1.55,
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _AnnouncementMetricButton(
+                  icon: widget.announcement.likedByMe
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  label: '${widget.announcement.likeCount} likes',
+                  accent: widget.announcement.likedByMe
+                      ? const Color(0xFFFF6B6B)
+                      : const Color(0xFF7EE7C6),
+                  onTap: widget.onToggleLike,
+                ),
+                _AnnouncementStaticPill(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: '${widget.announcement.commentCount} comments',
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _AnnouncementCommentComposer(
+              controller: _commentController,
+              isSubmitting: _commentSubmitting,
+              onSubmit: _submitComment,
+            ),
+            if (widget.announcement.comments.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              for (final (index, comment) in widget.announcement.comments.indexed) ...[
+                _AnnouncementCommentCard(
+                  comment: comment,
+                  onEdit: () => _promptEditComment(comment),
+                  onDelete: () => widget.onDeleteComment(comment),
+                ),
+                if (index < widget.announcement.comments.length - 1)
+                  const SizedBox(height: 10),
+              ],
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _submitComment() async {
+    final body = _commentController.text.trim();
+    if (body.isEmpty || _commentSubmitting) {
+      return;
+    }
+    setState(() => _commentSubmitting = true);
+    try {
+      await widget.onCreateComment(body);
+      _commentController.clear();
+    } finally {
+      if (mounted) {
+        setState(() => _commentSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _promptEditComment(AnnouncementComment comment) async {
+    final controller = TextEditingController(text: comment.body);
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F1727),
+        title: const Text('Edit comment', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Update your comment',
+            hintStyle: TextStyle(color: Color(0xFF8EA0BE)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (saved == null || saved.isEmpty) {
+      return;
+    }
+    await widget.onEditComment(comment, saved);
+  }
+}
+
+class _AnnouncementMetricButton extends StatelessWidget {
+  const _AnnouncementMetricButton({
+    required this.icon,
+    required this.label,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color accent;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: accent.withOpacity(0.12),
+            border: Border.all(color: accent.withOpacity(0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: accent),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementStaticPill extends StatelessWidget {
+  const _AnnouncementStaticPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withOpacity(0.06),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF8EA0BE)),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnouncementCommentComposer extends StatelessWidget {
+  const _AnnouncementCommentComposer({
+    required this.controller,
+    required this.isSubmitting,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final bool isSubmitting;
+  final Future<void> Function() onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.04),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: controller,
+            minLines: 1,
+            maxLines: 4,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Add a comment',
+              hintStyle: TextStyle(color: Color(0xFF8EA0BE)),
+              border: InputBorder.none,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: isSubmitting ? null : onSubmit,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B2C),
+                foregroundColor: Colors.white,
+              ),
+              icon: isSubmitting
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded),
+              label: const Text('Post'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnouncementCommentCard extends StatelessWidget {
+  const _AnnouncementCommentCard({
+    required this.comment,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final AnnouncementComment comment;
+  final Future<void> Function() onEdit;
+  final Future<void> Function() onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFF0F1727),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.authorName,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatAnnouncementDate(comment.updatedAt),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8EA0BE),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (comment.canManage)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, color: Color(0xFF8EA0BE)),
+                  color: const Color(0xFF141E31),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      onEdit();
+                    } else if (value == 'delete') {
+                      onDelete();
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem<String>(value: 'edit', child: Text('Edit comment')),
+                    PopupMenuItem<String>(value: 'delete', child: Text('Delete comment')),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            comment.body,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFFD7E0EE),
+              height: 1.5,
+            ),
+          ),
+        ],
       ),
     );
   }

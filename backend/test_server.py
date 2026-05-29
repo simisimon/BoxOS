@@ -3582,6 +3582,194 @@ class BackendServerTests(unittest.TestCase):
 
         self.assertEqual(len(payload["announcements"]), 1)
         self.assertEqual(payload["announcements"][0]["title"], "Bring jump ropes")
+        self.assertEqual(payload["announcements"][0]["like_count"], 0)
+        self.assertEqual(payload["announcements"][0]["comment_count"], 0)
+        self.assertFalse(payload["announcements"][0]["can_manage"])
+
+    def test_active_gym_member_can_like_and_unlike_announcement(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Likes Gym",
+                "logo_url": "https://example.com/likes.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Open gym note",
+                "description": "Stay after class if you need extra barbell work.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+
+        liked = self.post_json_with_auth(
+            "/announcements/likes",
+            {"announcement_id": created["announcement"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(liked["announcement"]["like_count"], 1)
+        self.assertTrue(liked["announcement"]["liked_by_me"])
+
+        unliked = self.delete_json_with_auth(
+            "/announcements/likes",
+            {"announcement_id": created["announcement"]["id"]},
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(unliked["announcement"]["like_count"], 0)
+        self.assertFalse(unliked["announcement"]["liked_by_me"])
+
+    def test_active_gym_member_can_comment_and_admin_can_delete_comment(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Comments Gym",
+                "logo_url": "https://example.com/comments.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Hero board",
+                "description": "Write your target split before class.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+
+        comment = self.post_json_with_auth(
+            "/announcements/comments",
+            {
+                "announcement_id": created["announcement"]["id"],
+                "body": "Love this. I am in.",
+            },
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(comment["comment"]["author_name"], "Demo Athlete")
+
+        payload = self.get_json_with_auth(
+            "/announcements",
+            access_token=athlete_login["access_token"],
+        )
+        self.assertEqual(payload["announcements"][0]["comment_count"], 1)
+        self.assertEqual(payload["announcements"][0]["comments"][0]["body"], "Love this. I am in.")
+        self.assertTrue(payload["announcements"][0]["comments"][0]["can_manage"])
+
+        deleted = self.delete_json_with_auth(
+            "/announcements/comments",
+            {"id": comment["comment"]["id"]},
+            access_token=admin_login["access_token"],
+        )
+        self.assertTrue(deleted["deleted"])
+
+    def test_non_author_member_cannot_edit_or_delete_comment(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Comment Guard Gym",
+                "logo_url": "https://example.com/comment-guard.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        self.post_json(
+            "/auth/signup",
+            {"email": "member2@boxos.app", "password": "BoxOS123!"},
+        )
+        self._verify_user_email("member2@boxos.app")
+        self._add_active_gym_membership(
+            email="member2@boxos.app",
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Pacing reminder",
+                "description": "Hold back in round one.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        author_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        other_login = self.post_json(
+            "/auth/login",
+            {"email": "member2@boxos.app", "password": "BoxOS123!"},
+        )
+        comment = self.post_json_with_auth(
+            "/announcements/comments",
+            {
+                "announcement_id": created["announcement"]["id"],
+                "body": "See you there.",
+            },
+            access_token=author_login["access_token"],
+        )
+
+        update_request = urllib.request.Request(
+            f"{self.base_url}/announcements/comments",
+            data=json_bytes({"id": comment["comment"]["id"], "body": "Hijack"}),
+            headers={
+                "Authorization": f"Bearer {other_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as update_error:
+            urllib.request.urlopen(update_request)
+        self.assertEqual(update_error.exception.code, 403)
+
+        delete_request = urllib.request.Request(
+            f"{self.base_url}/announcements/comments",
+            data=json_bytes({"id": comment["comment"]["id"]}),
+            headers={
+                "Authorization": f"Bearer {other_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="DELETE",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as delete_error:
+            urllib.request.urlopen(delete_request)
+        self.assertEqual(delete_error.exception.code, 403)
 
     def test_admin_and_author_trainer_can_update_and_delete_announcements(self) -> None:
         admin_login = self.post_json(

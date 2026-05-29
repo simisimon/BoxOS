@@ -33,7 +33,7 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
     );
     final items = response.data?['announcements'] as List<dynamic>? ?? const [];
     return items
-        .map((item) => _fromJson(item as Map<String, dynamic>?))
+        .map((item) => _announcementFromJson(item as Map<String, dynamic>?))
         .toList();
   }
 
@@ -74,7 +74,9 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
       },
       options: Options(headers: await _authHeaders()),
     );
-    return _fromJson(response.data?['announcement'] as Map<String, dynamic>?);
+    return _announcementFromJson(
+      response.data?['announcement'] as Map<String, dynamic>?,
+    );
   }
 
   @override
@@ -94,7 +96,9 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
       },
       options: Options(headers: await _authHeaders()),
     );
-    return _fromJson(response.data?['announcement'] as Map<String, dynamic>?);
+    return _announcementFromJson(
+      response.data?['announcement'] as Map<String, dynamic>?,
+    );
   }
 
   @override
@@ -102,6 +106,71 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
     await _dio.delete<void>(
       '/announcements',
       data: {'id': id},
+      options: Options(headers: await _authHeaders()),
+    );
+  }
+
+  @override
+  Future<Announcement> likeAnnouncement({required int announcementId}) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/announcements/likes',
+      data: {'announcement_id': announcementId},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _announcementFromJson(
+      response.data?['announcement'] as Map<String, dynamic>?,
+    );
+  }
+
+  @override
+  Future<Announcement> unlikeAnnouncement({required int announcementId}) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/announcements/likes',
+      data: {'announcement_id': announcementId},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _announcementFromJson(
+      response.data?['announcement'] as Map<String, dynamic>?,
+    );
+  }
+
+  @override
+  Future<AnnouncementComment> createComment({
+    required int announcementId,
+    required String body,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/announcements/comments',
+      data: {
+        'announcement_id': announcementId,
+        'body': body,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return _commentFromJson(response.data?['comment'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<AnnouncementComment> updateComment({
+    required int commentId,
+    required String body,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/announcements/comments',
+      data: {
+        'id': commentId,
+        'body': body,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return _commentFromJson(response.data?['comment'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<void> deleteComment({required int commentId}) async {
+    await _dio.delete<void>(
+      '/announcements/comments',
+      data: {'id': commentId},
       options: Options(headers: await _authHeaders()),
     );
   }
@@ -114,10 +183,11 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
     return {'Authorization': 'Bearer ${tokens.accessToken}'};
   }
 
-  Announcement _fromJson(Map<String, dynamic>? data) {
+  Announcement _announcementFromJson(Map<String, dynamic>? data) {
     if (data == null) {
       throw Exception('Missing announcement data.');
     }
+    final comments = data['comments'] as List<dynamic>? ?? const [];
     return Announcement(
       id: data['id'] as int? ?? 0,
       gymId: data['gym_id'] as int? ?? 0,
@@ -129,6 +199,28 @@ class ApiAnnouncementRepository implements AnnouncementRepository {
       authorName: data['author_name'] as String? ?? '',
       createdAt: DateTime.parse(data['created_at'] as String? ?? ''),
       updatedAt: DateTime.parse(data['updated_at'] as String? ?? ''),
+      likeCount: data['like_count'] as int? ?? 0,
+      likedByMe: data['liked_by_me'] as bool? ?? false,
+      commentCount: data['comment_count'] as int? ?? comments.length,
+      comments: comments
+          .map((item) => _commentFromJson(item as Map<String, dynamic>?))
+          .toList(),
+      canManage: data['can_manage'] as bool? ?? false,
+    );
+  }
+
+  AnnouncementComment _commentFromJson(Map<String, dynamic>? data) {
+    if (data == null) {
+      throw Exception('Missing announcement comment data.');
+    }
+    return AnnouncementComment(
+      id: data['id'] as int? ?? 0,
+      announcementId: data['announcement_id'] as int? ?? 0,
+      authorName: data['author_name'] as String? ?? '',
+      body: data['body'] as String? ?? '',
+      createdAt: DateTime.parse(data['created_at'] as String? ?? ''),
+      updatedAt: DateTime.parse(data['updated_at'] as String? ?? ''),
+      canManage: data['can_manage'] as bool? ?? false,
     );
   }
 }

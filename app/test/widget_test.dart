@@ -704,6 +704,11 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
   Announcement? lastCreatedAnnouncement;
   Announcement? lastUpdatedAnnouncement;
   int? lastDeletedAnnouncementId;
+  int? lastLikedAnnouncementId;
+  int? lastUnlikedAnnouncementId;
+  AnnouncementComment? lastCreatedComment;
+  AnnouncementComment? lastUpdatedComment;
+  int? lastDeletedCommentId;
   String uploadedImageUrl = 'https://example.com/uploaded-announcement.png';
 
   @override
@@ -728,6 +733,11 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
       authorName: 'Demo Coach',
       createdAt: DateTime.utc(2026, 5, 29, 7),
       updatedAt: DateTime.utc(2026, 5, 29, 7),
+      likeCount: 0,
+      likedByMe: false,
+      commentCount: 0,
+      comments: const [],
+      canManage: true,
     );
     announcements = [created, ...announcements];
     lastCreatedAnnouncement = created;
@@ -751,6 +761,11 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
       authorName: existing.authorName,
       createdAt: existing.createdAt,
       updatedAt: DateTime.utc(2026, 5, 29, 8),
+      likeCount: existing.likeCount,
+      likedByMe: existing.likedByMe,
+      commentCount: existing.commentCount,
+      comments: existing.comments,
+      canManage: existing.canManage,
     );
     announcements = [
       for (final item in announcements) if (item.id == id) updated else item,
@@ -763,6 +778,158 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
   Future<void> deleteAnnouncement({required int id}) async {
     announcements = announcements.where((item) => item.id != id).toList();
     lastDeletedAnnouncementId = id;
+  }
+
+  @override
+  Future<Announcement> likeAnnouncement({required int announcementId}) async {
+    lastLikedAnnouncementId = announcementId;
+    final updated = announcements.firstWhere((item) => item.id == announcementId);
+    final next = Announcement(
+      id: updated.id,
+      gymId: updated.gymId,
+      title: updated.title,
+      description: updated.description,
+      imageUrl: updated.imageUrl,
+      authorName: updated.authorName,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+      likeCount: updated.likeCount + 1,
+      likedByMe: true,
+      commentCount: updated.commentCount,
+      comments: updated.comments,
+      canManage: updated.canManage,
+    );
+    announcements = [for (final item in announcements) if (item.id == announcementId) next else item];
+    return next;
+  }
+
+  @override
+  Future<Announcement> unlikeAnnouncement({required int announcementId}) async {
+    lastUnlikedAnnouncementId = announcementId;
+    final updated = announcements.firstWhere((item) => item.id == announcementId);
+    final next = Announcement(
+      id: updated.id,
+      gymId: updated.gymId,
+      title: updated.title,
+      description: updated.description,
+      imageUrl: updated.imageUrl,
+      authorName: updated.authorName,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+      likeCount: updated.likeCount > 0 ? updated.likeCount - 1 : 0,
+      likedByMe: false,
+      commentCount: updated.commentCount,
+      comments: updated.comments,
+      canManage: updated.canManage,
+    );
+    announcements = [for (final item in announcements) if (item.id == announcementId) next else item];
+    return next;
+  }
+
+  @override
+  Future<AnnouncementComment> createComment({
+    required int announcementId,
+    required String body,
+  }) async {
+    final existing = announcements.firstWhere((item) => item.id == announcementId);
+    final comment = AnnouncementComment(
+      id: existing.comments.length + 1,
+      announcementId: announcementId,
+      authorName: 'Demo Coach',
+      body: body,
+      createdAt: DateTime.utc(2026, 5, 29, 8, 30),
+      updatedAt: DateTime.utc(2026, 5, 29, 8, 30),
+      canManage: true,
+    );
+    final updated = Announcement(
+      id: existing.id,
+      gymId: existing.gymId,
+      title: existing.title,
+      description: existing.description,
+      imageUrl: existing.imageUrl,
+      authorName: existing.authorName,
+      createdAt: existing.createdAt,
+      updatedAt: existing.updatedAt,
+      likeCount: existing.likeCount,
+      likedByMe: existing.likedByMe,
+      commentCount: existing.commentCount + 1,
+      comments: [...existing.comments, comment],
+      canManage: existing.canManage,
+    );
+    announcements = [for (final item in announcements) if (item.id == announcementId) updated else item];
+    lastCreatedComment = comment;
+    return comment;
+  }
+
+  @override
+  Future<AnnouncementComment> updateComment({
+    required int commentId,
+    required String body,
+  }) async {
+    late AnnouncementComment updatedComment;
+    announcements = [
+      for (final announcement in announcements)
+        if (announcement.comments.any((comment) => comment.id == commentId))
+          Announcement(
+            id: announcement.id,
+            gymId: announcement.gymId,
+            title: announcement.title,
+            description: announcement.description,
+            imageUrl: announcement.imageUrl,
+            authorName: announcement.authorName,
+            createdAt: announcement.createdAt,
+            updatedAt: announcement.updatedAt,
+            likeCount: announcement.likeCount,
+            likedByMe: announcement.likedByMe,
+            commentCount: announcement.commentCount,
+            comments: [
+              for (final comment in announcement.comments)
+                if (comment.id == commentId)
+                  updatedComment = AnnouncementComment(
+                    id: comment.id,
+                    announcementId: comment.announcementId,
+                    authorName: comment.authorName,
+                    body: body,
+                    createdAt: comment.createdAt,
+                    updatedAt: DateTime.utc(2026, 5, 29, 9),
+                    canManage: comment.canManage,
+                  )
+                else
+                  comment,
+            ],
+            canManage: announcement.canManage,
+          )
+        else
+          announcement,
+    ];
+    lastUpdatedComment = updatedComment;
+    return updatedComment;
+  }
+
+  @override
+  Future<void> deleteComment({required int commentId}) async {
+    announcements = [
+      for (final announcement in announcements)
+        if (announcement.comments.any((comment) => comment.id == commentId))
+          Announcement(
+            id: announcement.id,
+            gymId: announcement.gymId,
+            title: announcement.title,
+            description: announcement.description,
+            imageUrl: announcement.imageUrl,
+            authorName: announcement.authorName,
+            createdAt: announcement.createdAt,
+            updatedAt: announcement.updatedAt,
+            likeCount: announcement.likeCount,
+            likedByMe: announcement.likedByMe,
+            commentCount: announcement.commentCount - 1,
+            comments: [for (final comment in announcement.comments) if (comment.id != commentId) comment],
+            canManage: announcement.canManage,
+          )
+        else
+          announcement,
+    ];
+    lastDeletedCommentId = commentId;
   }
 
   @override
@@ -1287,6 +1454,11 @@ void main() {
           authorName: 'Demo Coach',
           createdAt: DateTime.utc(2026, 5, 29, 7),
           updatedAt: DateTime.utc(2026, 5, 29, 7),
+          likeCount: 0,
+          likedByMe: false,
+          commentCount: 0,
+          comments: const [],
+          canManage: false,
         ),
       ];
     final scheduleRepository = RecordingScheduleRepository();
@@ -1375,6 +1547,11 @@ void main() {
           authorName: 'Demo Coach',
           createdAt: DateTime.utc(2026, 5, 29, 7),
           updatedAt: DateTime.utc(2026, 5, 29, 7),
+          likeCount: 0,
+          likedByMe: false,
+          commentCount: 0,
+          comments: const [],
+          canManage: true,
         ),
       ];
 
@@ -1445,6 +1622,94 @@ void main() {
     await _settleApp(tester);
 
     expect(announcementRepository.lastDeletedAnnouncementId, isNotNull);
+  });
+
+  testWidgets('Home announcements support likes and comments', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository()
+      ..profile = const UserProfile(
+        email: 'athlete@boxos.app',
+        accountType: AccountType.athlete,
+        role: UserRole.athlete,
+        availableRoles: [UserRole.athlete],
+        displayName: 'Demo Athlete',
+        nickname: 'athlete',
+        notificationPreferences: NotificationPreferences(
+          bookingConfirmations: true,
+          waitlistPromotions: true,
+          paymentIssues: true,
+          wodPosted: true,
+          prAchievements: true,
+        ),
+        activeGym: GymSummary(
+          id: 1,
+          name: 'CrossFit Mitte',
+          slug: 'crossfit-mitte',
+          logoUrl: 'https://example.com/m.png',
+          timezone: 'Europe/Berlin',
+        ),
+        memberships: [
+          GymMembership(
+            gym: GymSummary(
+              id: 1,
+              name: 'CrossFit Mitte',
+              slug: 'crossfit-mitte',
+              logoUrl: 'https://example.com/m.png',
+              timezone: 'Europe/Berlin',
+            ),
+            role: UserRole.athlete,
+            availableRoles: [UserRole.athlete],
+            status: 'active',
+          ),
+        ],
+      );
+    final announcementRepository = RecordingAnnouncementRepository()
+      ..announcements = [
+        Announcement(
+          id: 1,
+          gymId: 1,
+          title: 'Friday throwdown',
+          description: 'Comment with your scaling plan before the heat list drops.',
+          imageUrl: null,
+          authorName: 'Demo Coach',
+          createdAt: DateTime.utc(2026, 5, 29, 7),
+          updatedAt: DateTime.utc(2026, 5, 29, 7),
+          likeCount: 0,
+          likedByMe: false,
+          commentCount: 0,
+          comments: const [],
+          canManage: false,
+        ),
+      ];
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/home',
+      announcementRepository: announcementRepository,
+    );
+
+    await tester.tap(find.text('Friday throwdown'));
+    await _settleApp(tester);
+
+    await tester.tap(find.text('0 likes'));
+    await _settleApp(tester);
+    expect(announcementRepository.lastLikedAnnouncementId, 1);
+
+    await tester.tap(find.text('Friday throwdown'));
+    await _settleApp(tester);
+    await tester.enterText(find.byType(TextField).first, 'I will scale volume but keep the pace.');
+    await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+    await _settleApp(tester);
+
+    expect(announcementRepository.lastCreatedComment, isNotNull);
+    await tester.tap(find.text('Friday throwdown'));
+    await _settleApp(tester);
+    expect(find.text('I will scale volume but keep the pace.'), findsOneWidget);
+    expect(announcementRepository.announcements.first.commentCount, 1);
   });
 
   testWidgets('Home booking quick access shows placeholder without bookings', (

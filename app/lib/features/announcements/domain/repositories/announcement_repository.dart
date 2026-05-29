@@ -1,5 +1,6 @@
-import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'dart:typed_data';
+
+import 'package:app/features/announcements/domain/models/announcement.dart';
 
 abstract class AnnouncementRepository {
   Future<List<Announcement>> fetchAnnouncements();
@@ -24,4 +25,20 @@ abstract class AnnouncementRepository {
   });
 
   Future<void> deleteAnnouncement({required int id});
+
+  Future<Announcement> likeAnnouncement({required int announcementId});
+
+  Future<Announcement> unlikeAnnouncement({required int announcementId});
+
+  Future<AnnouncementComment> createComment({
+    required int announcementId,
+    required String body,
+  });
+
+  Future<AnnouncementComment> updateComment({
+    required int commentId,
+    required String body,
+  });
+
+  Future<void> deleteComment({required int commentId});
 }

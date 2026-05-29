@@ -326,6 +326,23 @@ def init_db() -> None:
             created_at text not null,
             updated_at text not null
           );
+
+          create table if not exists announcement_likes (
+            announcement_id integer not null references announcements(id) on delete cascade,
+            user_id integer not null references users(id) on delete cascade,
+            created_at text not null,
+            primary key (announcement_id, user_id)
+          );
+
+          create table if not exists announcement_comments (
+            id integer primary key autoincrement,
+            announcement_id integer not null references announcements(id) on delete cascade,
+            gym_id integer not null references gyms(id) on delete cascade,
+            user_id integer not null references users(id) on delete cascade,
+            body text not null,
+            created_at text not null,
+            updated_at text not null
+          );
           """
       )
       ensure_user_columns(connection)
@@ -1144,6 +1161,12 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/announcements":
                 self.handle_create_announcement(body)
                 return
+            if path == "/announcements/likes":
+                self.handle_like_announcement(body)
+                return
+            if path == "/announcements/comments":
+                self.handle_create_announcement_comment(body)
+                return
             if path == "/announcements/image":
                 self.handle_upload_announcement_image(body)
                 return
@@ -1176,6 +1199,12 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/announcements":
                 self.handle_delete_announcement(body)
+                return
+            if path == "/announcements/likes":
+                self.handle_unlike_announcement(body)
+                return
+            if path == "/announcements/comments":
+                self.handle_delete_announcement_comment(body)
                 return
             if path == "/schedule/bookings":
                 self.handle_delete_class_booking(body)
@@ -1212,6 +1241,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/announcements":
                 self.handle_update_announcement(body)
+                return
+            if path == "/announcements/comments":
+                self.handle_update_announcement_comment(body)
                 return
             if path == "/schedule/bookings/attendance":
                 self.handle_update_class_attendance(body)
@@ -1630,6 +1662,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
               announcements.title,
               announcements.description,
               announcements.image_url,
+              announcements.created_by_user_id,
               announcements.created_at,
               announcements.updated_at,
               users.display_name as author_display_name,
@@ -1642,10 +1675,19 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             """,
             (session["active_gym_id"],),
         ).fetchall()
+        payload = [
+            announcement_payload(
+                connection,
+                row,
+                current_user_id=session["user_id"],
+                session_role=str(session["role"]),
+            )
+            for row in rows
+        ]
         connection.close()
         self.send_json(
             HTTPStatus.OK,
-            {"announcements": [announcement_payload(row) for row in rows]},
+            {"announcements": payload},
         )
 
     def handle_list_schedule_classes(self) -> None:
@@ -1896,6 +1938,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                   announcements.title,
                   announcements.description,
                   announcements.image_url,
+                  announcements.created_by_user_id,
                   announcements.created_at,
                   announcements.updated_at,
                   users.display_name as author_display_name,
@@ -1924,8 +1967,14 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     "has_image": bool(image_url),
                 },
             )
+        payload = announcement_payload(
+            connection,
+            row,
+            current_user_id=session["user_id"],
+            session_role=str(session["role"]),
+        )
         connection.close()
-        self.send_json(HTTPStatus.CREATED, {"announcement": announcement_payload(row)})
+        self.send_json(HTTPStatus.CREATED, {"announcement": payload})
 
     def handle_upload_announcement_image(self, body: dict[str, Any]) -> None:
         self.require_schedule_manager_session()
@@ -1992,6 +2041,7 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                   announcements.title,
                   announcements.description,
                   announcements.image_url,
+                  announcements.created_by_user_id,
                   announcements.created_at,
                   announcements.updated_at,
                   users.display_name as author_display_name,
@@ -2017,8 +2067,14 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                     "has_image": bool(image_url),
                 },
             )
+        payload = announcement_payload(
+            connection,
+            row,
+            current_user_id=session["user_id"],
+            session_role=str(session["role"]),
+        )
         connection.close()
-        self.send_json(HTTPStatus.OK, {"announcement": announcement_payload(row)})
+        self.send_json(HTTPStatus.OK, {"announcement": payload})
 
     def handle_delete_announcement(self, body: dict[str, Any]) -> None:
         session = self.require_schedule_manager_session()
@@ -2047,6 +2103,170 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 entity_type="announcement",
                 entity_id=announcement_id,
                 details={"title": existing["title"]},
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"deleted": True})
+
+    def handle_like_announcement(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        announcement_id = require_user_id(body.get("announcement_id"))
+        connection = get_connection()
+        announcement = get_announcement_row(
+            connection,
+            announcement_id=announcement_id,
+            gym_id=session["active_gym_id"],
+        )
+        if announcement is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Announcement not found.")
+        with connection:
+            connection.execute(
+                """
+                insert or ignore into announcement_likes (
+                  announcement_id, user_id, created_at
+                ) values (?, ?, ?)
+                """,
+                (announcement_id, session["user_id"], isoformat(now_utc())),
+            )
+        payload = announcement_payload(
+            connection,
+            announcement,
+            current_user_id=session["user_id"],
+            session_role=str(session["role"]),
+        )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"announcement": payload})
+
+    def handle_unlike_announcement(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        announcement_id = require_user_id(body.get("announcement_id"))
+        connection = get_connection()
+        announcement = get_announcement_row(
+            connection,
+            announcement_id=announcement_id,
+            gym_id=session["active_gym_id"],
+        )
+        if announcement is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Announcement not found.")
+        with connection:
+            connection.execute(
+                "delete from announcement_likes where announcement_id = ? and user_id = ?",
+                (announcement_id, session["user_id"]),
+            )
+        payload = announcement_payload(
+            connection,
+            announcement,
+            current_user_id=session["user_id"],
+            session_role=str(session["role"]),
+        )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"announcement": payload})
+
+    def handle_create_announcement_comment(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        announcement_id = require_user_id(body.get("announcement_id"))
+        comment_body = require_announcement_comment_body(body.get("body"))
+        timestamp = isoformat(now_utc())
+        connection = get_connection()
+        announcement = get_announcement_row(
+            connection,
+            announcement_id=announcement_id,
+            gym_id=session["active_gym_id"],
+        )
+        if announcement is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Announcement not found.")
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into announcement_comments (
+                  announcement_id, gym_id, user_id, body, created_at, updated_at
+                ) values (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    announcement_id,
+                    session["active_gym_id"],
+                    session["user_id"],
+                    comment_body,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            comment = get_announcement_comment_row(connection, int(cursor.lastrowid))
+            if comment is None:
+                raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "Comment creation failed.")
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="announcement_comment_created",
+                entity_type="announcement_comment",
+                entity_id=int(cursor.lastrowid),
+                details={"announcement_id": announcement_id},
+            )
+        payload = announcement_comment_payload(
+            comment,
+            current_user_id=session["user_id"],
+            session_role=str(session["role"]),
+        )
+        connection.close()
+        self.send_json(HTTPStatus.CREATED, {"comment": payload})
+
+    def handle_update_announcement_comment(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        comment_id = require_user_id(body.get("id"))
+        comment_body = require_announcement_comment_body(body.get("body"))
+        connection = get_connection()
+        existing = get_announcement_comment_row(connection, comment_id)
+        if existing is None or int(existing["gym_id"]) != int(session["active_gym_id"]):
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Comment not found.")
+        ensure_announcement_comment_manage_permission(existing, session)
+        with connection:
+            connection.execute(
+                "update announcement_comments set body = ?, updated_at = ? where id = ?",
+                (comment_body, isoformat(now_utc()), comment_id),
+            )
+            comment = get_announcement_comment_row(connection, comment_id)
+            if comment is None:
+                raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "Comment update failed.")
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="announcement_comment_updated",
+                entity_type="announcement_comment",
+                entity_id=comment_id,
+                details={"announcement_id": existing["announcement_id"]},
+            )
+        payload = announcement_comment_payload(
+            comment,
+            current_user_id=session["user_id"],
+            session_role=str(session["role"]),
+        )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"comment": payload})
+
+    def handle_delete_announcement_comment(self, body: dict[str, Any]) -> None:
+        session = self.require_active_gym_member_session()
+        comment_id = require_user_id(body.get("id"))
+        connection = get_connection()
+        existing = get_announcement_comment_row(connection, comment_id)
+        if existing is None or int(existing["gym_id"]) != int(session["active_gym_id"]):
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Comment not found.")
+        ensure_announcement_comment_manage_permission(existing, session)
+        with connection:
+            connection.execute("delete from announcement_comments where id = ?", (comment_id,))
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="announcement_comment_deleted",
+                entity_type="announcement_comment",
+                entity_id=comment_id,
+                details={"announcement_id": existing["announcement_id"]},
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"deleted": True})
@@ -4183,11 +4403,91 @@ def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def announcement_payload(row: sqlite3.Row) -> dict[str, Any]:
+def announcement_comment_payload(
+    row: sqlite3.Row,
+    *,
+    current_user_id: int,
+    session_role: str,
+) -> dict[str, Any]:
     author_name = (
         str(row["author_display_name"] or "").strip()
         or str(row["author_nickname"] or "").strip()
         or str(row["author_email"] or "").strip()
+    )
+    return {
+        "id": row["id"],
+        "announcement_id": row["announcement_id"],
+        "author_name": author_name,
+        "body": row["body"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "can_manage": session_role == "admin" or int(row["user_id"]) == int(current_user_id),
+    }
+
+
+def list_announcement_comments(
+    connection: sqlite3.Connection,
+    *,
+    announcement_id: int,
+    current_user_id: int,
+    session_role: str,
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """
+        select
+          announcement_comments.id,
+          announcement_comments.announcement_id,
+          announcement_comments.user_id,
+          announcement_comments.body,
+          announcement_comments.created_at,
+          announcement_comments.updated_at,
+          users.display_name as author_display_name,
+          users.nickname as author_nickname,
+          users.email as author_email
+        from announcement_comments
+        join users on users.id = announcement_comments.user_id
+        where announcement_comments.announcement_id = ?
+        order by announcement_comments.created_at asc, announcement_comments.id asc
+        """,
+        (announcement_id,),
+    ).fetchall()
+    return [
+        announcement_comment_payload(
+            row,
+            current_user_id=current_user_id,
+            session_role=session_role,
+        )
+        for row in rows
+    ]
+
+
+def announcement_payload(
+    connection: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    current_user_id: int,
+    session_role: str,
+) -> dict[str, Any]:
+    author_name = (
+        str(row["author_display_name"] or "").strip()
+        or str(row["author_nickname"] or "").strip()
+        or str(row["author_email"] or "").strip()
+    )
+    like_count = int(
+        connection.execute(
+            "select count(*) from announcement_likes where announcement_id = ?",
+            (row["id"],),
+        ).fetchone()[0]
+    )
+    liked_by_me = connection.execute(
+        "select 1 from announcement_likes where announcement_id = ? and user_id = ?",
+        (row["id"], current_user_id),
+    ).fetchone() is not None
+    comments = list_announcement_comments(
+        connection,
+        announcement_id=int(row["id"]),
+        current_user_id=current_user_id,
+        session_role=session_role,
     )
     return {
         "id": row["id"],
@@ -4198,7 +4498,65 @@ def announcement_payload(row: sqlite3.Row) -> dict[str, Any]:
         "author_name": author_name,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        "like_count": like_count,
+        "liked_by_me": liked_by_me,
+        "comment_count": len(comments),
+        "comments": comments,
+        "can_manage": session_role == "admin" or int(row["created_by_user_id"]) == int(current_user_id),
     }
+
+
+def get_announcement_row(
+    connection: sqlite3.Connection,
+    *,
+    announcement_id: int,
+    gym_id: int,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        select
+          announcements.id,
+          announcements.gym_id,
+          announcements.title,
+          announcements.description,
+          announcements.image_url,
+          announcements.created_by_user_id,
+          announcements.created_at,
+          announcements.updated_at,
+          users.display_name as author_display_name,
+          users.nickname as author_nickname,
+          users.email as author_email
+        from announcements
+        join users on users.id = announcements.created_by_user_id
+        where announcements.id = ? and announcements.gym_id = ?
+        """,
+        (announcement_id, gym_id),
+    ).fetchone()
+
+
+def get_announcement_comment_row(
+    connection: sqlite3.Connection,
+    comment_id: int,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        select
+          announcement_comments.id,
+          announcement_comments.announcement_id,
+          announcement_comments.gym_id,
+          announcement_comments.user_id,
+          announcement_comments.body,
+          announcement_comments.created_at,
+          announcement_comments.updated_at,
+          users.display_name as author_display_name,
+          users.nickname as author_nickname,
+          users.email as author_email
+        from announcement_comments
+        join users on users.id = announcement_comments.user_id
+        where announcement_comments.id = ?
+        """,
+        (comment_id,),
+    ).fetchone()
 
 
 def ensure_announcement_manage_permission(
@@ -4212,6 +4570,20 @@ def ensure_announcement_manage_permission(
     raise ApiError(
         HTTPStatus.FORBIDDEN,
         "Only the announcement author or an admin can modify this announcement.",
+    )
+
+
+def ensure_announcement_comment_manage_permission(
+    comment: sqlite3.Row,
+    session: sqlite3.Row,
+) -> None:
+    if session["role"] == "admin":
+        return
+    if int(comment["user_id"]) == int(session["user_id"]):
+        return
+    raise ApiError(
+        HTTPStatus.FORBIDDEN,
+        "Only the comment author or an admin can modify this comment.",
     )
 
 
@@ -4677,6 +5049,15 @@ def require_announcement_description(value: Any) -> str:
     if len(description) > 5000:
         raise ApiError(HTTPStatus.BAD_REQUEST, "Announcement description must be 5000 characters or fewer.")
     return description
+
+
+def require_announcement_comment_body(value: Any) -> str:
+    body = str(value or "").strip()
+    if not body:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Comment is required.")
+    if len(body) > 1500:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Comment must be 1500 characters or fewer.")
+    return body
 
 
 def require_optional_image_url(value: Any) -> str | None:
