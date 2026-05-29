@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,9 @@ import 'package:app/core/routing/router.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:app/features/auth/domain/repositories/auth_repository.dart';
+import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
+import 'package:app/features/announcements/domain/models/announcement.dart';
+import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
 import 'package:app/features/auth/presentation/screens/change_password_screen.dart';
 import 'package:app/features/auth/presentation/screens/delete_account_screen.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
@@ -694,6 +699,76 @@ class RecordingScheduleRepository implements ScheduleRepository {
   }
 }
 
+class RecordingAnnouncementRepository implements AnnouncementRepository {
+  List<Announcement> announcements = const [];
+  Announcement? lastCreatedAnnouncement;
+  Announcement? lastUpdatedAnnouncement;
+  int? lastDeletedAnnouncementId;
+  String uploadedImageUrl = 'https://example.com/uploaded-announcement.png';
+
+  @override
+  Future<String> uploadAnnouncementImage({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  }) async => uploadedImageUrl;
+
+  @override
+  Future<Announcement> createAnnouncement({
+    required String title,
+    required String description,
+    String? imageUrl,
+  }) async {
+    final created = Announcement(
+      id: announcements.length + 1,
+      gymId: 1,
+      title: title,
+      description: description,
+      imageUrl: imageUrl,
+      authorName: 'Demo Coach',
+      createdAt: DateTime.utc(2026, 5, 29, 7),
+      updatedAt: DateTime.utc(2026, 5, 29, 7),
+    );
+    announcements = [created, ...announcements];
+    lastCreatedAnnouncement = created;
+    return created;
+  }
+
+  @override
+  Future<Announcement> updateAnnouncement({
+    required int id,
+    required String title,
+    required String description,
+    String? imageUrl,
+  }) async {
+    final existing = announcements.firstWhere((item) => item.id == id);
+    final updated = Announcement(
+      id: existing.id,
+      gymId: existing.gymId,
+      title: title,
+      description: description,
+      imageUrl: imageUrl,
+      authorName: existing.authorName,
+      createdAt: existing.createdAt,
+      updatedAt: DateTime.utc(2026, 5, 29, 8),
+    );
+    announcements = [
+      for (final item in announcements) if (item.id == id) updated else item,
+    ];
+    lastUpdatedAnnouncement = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> deleteAnnouncement({required int id}) async {
+    announcements = announcements.where((item) => item.id != id).toList();
+    lastDeletedAnnouncementId = id;
+  }
+
+  @override
+  Future<List<Announcement>> fetchAnnouncements() async => announcements;
+}
+
 Future<void> _configureTestViewport(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1440, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -730,6 +805,7 @@ Future<GoRouter> _pumpAuthenticatedRouter(
   String initialLocation = '/home',
   RecordingGymRepository? gymRepository,
   RecordingScheduleRepository? scheduleRepository,
+  RecordingAnnouncementRepository? announcementRepository,
 }) async {
   await _configureTestViewport(tester);
 
@@ -742,6 +818,9 @@ Future<GoRouter> _pumpAuthenticatedRouter(
       ),
       scheduleRepositoryProvider.overrideWith(
         (ref) => scheduleRepository ?? RecordingScheduleRepository(),
+      ),
+      announcementRepositoryProvider.overrideWith(
+        (ref) => announcementRepository ?? RecordingAnnouncementRepository(),
       ),
     ],
   );
@@ -825,6 +904,7 @@ Future<ProviderContainer> _pumpAppWithRepository(
     repository,
     RecordingProfileRepository(),
     RecordingGymRepository(),
+    RecordingAnnouncementRepository(),
   );
 }
 
@@ -833,6 +913,7 @@ Future<ProviderContainer> _pumpAppWithRepositories(
   RecordingAuthRepository repository,
   RecordingProfileRepository profileRepository,
   RecordingGymRepository gymRepository,
+  RecordingAnnouncementRepository announcementRepository,
 ) async {
   await _configureTestViewport(tester);
 
@@ -844,6 +925,7 @@ Future<ProviderContainer> _pumpAppWithRepositories(
         (ref) => effectiveProfileRepository,
       ),
       gymRepositoryProvider.overrideWith((ref) => gymRepository),
+      announcementRepositoryProvider.overrideWith((ref) => announcementRepository),
     ],
   );
 
@@ -1157,10 +1239,64 @@ void main() {
   testWidgets('Home screen uses stacked full-width sections', (
     WidgetTester tester,
   ) async {
-    final profileRepository = RecordingProfileRepository();
+    final profileRepository = RecordingProfileRepository()
+      ..profile = const UserProfile(
+        email: 'demo@boxos.app',
+        accountType: AccountType.athlete,
+        role: UserRole.athlete,
+        availableRoles: [UserRole.athlete],
+        displayName: 'Demo Athlete',
+        nickname: 'demo',
+        notificationPreferences: NotificationPreferences(
+          bookingConfirmations: true,
+          waitlistPromotions: true,
+          paymentIssues: true,
+          wodPosted: true,
+          prAchievements: true,
+        ),
+        activeGym: GymSummary(
+          id: 1,
+          name: 'CrossFit Mitte',
+          slug: 'crossfit-mitte',
+          logoUrl: 'https://example.com/m.png',
+          timezone: 'Europe/Berlin',
+        ),
+        memberships: [
+          GymMembership(
+            gym: GymSummary(
+              id: 1,
+              name: 'CrossFit Mitte',
+              slug: 'crossfit-mitte',
+              logoUrl: 'https://example.com/m.png',
+              timezone: 'Europe/Berlin',
+            ),
+            role: UserRole.athlete,
+            availableRoles: [UserRole.athlete],
+            status: 'active',
+          ),
+        ],
+      );
+    final announcementRepository = RecordingAnnouncementRepository()
+      ..announcements = [
+        Announcement(
+          id: 1,
+          gymId: 1,
+          title: 'Murph briefing',
+          description: 'Heat assignments go live tonight.',
+          imageUrl: null,
+          authorName: 'Demo Coach',
+          createdAt: DateTime.utc(2026, 5, 29, 7),
+          updatedAt: DateTime.utc(2026, 5, 29, 7),
+        ),
+      ];
+    final scheduleRepository = RecordingScheduleRepository();
     final container = ProviderContainer(
       overrides: [
         profileRepositoryProvider.overrideWith((ref) => profileRepository),
+        announcementRepositoryProvider.overrideWith(
+          (ref) => announcementRepository,
+        ),
+        scheduleRepositoryProvider.overrideWith((ref) => scheduleRepository),
       ],
     );
     addTearDown(container.dispose);
@@ -1174,21 +1310,323 @@ void main() {
     await _settleApp(tester);
 
     expect(find.text('Today at a glance'), findsNothing);
-    expect(find.text('NEWS'), findsOneWidget);
-    expect(find.text('Booking State'), findsOneWidget);
-    expect(find.text('Workout Highlights'), findsOneWidget);
-    final newsTop = tester.getTopLeft(find.text('NEWS')).dy;
-    final todayTop = tester.getTopLeft(find.text('Booking State')).dy;
-    final bookingTop = tester.getTopLeft(find.text('Booking State')).dy;
-    final workoutTop = tester.getTopLeft(find.text('Workout Highlights')).dy;
-    expect(newsTop, lessThan(todayTop));
-    expect(bookingTop, lessThan(workoutTop));
-
-    expect(find.text('Booking State'), findsOneWidget);
-    expect(find.text('Workout Highlights'), findsOneWidget);
-
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    expect(find.text('Class access'), findsOneWidget);
+    expect(find.text('Book a class'), findsOneWidget);
+    final bookingSectionTop = tester.getTopLeft(find.text('Class access')).dy;
+    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
     await _settleApp(tester);
+    expect(find.text('Murph briefing'), findsOneWidget);
+    final todayTop = tester.getTopLeft(find.text('Murph briefing')).dy;
+    expect(bookingSectionTop, lessThan(todayTop));
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await _settleApp(tester);
+  });
+
+  testWidgets('Coach can create and expand announcements on home', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository()
+      ..profile = const UserProfile(
+        email: 'trainer@boxos.app',
+        accountType: AccountType.athlete,
+        role: UserRole.trainer,
+        availableRoles: [UserRole.athlete, UserRole.trainer],
+        displayName: 'Demo Trainer',
+        nickname: 'trainer',
+        notificationPreferences: NotificationPreferences(
+          bookingConfirmations: true,
+          waitlistPromotions: true,
+          paymentIssues: true,
+          wodPosted: true,
+          prAchievements: true,
+        ),
+        activeGym: GymSummary(
+          id: 1,
+          name: 'CrossFit Mitte',
+          slug: 'crossfit-mitte',
+          logoUrl: 'https://example.com/m.png',
+          timezone: 'Europe/Berlin',
+        ),
+        memberships: [
+          GymMembership(
+            gym: GymSummary(
+              id: 1,
+              name: 'CrossFit Mitte',
+              slug: 'crossfit-mitte',
+              logoUrl: 'https://example.com/m.png',
+              timezone: 'Europe/Berlin',
+            ),
+            role: UserRole.trainer,
+            availableRoles: [UserRole.athlete, UserRole.trainer],
+            status: 'active',
+          ),
+        ],
+      );
+    final announcementRepository = RecordingAnnouncementRepository()
+      ..announcements = [
+        Announcement(
+          id: 1,
+          gymId: 1,
+          title: 'Open Gym shift',
+          description: 'Open Gym starts 30 minutes later this Friday.',
+          imageUrl: null,
+          authorName: 'Demo Coach',
+          createdAt: DateTime.utc(2026, 5, 29, 7),
+          updatedAt: DateTime.utc(2026, 5, 29, 7),
+        ),
+      ];
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/home',
+      announcementRepository: announcementRepository,
+    );
+
+    expect(find.text('Post a new announcement'), findsOneWidget);
+    expect(find.textContaining('Posted by Demo Coach'), findsOneWidget);
+    await tester.tap(find.text('Open Gym shift'));
+    await _settleApp(tester);
+    expect(
+      find.text('Open Gym starts 30 minutes later this Friday.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Post a new announcement'));
+    await _settleApp(tester);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Title'),
+      'Saturday heat list',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Description'),
+      'Heat assignments are now live at the front desk.',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Post Announcement'));
+    await _settleApp(tester);
+
+    expect(announcementRepository.lastCreatedAnnouncement, isNotNull);
+    expect(
+      announcementRepository.lastCreatedAnnouncement!.title,
+      'Saturday heat list',
+    );
+    expect(find.text('Saturday heat list'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.more_horiz).first);
+    await _settleApp(tester);
+    await tester.tap(find.text('Edit announcement'));
+    await _settleApp(tester);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Title'),
+      'Saturday heat list updated',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Description'),
+      'Updated heat assignments are now live.',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save Changes'));
+    await _settleApp(tester);
+
+    expect(announcementRepository.lastUpdatedAnnouncement, isNotNull);
+    expect(
+      announcementRepository.lastUpdatedAnnouncement!.title,
+      'Saturday heat list updated',
+    );
+    expect(find.text('Saturday heat list updated'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.more_horiz).first);
+    await _settleApp(tester);
+    await tester.tap(find.text('Delete announcement'));
+    await _settleApp(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await _settleApp(tester);
+
+    expect(announcementRepository.lastDeletedAnnouncementId, isNotNull);
+  });
+
+  testWidgets('Home booking quick access shows placeholder without bookings', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository()
+      ..profile = const UserProfile(
+        email: 'athlete@boxos.app',
+        accountType: AccountType.athlete,
+        role: UserRole.athlete,
+        availableRoles: [UserRole.athlete],
+        displayName: 'Demo Athlete',
+        nickname: 'athlete',
+        notificationPreferences: NotificationPreferences(
+          bookingConfirmations: true,
+          waitlistPromotions: true,
+          paymentIssues: true,
+          wodPosted: true,
+          prAchievements: true,
+        ),
+        activeGym: GymSummary(
+          id: 1,
+          name: 'CrossFit Mitte',
+          slug: 'crossfit-mitte',
+          logoUrl: 'https://example.com/m.png',
+          timezone: 'Europe/Berlin',
+        ),
+        memberships: [
+          GymMembership(
+            gym: GymSummary(
+              id: 1,
+              name: 'CrossFit Mitte',
+              slug: 'crossfit-mitte',
+              logoUrl: 'https://example.com/m.png',
+              timezone: 'Europe/Berlin',
+            ),
+            role: UserRole.athlete,
+            availableRoles: [UserRole.athlete],
+            status: 'active',
+          ),
+        ],
+      );
+    final scheduleRepository = RecordingScheduleRepository()
+      ..classes = [
+        ScheduleClass(
+          id: 1,
+          gymId: 1,
+          title: 'Morning WOD',
+          classType: 'WOD',
+          startTime: DateTime.now().add(const Duration(hours: 3)),
+          durationMinutes: 60,
+          capacity: 12,
+          assignedTrainer: const ScheduleTrainer(
+            id: 2,
+            displayName: 'Demo Trainer',
+            nickname: 'trainer',
+          ),
+          wodDescription: '18.1',
+          bookedCount: 3,
+          remainingSpots: 9,
+          waitlistCount: 0,
+          isBooked: false,
+          isWaitlisted: false,
+          attendanceStatus: null,
+          bookings: const [],
+        ),
+      ];
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/home',
+      scheduleRepository: scheduleRepository,
+    );
+
+    expect(find.text('Book a class'), findsOneWidget);
+    expect(find.text('No class booked yet'), findsOneWidget);
+  });
+
+  testWidgets('Home booking quick access shows booked classes carousel', (
+    WidgetTester tester,
+  ) async {
+    final repository = RecordingAuthRepository()..isSignedIn = true;
+    final profileRepository = RecordingProfileRepository()
+      ..profile = const UserProfile(
+        email: 'athlete@boxos.app',
+        accountType: AccountType.athlete,
+        role: UserRole.athlete,
+        availableRoles: [UserRole.athlete],
+        displayName: 'Demo Athlete',
+        nickname: 'athlete',
+        notificationPreferences: NotificationPreferences(
+          bookingConfirmations: true,
+          waitlistPromotions: true,
+          paymentIssues: true,
+          wodPosted: true,
+          prAchievements: true,
+        ),
+        activeGym: GymSummary(
+          id: 1,
+          name: 'CrossFit Mitte',
+          slug: 'crossfit-mitte',
+          logoUrl: 'https://example.com/m.png',
+          timezone: 'Europe/Berlin',
+        ),
+        memberships: [
+          GymMembership(
+            gym: GymSummary(
+              id: 1,
+              name: 'CrossFit Mitte',
+              slug: 'crossfit-mitte',
+              logoUrl: 'https://example.com/m.png',
+              timezone: 'Europe/Berlin',
+            ),
+            role: UserRole.athlete,
+            availableRoles: [UserRole.athlete],
+            status: 'active',
+          ),
+        ],
+      );
+    final scheduleRepository = RecordingScheduleRepository()
+      ..classes = [
+        ScheduleClass(
+          id: 11,
+          gymId: 1,
+          title: 'Lunch Lift',
+          classType: 'Strength',
+          startTime: DateTime.now().add(const Duration(hours: 4)),
+          durationMinutes: 60,
+          capacity: 12,
+          assignedTrainer: const ScheduleTrainer(
+            id: 2,
+            displayName: 'Demo Trainer',
+            nickname: 'trainer',
+          ),
+          wodDescription: '',
+          bookedCount: 8,
+          remainingSpots: 4,
+          waitlistCount: 0,
+          isBooked: true,
+          isWaitlisted: false,
+          attendanceStatus: null,
+          bookings: const [],
+        ),
+        ScheduleClass(
+          id: 12,
+          gymId: 1,
+          title: 'Evening Engine',
+          classType: 'Conditioning',
+          startTime: DateTime.now().add(const Duration(hours: 8)),
+          durationMinutes: 60,
+          capacity: 14,
+          assignedTrainer: const ScheduleTrainer(
+            id: 3,
+            displayName: 'Coach Maya',
+            nickname: 'maya',
+          ),
+          wodDescription: '',
+          bookedCount: 10,
+          remainingSpots: 4,
+          waitlistCount: 0,
+          isBooked: true,
+          isWaitlisted: false,
+          attendanceStatus: null,
+          bookings: const [],
+        ),
+      ];
+
+    await _pumpAuthenticatedRouter(
+      tester,
+      repository,
+      profileRepository,
+      initialLocation: '/home',
+      scheduleRepository: scheduleRepository,
+    );
+
+    expect(find.text('Book a class'), findsOneWidget);
+    expect(find.text('Lunch Lift'), findsOneWidget);
+    expect(find.text('Evening Engine'), findsOneWidget);
+    expect(find.text('No class booked yet'), findsNothing);
   });
 
   testWidgets('Notification settings flow updates preferences', (

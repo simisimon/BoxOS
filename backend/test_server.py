@@ -3447,6 +3447,391 @@ class BackendServerTests(unittest.TestCase):
 
         self.assertEqual(error_context.exception.code, 403)
 
+    def test_admin_and_trainer_can_create_announcements(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Gym",
+                "logo_url": "https://example.com/announcement.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+
+        admin_created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Murph Prep Saturday",
+                "description": "We start at 9:00. Bring your vest if you have one.",
+                "image_url": "https://example.com/murph.png",
+            },
+            access_token=admin_login["access_token"],
+        )
+        trainer_created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Mobility Block",
+                "description": "Coach-led mobility after the evening class.",
+            },
+            access_token=trainer_login["access_token"],
+        )
+
+        self.assertEqual(admin_created["announcement"]["title"], "Murph Prep Saturday")
+        self.assertEqual(
+            trainer_created["announcement"]["title"],
+            "Mobility Block",
+        )
+        self.assertEqual(
+            trainer_created["announcement"]["author_name"],
+            "Demo Trainer",
+        )
+
+    def test_athlete_cannot_create_announcement(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Guard Gym",
+                "logo_url": "https://example.com/guard.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+
+        request = urllib.request.Request(
+            f"{self.base_url}/announcements",
+            data=json_bytes(
+                {
+                    "title": "Not allowed",
+                    "description": "Athletes should not post announcements.",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+
+        self.assertEqual(error_context.exception.code, 403)
+
+    def test_active_gym_members_can_list_announcements(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Feed Gym",
+                "logo_url": "https://example.com/feed.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Bring jump ropes",
+                "description": "Tomorrow starts with double-under prep before the WOD.",
+            },
+            access_token=admin_login["access_token"],
+        )
+
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        payload = self.get_json_with_auth(
+            "/announcements",
+            access_token=athlete_login["access_token"],
+        )
+
+        self.assertEqual(len(payload["announcements"]), 1)
+        self.assertEqual(payload["announcements"][0]["title"], "Bring jump ropes")
+
+    def test_admin_and_author_trainer_can_update_and_delete_announcements(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Edit Gym",
+                "logo_url": "https://example.com/edit.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Old title",
+                "description": "Old description.",
+            },
+            access_token=trainer_login["access_token"],
+        )
+
+        updated = self.patch_json(
+            "/announcements",
+            {
+                "id": created["announcement"]["id"],
+                "title": "New title",
+                "description": "New description.",
+                "image_url": "https://example.com/new.png",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(updated["announcement"]["title"], "New title")
+        self.assertEqual(updated["announcement"]["author_name"], "Demo Trainer")
+
+        deleted = self.delete_json_with_auth(
+            "/announcements",
+            {"id": created["announcement"]["id"]},
+            access_token=trainer_login["access_token"],
+        )
+        self.assertTrue(deleted["deleted"])
+
+        payload = self.get_json_with_auth(
+            "/announcements",
+            access_token=admin_login["access_token"],
+        )
+        self.assertEqual(payload["announcements"], [])
+
+    def test_non_author_trainer_cannot_update_or_delete_announcement(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Author Guard Gym",
+                "logo_url": "https://example.com/author-guard.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        self.post_json(
+            "/auth/signup",
+            {"email": "trainer2@boxos.app", "password": "BoxOS123!"},
+        )
+        self._verify_user_email("trainer2@boxos.app")
+        self._add_active_gym_membership(
+            email="trainer2@boxos.app",
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        author_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+        other_trainer_login = self.post_json(
+            "/auth/login",
+            {"email": "trainer2@boxos.app", "password": "BoxOS123!"},
+        )
+
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Coach note",
+                "description": "Original author only.",
+            },
+            access_token=author_login["access_token"],
+        )
+
+        update_request = urllib.request.Request(
+            f"{self.base_url}/announcements",
+            data=json_bytes(
+                {
+                    "id": created["announcement"]["id"],
+                    "title": "Hijacked",
+                    "description": "Should fail.",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {other_trainer_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as update_error:
+            urllib.request.urlopen(update_request)
+        self.assertEqual(update_error.exception.code, 403)
+
+        delete_request = urllib.request.Request(
+            f"{self.base_url}/announcements",
+            data=json_bytes({"id": created["announcement"]["id"]}),
+            headers={
+                "Authorization": f"Bearer {other_trainer_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="DELETE",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as delete_error:
+            urllib.request.urlopen(delete_request)
+        self.assertEqual(delete_error.exception.code, 403)
+
+    def test_athlete_cannot_update_or_delete_announcement(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Lock Gym",
+                "logo_url": "https://example.com/lock.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.DEMO_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete"],
+        )
+        created = self.post_json_with_auth(
+            "/announcements",
+            {
+                "title": "Protected",
+                "description": "Protected body.",
+            },
+            access_token=admin_login["access_token"],
+        )
+        athlete_login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+
+        update_request = urllib.request.Request(
+            f"{self.base_url}/announcements",
+            data=json_bytes(
+                {
+                    "id": created["announcement"]["id"],
+                    "title": "Nope",
+                    "description": "Still nope.",
+                }
+            ),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as update_error:
+            urllib.request.urlopen(update_request)
+        self.assertEqual(update_error.exception.code, 403)
+
+        delete_request = urllib.request.Request(
+            f"{self.base_url}/announcements",
+            data=json_bytes({"id": created["announcement"]["id"]}),
+            headers={
+                "Authorization": f"Bearer {athlete_login['access_token']}",
+                "Content-Type": "application/json",
+            },
+            method="DELETE",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as delete_error:
+            urllib.request.urlopen(delete_request)
+        self.assertEqual(delete_error.exception.code, 403)
+
+    def test_trainer_can_upload_announcement_image(self) -> None:
+        admin_login = self.post_json(
+            "/auth/login",
+            {"email": server.ADMIN_EMAIL, "password": server.ADMIN_PASSWORD},
+        )
+        created_gym = self.post_json_with_auth(
+            "/gyms",
+            {
+                "name": "Announcement Upload Gym",
+                "logo_url": "https://example.com/upload.png",
+                "timezone": "Europe/Berlin",
+            },
+            access_token=admin_login["access_token"],
+        )
+        self._add_active_gym_membership(
+            email=server.TRAINER_EMAIL,
+            gym_id=created_gym["gym"]["id"],
+            roles=["athlete", "trainer"],
+            active_role="trainer",
+        )
+        trainer_login = self.post_json(
+            "/auth/login",
+            {"email": server.TRAINER_EMAIL, "password": server.TRAINER_PASSWORD},
+        )
+
+        uploaded = self.post_json_with_auth(
+            "/announcements/image",
+            {
+                "filename": "briefing.png",
+                "content_type": "image/png",
+                "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+yF9sAAAAASUVORK5CYII=",
+            },
+            access_token=trainer_login["access_token"],
+        )
+
+        self.assertIn("/uploads/announcements/", uploaded["image_url"])
+
+        with urllib.request.urlopen(uploaded["image_url"]) as response:
+            body = response.read()
+            content_type = response.headers.get_content_type()
+
+        self.assertEqual(content_type, "image/png")
+        self.assertGreater(len(body), 0)
+
     def test_active_gym_members_can_list_daily_workouts(self) -> None:
         admin_login = self.post_json(
             "/auth/login",

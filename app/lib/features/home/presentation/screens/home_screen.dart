@@ -1,23 +1,136 @@
+import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:app/core/errors/error_message.dart';
+import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
+import 'package:app/features/announcements/domain/models/announcement.dart';
+import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
+import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  late Future<List<Announcement>> _announcementsFuture;
+  late Future<List<ScheduleClass>> _scheduleFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _announcementsFuture = _loadAnnouncements();
+    _scheduleFuture = _loadSchedule();
+  }
+
+  Future<List<Announcement>> _loadAnnouncements() {
+    return ref.read(announcementRepositoryProvider).fetchAnnouncements();
+  }
+
+  Future<List<ScheduleClass>> _loadSchedule() {
+    return ref.read(scheduleRepositoryProvider).fetchSchedule();
+  }
+
+  Future<void> _refreshAnnouncements() async {
+    setState(() {
+      _announcementsFuture = _loadAnnouncements();
+    });
+  }
+
+  Future<void> _refreshSchedule() async {
+    setState(() {
+      _scheduleFuture = _loadSchedule();
+    });
+  }
+
+  Future<void> _openAnnouncementComposer() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _AnnouncementComposerDialog(),
+    );
+    if (saved == true) {
+      await _refreshAnnouncements();
+    }
+  }
+
+  Future<void> _openAnnouncementEditor(Announcement announcement) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => _AnnouncementComposerDialog(existing: announcement),
+    );
+    if (saved == true) {
+      await _refreshAnnouncements();
+    }
+  }
+
+  Future<void> _deleteAnnouncement(Announcement announcement) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F1727),
+        title: const Text('Delete announcement', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Delete "${announcement.title}"? This can’t be undone.',
+          style: const TextStyle(color: Color(0xFFD7E0EE)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD64545)),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await ref
+          .read(announcementRepositoryProvider)
+          .deleteAnnouncement(id: announcement.id);
+      if (!mounted) {
+        return;
+      }
+      await _refreshAnnouncements();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to delete announcement'),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
     final notificationInboxAsync = ref.watch(notificationInboxProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final unreadNotifications = notificationInboxAsync.hasValue
         ? notificationInboxAsync.value!.unreadCount
         : 0;
+    final canManageAnnouncements =
+        profile?.activeGym != null &&
+        (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -42,12 +155,32 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           const _SectionTitle(
-            eyebrow: 'News',
-            title: 'Gym pulse',
-            subtitle: 'A sharper operational snapshot for the active BoxOS context.',
+            eyebrow: 'Booking',
+            title: 'Class access',
+            subtitle: 'Jump straight into booking and keep your reserved classes one swipe away.',
           ),
           const SizedBox(height: 12),
-          const _HighlightRail(),
+          _BookingQuickAccessRail(
+            scheduleFuture: _scheduleFuture,
+            hasActiveGym: profile?.activeGym != null,
+            onOpenBooking: () => context.go('/my-box'),
+            onRefresh: _refreshSchedule,
+          ),
+          const SizedBox(height: 20),
+          const _SectionTitle(
+            eyebrow: 'News',
+            title: 'Gym pulse',
+            subtitle: 'Announcements from your gym live here first, with expandable detail when you need it.',
+          ),
+          const SizedBox(height: 12),
+          _AnnouncementRail(
+            announcementsFuture: _announcementsFuture,
+            canManageAnnouncements: canManageAnnouncements,
+            hasActiveGym: profile?.activeGym != null,
+            onCreateAnnouncement: _openAnnouncementComposer,
+            onEditAnnouncement: _openAnnouncementEditor,
+            onDeleteAnnouncement: _deleteAnnouncement,
+          ),
           const SizedBox(height: 20),
           const _SectionTitle(
             eyebrow: 'Today',
@@ -536,46 +669,447 @@ class _AccentBadge extends StatelessWidget {
   }
 }
 
-class _HighlightRail extends StatelessWidget {
-  const _HighlightRail();
+class _BookingQuickAccessRail extends StatelessWidget {
+  const _BookingQuickAccessRail({
+    required this.scheduleFuture,
+    required this.hasActiveGym,
+    required this.onOpenBooking,
+    required this.onRefresh,
+  });
+
+  final Future<List<ScheduleClass>> scheduleFuture;
+  final bool hasActiveGym;
+  final VoidCallback onOpenBooking;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: const [
-        _NewsCard(
-          icon: Icons.event_available_outlined,
-          title: 'Booking State',
-          subtitle:
-              'Upcoming class status, attendance signals, and operational changes deserve stronger visual priority here.',
-          accentColor: Color(0xFF5FB2FF),
-        ),
-        SizedBox(height: 12),
-        _NewsCard(
-          icon: Icons.leaderboard_outlined,
-          title: 'Workout Highlights',
-          subtitle:
-              'Workout-posted and PR alerts are live in the inbox and now framed like actual product highlights instead of placeholders.',
-          accentColor: Color(0xFFFF6B2C),
-        ),
-      ],
+    if (!hasActiveGym) {
+      return _AnnouncementEmptyState(
+        icon: Icons.calendar_month_outlined,
+        title: 'No active gym selected',
+        subtitle:
+            'Pick or join a gym first, then your booking shortcut and reserved classes appear here.',
+        actionLabel: null,
+        onTap: null,
+      );
+    }
+
+    return FutureBuilder<List<ScheduleClass>>(
+      future: scheduleFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return _AnnouncementEmptyState(
+            icon: Icons.error_outline,
+            title: 'Couldn’t load your bookings',
+            subtitle: errorMessageFrom(
+              snapshot.error!,
+              fallback: 'Class shortcuts are unavailable right now.',
+            ),
+            actionLabel: 'Retry',
+            onTap: onRefresh,
+          );
+        }
+
+        final now = DateTime.now();
+        final bookedItems = (snapshot.data ?? const <ScheduleClass>[])
+            .where((item) => item.isBooked && item.startTime.isAfter(now))
+            .toList()
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+        return SizedBox(
+          height: 220,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: bookedItems.isEmpty ? 2 : bookedItems.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _BookingLauncherCard(onTap: onOpenBooking);
+              }
+              if (bookedItems.isEmpty) {
+                return const _BookingPlaceholderCard();
+              }
+              return _BookedClassCard(
+                item: bookedItems[index - 1],
+                onTap: onOpenBooking,
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
 
-class _NewsCard extends StatelessWidget {
-  const _NewsCard({
+class _BookingLauncherCard extends StatelessWidget {
+  const _BookingLauncherCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 184,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFF6B2C), Color(0xFFE4511E), Color(0xFFB83314)],
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x44FF6B2C),
+                  blurRadius: 28,
+                  offset: Offset(0, 18),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Color(0x22FFFFFF),
+                    child: Icon(Icons.add_rounded, color: Colors.white, size: 26),
+                  ),
+                  Spacer(),
+                  Text(
+                    'Book a class',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Open the schedule and reserve your next slot fast.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Color(0xFFFBE7DE), height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookingPlaceholderCard extends StatelessWidget {
+  const _BookingPlaceholderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        color: const Color(0xFF101827),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: const SingleChildScrollView(
+        physics: NeverScrollableScrollPhysics(),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.event_busy_outlined,
+                color: Color(0xFF5FB2FF),
+                size: 26,
+              ),
+              SizedBox(height: 14),
+              Text(
+                'No class booked yet',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Reserve one and it stays pinned here for quick access.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Color(0xFFB8C4D9), height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookedClassCard extends StatelessWidget {
+  const _BookedClassCard({required this.item, required this.onTap});
+
+  final ScheduleClass item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final localizations = MaterialLocalizations.of(context);
+    final startLabel = localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(item.startTime.toLocal()),
+      alwaysUse24HourFormat: true,
+    );
+    final dayLabel = localizations.formatShortDate(item.startTime.toLocal());
+    return SizedBox(
+      width: 240,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: onTap,
+          child: Ink(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF141E31), Color(0xFF101827)],
+              ),
+              border: Border.all(color: Colors.white.withOpacity(0.07)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const _AccentBadge(
+                      icon: Icons.check_circle_outline_rounded,
+                      color: Color(0xFF7EE7C6),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        color: const Color(0x147EE7C6),
+                        border: Border.all(color: const Color(0x337EE7C6)),
+                      ),
+                    child: const Text(
+                        'BOOKED',
+                        style: TextStyle(
+                          color: Color(0xFF7EE7C6),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$dayLabel · $startLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFD7E0EE),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.assignedTrainer == null
+                      ? item.classType
+                      : '${item.classType} · ${item.assignedTrainer!.displayName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF8EA0BE),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementRail extends StatelessWidget {
+  const _AnnouncementRail({
+    required this.announcementsFuture,
+    required this.canManageAnnouncements,
+    required this.hasActiveGym,
+    required this.onCreateAnnouncement,
+    required this.onEditAnnouncement,
+    required this.onDeleteAnnouncement,
+  });
+
+  final Future<List<Announcement>> announcementsFuture;
+  final bool canManageAnnouncements;
+  final bool hasActiveGym;
+  final Future<void> Function() onCreateAnnouncement;
+  final Future<void> Function(Announcement announcement) onEditAnnouncement;
+  final Future<void> Function(Announcement announcement) onDeleteAnnouncement;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Announcement>>(
+      future: announcementsFuture,
+      builder: (context, snapshot) {
+        if (!hasActiveGym) {
+          return _AnnouncementEmptyState(
+            icon: Icons.campaign_outlined,
+            title: 'No active gym selected',
+            subtitle:
+                'Announcements appear once you are inside an active gym context.',
+            actionLabel: null,
+            onTap: null,
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return _AnnouncementEmptyState(
+            icon: Icons.error_outline,
+            title: 'Failed to load announcements',
+            subtitle: errorMessageFrom(
+              snapshot.error!,
+              fallback: 'Announcements could not be loaded.',
+            ),
+            actionLabel: canManageAnnouncements ? 'Try posting instead' : null,
+            onTap: canManageAnnouncements ? onCreateAnnouncement : null,
+          );
+        }
+
+        final announcements = snapshot.data ?? const <Announcement>[];
+        if (announcements.isEmpty) {
+          return _AnnouncementEmptyState(
+            icon: Icons.campaign_outlined,
+            title: 'No announcements yet',
+            subtitle: canManageAnnouncements
+                ? 'Post the first update so athletes see a real gym news feed instead of placeholders.'
+                : 'Your coaches and admins have not posted any announcements yet.',
+            actionLabel: canManageAnnouncements ? 'Create Announcement' : null,
+            onTap: canManageAnnouncements ? onCreateAnnouncement : null,
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (canManageAnnouncements) ...[
+              _AnnouncementComposerBanner(onTap: onCreateAnnouncement),
+              const SizedBox(height: 12),
+            ],
+            for (final (index, announcement) in announcements.indexed) ...[
+              _AnnouncementCard(
+                announcement: announcement,
+                canManage: canManageAnnouncements,
+                onEdit: () => onEditAnnouncement(announcement),
+                onDelete: () => onDeleteAnnouncement(announcement),
+              ),
+              if (index < announcements.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AnnouncementComposerBanner extends StatelessWidget {
+  const _AnnouncementComposerBanner({required this.onTap});
+
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0x33FF6B2C), Color(0x22141E31)],
+        ),
+        border: Border.all(color: const Color(0x66FF6B2C)),
+      ),
+      child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          leading: const _AccentBadge(
+            icon: Icons.add_comment_outlined,
+            color: Color(0xFFFF6B2C),
+          ),
+          title: const Text(
+            'Post a new announcement',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          subtitle: const Text(
+            'Share schedule changes, event reminders, or coach notes right on the home feed.',
+            style: TextStyle(color: Color(0xFFB8C4D9), height: 1.45),
+          ),
+          trailing: const Icon(Icons.north_east_rounded, color: Color(0xFFFF6B2C)),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementEmptyState extends StatelessWidget {
+  const _AnnouncementEmptyState({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.accentColor,
+    required this.actionLabel,
+    required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color accentColor;
+  final String? actionLabel;
+  final Future<void> Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -584,47 +1118,211 @@ class _NewsCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF141E31),
-            accentColor.withOpacity(0.12),
-          ],
+          colors: [Color(0xFF141E31), Color(0xFF101827)],
         ),
         border: Border.all(color: Colors.white.withOpacity(0.07)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: accentColor),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB8C4D9),
-                    height: 1.45,
-                  ),
-                ),
-              ],
+          _AccentBadge(icon: icon, color: const Color(0xFF7EE7C6)),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
             ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFFB8C4D9),
+              height: 1.45,
+            ),
+          ),
+          if (actionLabel != null && onTap != null) ...[
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B2C),
+                foregroundColor: Colors.white,
+              ),
+              child: Text(actionLabel!),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard({
+    required this.announcement,
+    required this.canManage,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final Announcement announcement;
+  final bool canManage;
+  final Future<void> Function() onEdit;
+  final Future<void> Function() onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF141E31), Color(0xFF101827)],
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          collapsedIconColor: const Color(0xFF7EE7C6),
+          iconColor: const Color(0xFF7EE7C6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          collapsedShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      announcement.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Posted by ${announcement.authorName} · ${_formatAnnouncementDate(announcement.createdAt)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8EA0BE),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (canManage)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, color: Color(0xFFB8C4D9)),
+                  color: const Color(0xFF141E31),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      onEdit();
+                    } else if (value == 'delete') {
+                      onDelete();
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Text('Edit announcement'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text('Delete announcement'),
+                    ),
+                  ],
+                ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          subtitle: announcement.imageUrl == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        announcement.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: const Color(0xFF0F1727),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: Color(0xFF8EA0BE),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+          children: [
+            if (announcement.updatedAt.isAfter(announcement.createdAt)) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    'Last updated ${_formatAnnouncementDate(announcement.updatedAt)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF8EA0BE),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                announcement.description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFD7E0EE),
+                  height: 1.55,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _formatAnnouncementDate(DateTime value) {
+  final local = value.toLocal();
+  final month = switch (local.month) {
+    1 => 'Jan',
+    2 => 'Feb',
+    3 => 'Mar',
+    4 => 'Apr',
+    5 => 'May',
+    6 => 'Jun',
+    7 => 'Jul',
+    8 => 'Aug',
+    9 => 'Sep',
+    10 => 'Oct',
+    11 => 'Nov',
+    _ => 'Dec',
+  };
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.day} $month · $hour:$minute';
 }
 
 class _HomeAction {
@@ -844,6 +1542,322 @@ class _ActionSpotlight extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AnnouncementComposerDialog extends ConsumerStatefulWidget {
+  const _AnnouncementComposerDialog({this.existing});
+
+  final Announcement? existing;
+
+  @override
+  ConsumerState<_AnnouncementComposerDialog> createState() =>
+      _AnnouncementComposerDialogState();
+}
+
+class _AnnouncementComposerDialogState
+    extends ConsumerState<_AnnouncementComposerDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _imageUrlController = TextEditingController();
+  final _imagePicker = ImagePicker();
+  bool _isSaving = false;
+  bool _isUploadingImage = false;
+  Uint8List? _selectedImageBytes;
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    if (existing != null) {
+      _titleController.text = existing.title;
+      _descriptionController.text = existing.description;
+      _imageUrlController.text = existing.imageUrl ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    if (_isSaving || _isUploadingImage) {
+      return;
+    }
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 1800,
+      );
+      if (picked == null) {
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      final contentType = switch (picked.mimeType) {
+        final type? when type.trim().isNotEmpty => type,
+        _ when picked.name.toLowerCase().endsWith('.png') => 'image/png',
+        _ when picked.name.toLowerCase().endsWith('.webp') => 'image/webp',
+        _ => 'image/jpeg',
+      };
+      setState(() {
+        _isUploadingImage = true;
+        _selectedImageBytes = bytes;
+      });
+      final imageUrl = await ref
+          .read(announcementRepositoryProvider)
+          .uploadAnnouncementImage(
+            bytes: bytes,
+            filename: picked.name,
+            contentType: contentType,
+          );
+      if (!mounted) {
+        return;
+      }
+      _imageUrlController.text = imageUrl;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to upload image'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_isSaving || !_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final repository = ref.read(announcementRepositoryProvider);
+      if (_isEditing) {
+        await repository.updateAnnouncement(
+          id: widget.existing!.id,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          imageUrl: _imageUrlController.text.trim().isEmpty
+              ? null
+              : _imageUrlController.text.trim(),
+        );
+      } else {
+        await repository.createAnnouncement(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          imageUrl: _imageUrlController.text.trim().isEmpty
+              ? null
+              : _imageUrlController.text.trim(),
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(
+              error,
+              fallback: _isEditing
+                  ? 'Failed to update announcement'
+                  : 'Failed to create announcement',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF0F1727),
+      title: Text(
+        _isEditing ? 'Edit Announcement' : 'Create Announcement',
+        style: const TextStyle(color: Colors.white),
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0x2218D2A8), Color(0x22FF6B2C)],
+                    ),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Add a gallery image',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Pick a photo from your phone. It will upload and attach automatically.',
+                        style: TextStyle(
+                          color: Color(0xFFB8C4D9),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_selectedImageBytes != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Image.memory(
+                              _selectedImageBytes!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Row(
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _isUploadingImage
+                                ? null
+                                : _pickImageFromGallery,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF6B2C),
+                              foregroundColor: Colors.white,
+                            ),
+                            icon: _isUploadingImage
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.photo_library_outlined),
+                            label: Text(
+                              _isUploadingImage
+                                  ? 'Uploading...'
+                                  : 'Choose from gallery',
+                            ),
+                          ),
+                          if (_imageUrlController.text.trim().isNotEmpty) ...[
+                            const SizedBox(width: 10),
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _imageUrlController.clear();
+                                  _selectedImageBytes = null;
+                                });
+                              },
+                              child: const Text('Remove image'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _titleController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    hintText: 'Saturday schedule update',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Title is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _descriptionController,
+                  minLines: 4,
+                  maxLines: 7,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'Write the actual update athletes should read.',
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Description is required';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _submit,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFFF6B2C),
+            foregroundColor: Colors.white,
+          ),
+          child: Text(
+            _isSaving
+                ? (_isEditing ? 'Saving...' : 'Posting...')
+                : (_isEditing ? 'Save Changes' : 'Post Announcement'),
+          ),
+        ),
+      ],
     );
   }
 }

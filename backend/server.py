@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import hmac
 import json
+import mimetypes
 import secrets
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
@@ -24,10 +27,18 @@ except ImportError:  # pragma: no cover - optional runtime fallback
     pytz = None
 
 DB_PATH = Path(__file__).with_name("boxos_dev.db")
+UPLOADS_ROOT = Path(__file__).with_name("uploads")
+ANNOUNCEMENT_UPLOADS_DIR = UPLOADS_ROOT / "announcements"
 HOST = "127.0.0.1"
 PORT = 8080
 DELETE_RETENTION_DAYS = 30
 MAX_RECURRENCE_OCCURRENCES = 365
+MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024
+ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 ALLOWED_ROLES = {"athlete", "trainer", "admin"}
 ALLOWED_ACCOUNT_TYPES = {"athlete", "admin"}
 RECURRENCE_OCCURRENCE_LIMITS = {
@@ -88,13 +99,22 @@ def create_token(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(24)}"
 
 
+class ManagedConnection(sqlite3.Connection):
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except sqlite3.Error:
+            pass
+
+
 def get_connection() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(DB_PATH, factory=ManagedConnection)
     connection.row_factory = sqlite3.Row
     return connection
 
 
 def init_db() -> None:
+    ANNOUNCEMENT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     connection = get_connection()
     with connection:
       connection.executescript(
@@ -294,6 +314,17 @@ def init_db() -> None:
             entity_id integer,
             read_at text,
             created_at text not null
+          );
+
+          create table if not exists announcements (
+            id integer primary key autoincrement,
+            gym_id integer not null references gyms(id) on delete cascade,
+            title text not null,
+            description text not null,
+            image_url text,
+            created_by_user_id integer not null references users(id) on delete cascade,
+            created_at text not null,
+            updated_at text not null
           );
           """
       )
@@ -983,6 +1014,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
         try:
             self.run_housekeeping()
             path = urlparse(self.path).path
+            if path.startswith("/uploads/"):
+                self.handle_uploaded_file(path)
+                return
             if path == "/health":
                 self.send_json(HTTPStatus.OK, {"status": "ok"})
                 return
@@ -1013,6 +1047,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/notifications":
                 self.handle_list_notifications()
+                return
+            if path == "/announcements":
+                self.handle_list_announcements()
                 return
             if path == "/gyms":
                 self.handle_list_gyms()
@@ -1104,6 +1141,12 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/programming/workouts":
                 self.handle_create_daily_workout(body)
                 return
+            if path == "/announcements":
+                self.handle_create_announcement(body)
+                return
+            if path == "/announcements/image":
+                self.handle_upload_announcement_image(body)
+                return
             if path == "/programming/whiteboard-results":
                 self.handle_submit_whiteboard_result(body)
                 return
@@ -1130,6 +1173,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/schedule/classes":
                 self.handle_delete_schedule_class(body)
+                return
+            if path == "/announcements":
+                self.handle_delete_announcement(body)
                 return
             if path == "/schedule/bookings":
                 self.handle_delete_class_booking(body)
@@ -1163,6 +1209,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/schedule/classes":
                 self.handle_update_schedule_class(body)
+                return
+            if path == "/announcements":
+                self.handle_update_announcement(body)
                 return
             if path == "/schedule/bookings/attendance":
                 self.handle_update_class_attendance(body)
@@ -1570,6 +1619,35 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             },
         )
 
+    def handle_list_announcements(self) -> None:
+        session = self.require_active_gym_member_session()
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select
+              announcements.id,
+              announcements.gym_id,
+              announcements.title,
+              announcements.description,
+              announcements.image_url,
+              announcements.created_at,
+              announcements.updated_at,
+              users.display_name as author_display_name,
+              users.nickname as author_nickname,
+              users.email as author_email
+            from announcements
+            join users on users.id = announcements.created_by_user_id
+            where announcements.gym_id = ?
+            order by announcements.created_at desc, announcements.id desc
+            """,
+            (session["active_gym_id"],),
+        ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {"announcements": [announcement_payload(row) for row in rows]},
+        )
+
     def handle_list_schedule_classes(self) -> None:
         session = self.require_active_gym_member_session()
         connection = get_connection()
@@ -1784,6 +1862,194 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 "created_count": len(payloads),
             },
         )
+
+    def handle_create_announcement(self, body: dict[str, Any]) -> None:
+        session = self.require_schedule_manager_session()
+        title = require_announcement_title(body.get("title"))
+        description = require_announcement_description(body.get("description"))
+        image_url = require_optional_image_url(body.get("image_url"))
+        timestamp = isoformat(now_utc())
+        connection = get_connection()
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into announcements (
+                  gym_id, title, description, image_url, created_by_user_id, created_at, updated_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session["active_gym_id"],
+                    title,
+                    description,
+                    image_url,
+                    session["user_id"],
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            row = connection.execute(
+                """
+                select
+                  announcements.id,
+                  announcements.gym_id,
+                  announcements.title,
+                  announcements.description,
+                  announcements.image_url,
+                  announcements.created_at,
+                  announcements.updated_at,
+                  users.display_name as author_display_name,
+                  users.nickname as author_nickname,
+                  users.email as author_email
+                from announcements
+                join users on users.id = announcements.created_by_user_id
+                where announcements.id = ?
+                """,
+                (int(cursor.lastrowid),),
+            ).fetchone()
+            if row is None:
+                raise ApiError(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    "Announcement creation failed.",
+                )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="announcement_created",
+                entity_type="announcement",
+                entity_id=int(cursor.lastrowid),
+                details={
+                    "title": title,
+                    "has_image": bool(image_url),
+                },
+            )
+        connection.close()
+        self.send_json(HTTPStatus.CREATED, {"announcement": announcement_payload(row)})
+
+    def handle_upload_announcement_image(self, body: dict[str, Any]) -> None:
+        self.require_schedule_manager_session()
+        filename = require_upload_filename(body.get("filename"))
+        content_type = require_announcement_image_content_type(body.get("content_type"))
+        raw_bytes = require_base64_bytes(
+            body.get("data_base64"),
+            label="Image data",
+            max_bytes=MAX_ANNOUNCEMENT_IMAGE_BYTES,
+        )
+        extension = ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES[content_type]
+        stored_name = f"announcement_{secrets.token_urlsafe(12)}{extension}"
+        file_path = ANNOUNCEMENT_UPLOADS_DIR / stored_name
+        file_path.write_bytes(raw_bytes)
+        self.send_json(
+            HTTPStatus.CREATED,
+            {
+                "filename": filename,
+                "image_url": self.absolute_url_for_path(
+                    f"/uploads/announcements/{stored_name}"
+                ),
+            },
+        )
+
+    def handle_update_announcement(self, body: dict[str, Any]) -> None:
+        session = self.require_schedule_manager_session()
+        announcement_id = require_user_id(body.get("id"))
+        title = require_announcement_title(body.get("title"))
+        description = require_announcement_description(body.get("description"))
+        image_url = require_optional_image_url(body.get("image_url"))
+        timestamp = isoformat(now_utc())
+        connection = get_connection()
+        existing = connection.execute(
+            """
+            select id, created_by_user_id from announcements where id = ? and gym_id = ?
+            """,
+            (announcement_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Announcement not found.")
+        ensure_announcement_manage_permission(existing, session)
+        with connection:
+            connection.execute(
+                """
+                update announcements
+                set title = ?, description = ?, image_url = ?, updated_at = ?
+                where id = ? and gym_id = ?
+                """,
+                (
+                    title,
+                    description,
+                    image_url,
+                    timestamp,
+                    announcement_id,
+                    session["active_gym_id"],
+                ),
+            )
+            row = connection.execute(
+                """
+                select
+                  announcements.id,
+                  announcements.gym_id,
+                  announcements.title,
+                  announcements.description,
+                  announcements.image_url,
+                  announcements.created_at,
+                  announcements.updated_at,
+                  users.display_name as author_display_name,
+                  users.nickname as author_nickname,
+                  users.email as author_email
+                from announcements
+                join users on users.id = announcements.created_by_user_id
+                where announcements.id = ?
+                """,
+                (announcement_id,),
+            ).fetchone()
+            if row is None:
+                raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "Announcement update failed.")
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="announcement_updated",
+                entity_type="announcement",
+                entity_id=announcement_id,
+                details={
+                    "title": title,
+                    "has_image": bool(image_url),
+                },
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"announcement": announcement_payload(row)})
+
+    def handle_delete_announcement(self, body: dict[str, Any]) -> None:
+        session = self.require_schedule_manager_session()
+        announcement_id = require_user_id(body.get("id"))
+        connection = get_connection()
+        existing = connection.execute(
+            """
+            select id, title, created_by_user_id from announcements where id = ? and gym_id = ?
+            """,
+            (announcement_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            connection.close()
+            raise ApiError(HTTPStatus.NOT_FOUND, "Announcement not found.")
+        ensure_announcement_manage_permission(existing, session)
+        with connection:
+            connection.execute(
+                "delete from announcements where id = ? and gym_id = ?",
+                (announcement_id, session["active_gym_id"]),
+            )
+            write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="announcement_deleted",
+                entity_type="announcement",
+                entity_id=announcement_id,
+                details={"title": existing["title"]},
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"deleted": True})
 
     def handle_update_schedule_class(self, body: dict[str, Any]) -> None:
         session = self.require_schedule_manager_session()
@@ -3803,6 +4069,29 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNAUTHORIZED, "Missing bearer token.")
         return header.removeprefix("Bearer ").strip()
 
+    def absolute_url_for_path(self, path: str) -> str:
+        host = self.headers.get("Host") or f"{HOST}:{PORT}"
+        return f"http://{host}{path}"
+
+    def handle_uploaded_file(self, path: str) -> None:
+        relative_path = path.removeprefix("/")
+        candidate = (Path(__file__).parent / relative_path).resolve()
+        uploads_root = UPLOADS_ROOT.resolve()
+        if not candidate.is_file():
+            raise ApiError(HTTPStatus.NOT_FOUND, "Uploaded file not found.")
+        if uploads_root not in candidate.parents:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Uploaded file not found.")
+        body = candidate.read_bytes()
+        content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
+        self.send_response(HTTPStatus.OK.value)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+        self.end_headers()
+        self.wfile.write(body)
+
     def send_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status.value)
@@ -3892,6 +4181,38 @@ def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
         "read_at": row["read_at"],
         "created_at": row["created_at"],
     }
+
+
+def announcement_payload(row: sqlite3.Row) -> dict[str, Any]:
+    author_name = (
+        str(row["author_display_name"] or "").strip()
+        or str(row["author_nickname"] or "").strip()
+        or str(row["author_email"] or "").strip()
+    )
+    return {
+        "id": row["id"],
+        "gym_id": row["gym_id"],
+        "title": row["title"],
+        "description": row["description"],
+        "image_url": row["image_url"],
+        "author_name": author_name,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def ensure_announcement_manage_permission(
+    announcement: sqlite3.Row,
+    session: sqlite3.Row,
+) -> None:
+    if session["role"] == "admin":
+        return
+    if int(announcement["created_by_user_id"]) == int(session["user_id"]):
+        return
+    raise ApiError(
+        HTTPStatus.FORBIDDEN,
+        "Only the announcement author or an admin can modify this announcement.",
+    )
 
 
 def create_notification(
@@ -4304,6 +4625,69 @@ def require_logo_url(value: Any) -> str:
     if len(logo_url) > 300:
         raise ApiError(HTTPStatus.BAD_REQUEST, "Gym logo URL must be 300 characters or fewer.")
     return logo_url
+
+
+def require_upload_filename(value: Any) -> str:
+    filename = Path(str(value or "upload").strip()).name
+    if not filename:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Filename is required.")
+    if len(filename) > 120:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Filename is too long.")
+    return filename
+
+
+def require_announcement_image_content_type(value: Any) -> str:
+    content_type = str(value or "").strip().lower()
+    if content_type not in ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Announcement images must be JPEG, PNG, or WEBP.",
+        )
+    return content_type
+
+
+def require_base64_bytes(value: Any, *, label: str, max_bytes: int) -> bytes:
+    data = str(value or "").strip()
+    if not data:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} is required.")
+    try:
+        decoded = base64.b64decode(data, validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} must be valid base64.") from error
+    if not decoded:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} is required.")
+    if len(decoded) > max_bytes:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} is too large.")
+    return decoded
+
+
+def require_announcement_title(value: Any) -> str:
+    title = str(value or "").strip()
+    if not title:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Announcement title is required.")
+    if len(title) > 120:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Announcement title must be 120 characters or fewer.")
+    return title
+
+
+def require_announcement_description(value: Any) -> str:
+    description = str(value or "").strip()
+    if not description:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Announcement description is required.")
+    if len(description) > 5000:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Announcement description must be 5000 characters or fewer.")
+    return description
+
+
+def require_optional_image_url(value: Any) -> str | None:
+    if value is None:
+        return None
+    image_url = str(value).strip()
+    if not image_url:
+        return None
+    if len(image_url) > 500:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Announcement image URL must be 500 characters or fewer.")
+    return image_url
 
 
 def require_timezone(value: Any) -> str:
