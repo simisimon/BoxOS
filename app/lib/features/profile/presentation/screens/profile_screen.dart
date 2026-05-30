@@ -231,9 +231,10 @@ class _ProfileHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor = _accentForRole(roleLabel);
+    const accentColor = appPrimary;
 
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
@@ -317,17 +318,6 @@ class _ProfileHero extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static Color _accentForRole(String roleLabel) {
-    switch (roleLabel.toLowerCase()) {
-      case 'admin':
-        return appPrimary;
-      case 'trainer':
-        return appPrimary;
-      default:
-        return appPrimary;
-    }
   }
 }
 

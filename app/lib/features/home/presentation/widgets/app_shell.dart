@@ -117,7 +117,7 @@ class _ShellHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = _accentForRole(roleLabel);
+    const accentColor = appPrimary;
     final titleLine = displayName.isEmpty
         ? roleLabel
         : '$displayName • $roleLabel';
@@ -241,17 +241,6 @@ class _ShellHeader extends StatelessWidget {
     }
     return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
         .toUpperCase();
-  }
-
-  static Color _accentForRole(String roleLabel) {
-    switch (roleLabel.toLowerCase()) {
-      case 'admin':
-        return appPrimary;
-      case 'trainer':
-        return _shellBlue;
-      default:
-        return appPrimary;
-    }
   }
 }
 

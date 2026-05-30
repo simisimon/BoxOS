@@ -158,6 +158,7 @@ class _NotificationsHero extends StatelessWidget {
     const accentColor = appPrimary;
 
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),

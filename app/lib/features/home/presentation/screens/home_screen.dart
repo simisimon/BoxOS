@@ -406,7 +406,7 @@ class _HeroPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final roleLabel = profileRole?.label ?? 'Athlete';
     final greeting = displayName.isEmpty ? roleLabel : displayName;
-    final accent = _accentForRole(profileRole);
+    const accent = _homeAccent;
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -504,18 +504,6 @@ class _HeroPanel extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static Color _accentForRole(UserRole? role) {
-    switch (role) {
-      case UserRole.admin:
-        return _homeAccent;
-      case UserRole.trainer:
-        return _homeAccent;
-      case UserRole.athlete:
-      case null:
-        return _homeAccent;
-    }
   }
 }
 
