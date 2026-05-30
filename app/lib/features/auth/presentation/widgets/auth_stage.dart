@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:flutter/material.dart';
@@ -137,7 +135,7 @@ class AuthFieldGroup extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _AccentBadge(icon: icon, color: accentColor),
+              AppAccentBadge(icon: icon, color: accentColor),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -261,8 +259,6 @@ class _BrandHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -406,33 +402,6 @@ class _HeroCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AccentBadge extends StatelessWidget {
-  const _AccentBadge({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: appBorder),
-          ),
-          child: Icon(icon, color: color),
-        ),
       ),
     );
   }

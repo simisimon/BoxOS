@@ -37,3 +37,40 @@ BoxDecoration appHeroDecoration({double radius = 28}) => BoxDecoration(
     BoxShadow(color: Color(0x120F172A), blurRadius: 28, offset: Offset(0, 14)),
   ],
 );
+
+/// Rounded square icon badge with an accent-tinted gradient, used across
+/// feature cards, list tiles, and section headers. Consolidates what used to
+/// be a dozen identical private `_AccentBadge` copies.
+class AppAccentBadge extends StatelessWidget {
+  const AppAccentBadge({
+    super.key,
+    required this.icon,
+    this.color = appPrimary,
+    this.size = 50,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.28),
+            color.withValues(alpha: 0.12),
+          ],
+        ),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Icon(icon, color: color),
+    );
+  }
+}

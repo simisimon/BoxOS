@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
@@ -410,6 +409,7 @@ class _HeroPanel extends StatelessWidget {
     final accent = _accentForRole(profileRole);
 
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
@@ -528,38 +528,32 @@ class _MetricBand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: appBorder),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: appSurfaceAlt,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: appBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: appSubtleText,
+              letterSpacing: 1.1,
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label.toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: appSubtleText,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: appText,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -709,7 +703,7 @@ class _FeatureCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: accentColor),
+          AppAccentBadge(icon: icon, color: accentColor),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -744,31 +738,6 @@ class _FeatureCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _AccentBadge extends StatelessWidget {
-  const _AccentBadge({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
-        ),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Icon(icon, color: color),
     );
   }
 }
@@ -892,13 +861,17 @@ class _BookingLauncherCard extends StatelessWidget {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: Color(0x22FFFFFF),
-                    child: Icon(Icons.add_rounded, color: appText, size: 26),
+                    child: Icon(
+                      Icons.add_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                   ),
                   Spacer(),
                   Text(
                     'Book a class',
                     style: TextStyle(
-                      color: appText,
+                      color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -1004,7 +977,7 @@ class _BookedClassCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const _AccentBadge(
+                    const AppAccentBadge(
                       icon: Icons.check_circle_outline_rounded,
                       color: appPrimary,
                     ),
@@ -1197,7 +1170,7 @@ class _AnnouncementComposerBanner extends StatelessWidget {
             horizontal: 18,
             vertical: 10,
           ),
-          leading: const _AccentBadge(
+          leading: const AppAccentBadge(
             icon: Icons.add_comment_outlined,
             color: appPrimary,
           ),
@@ -1249,7 +1222,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: _homeAccent),
+          AppAccentBadge(icon: icon, color: _homeAccent),
           const SizedBox(height: 14),
           Text(
             title,
@@ -1900,7 +1873,7 @@ class _ActionTile extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: Row(
               children: [
-                _AccentBadge(icon: action.icon, color: action.accentColor),
+                AppAccentBadge(icon: action.icon, color: action.accentColor),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -1969,7 +1942,7 @@ class _ActionSpotlight extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: accentColor),
+          AppAccentBadge(icon: icon, color: accentColor),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

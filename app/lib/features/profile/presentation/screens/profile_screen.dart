@@ -1,5 +1,4 @@
 import 'package:app/core/presentation/app_chrome.dart';
-import 'dart:ui';
 
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
@@ -430,7 +429,7 @@ class _PrimaryActionTile extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: Row(
               children: [
-                _AccentBadge(icon: icon, color: accentColor),
+                AppAccentBadge(icon: icon, color: accentColor),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -502,7 +501,7 @@ class _SecondaryActionTile extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: Row(
               children: [
-                _AccentBadge(icon: icon, color: accentColor),
+                AppAccentBadge(icon: icon, color: accentColor),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -651,37 +650,6 @@ class _GlowOrb extends StatelessWidget {
           gradient: RadialGradient(
             colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AccentBadge extends StatelessWidget {
-  const _AccentBadge({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.28)),
-          ),
-          child: Icon(icon, color: color),
         ),
       ),
     );

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 const boxOsLogoAsset = 'assets/images/boxOS_logo.png';
 const _shellBlue = appPrimary;
 const _shellBackground = appPageBackground;
-const _shellSurface = appSurface;
 const _shellBorder = appBorder;
 const _shellText = appText;
 const _shellMuted = appSubtleText;
@@ -279,37 +278,6 @@ class _LogoBadge extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Image.asset(boxOsLogoAsset, fit: BoxFit.contain),
-      ),
-    );
-  }
-}
-
-class _HeaderChip extends StatelessWidget {
-  const _HeaderChip({
-    required this.label,
-    required this.color,
-    this.outlined = false,
-  });
-
-  final String label;
-  final Color color;
-  final bool outlined;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: outlined ? Colors.white : color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(outlined ? 0.32 : 0.20)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: outlined ? color : _shellText,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }

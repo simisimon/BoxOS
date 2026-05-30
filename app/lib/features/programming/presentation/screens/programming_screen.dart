@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
@@ -346,7 +344,7 @@ class _InfoBand extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: accentColor),
+          AppAccentBadge(icon: icon, color: accentColor),
           const SizedBox(height: 12),
           Text(
             title,
@@ -395,7 +393,7 @@ class _ProgrammingStateCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccentBadge(icon: icon, color: accentColor),
+          AppAccentBadge(icon: icon, color: accentColor),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -947,37 +945,6 @@ class _GlowOrb extends StatelessWidget {
           gradient: RadialGradient(
             colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AccentBadge extends StatelessWidget {
-  const _AccentBadge({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withOpacity(0.28), color.withOpacity(0.12)],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.28)),
-          ),
-          child: Icon(icon, color: color),
         ),
       ),
     );
