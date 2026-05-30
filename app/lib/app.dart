@@ -33,7 +33,7 @@ class BoxOsApp extends ConsumerWidget {
           color: appSurface,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(24)),
+            borderRadius: BorderRadius.all(Radius.circular(appRadiusLg)),
             side: BorderSide(color: appBorder),
           ),
         ),
@@ -48,19 +48,19 @@ class BoxOsApp extends ConsumerWidget {
           labelStyle: const TextStyle(color: appMutedText),
           hintStyle: const TextStyle(color: appSubtleText),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(appRadiusSm),
             borderSide: const BorderSide(color: appBorder),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(appRadiusSm),
             borderSide: const BorderSide(color: seed, width: 1.6),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(appRadiusSm),
             borderSide: const BorderSide(color: appDanger),
           ),
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(appRadiusSm),
             borderSide: const BorderSide(color: appDanger, width: 1.6),
           ),
         ),
@@ -70,7 +70,7 @@ class BoxOsApp extends ConsumerWidget {
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(52),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(appRadiusSm),
             ),
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),
@@ -81,7 +81,7 @@ class BoxOsApp extends ConsumerWidget {
             side: const BorderSide(color: appBorder),
             minimumSize: const Size.fromHeight(52),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(appRadiusSm),
             ),
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),

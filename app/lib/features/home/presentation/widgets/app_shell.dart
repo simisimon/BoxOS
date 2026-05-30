@@ -209,14 +209,22 @@ class _ShellHeader extends StatelessWidget {
                   const SizedBox(width: 4),
                   GestureDetector(
                     onTap: onProfileTap,
-                    child: CircleAvatar(
-                      radius: 20,
-                      backgroundColor: accentColor.withOpacity(0.14),
-                      child: Text(
-                        _initials(displayName),
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: _shellText,
-                          fontWeight: FontWeight.w800,
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: accentColor.withOpacity(0.14),
+                          child: Text(
+                            _initials(displayName),
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: _shellText,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
                         ),
                       ),
                     ),

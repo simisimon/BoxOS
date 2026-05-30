@@ -12,6 +12,14 @@ const appSubtleText = Color(0xFF64748B);
 const appPrimary = Color(0xFF2563EB);
 const appDanger = Color(0xFFD64545);
 
+// Corner-radius scale. Use these instead of raw BorderRadius.circular(...)
+// literals so card, field, badge, and pill rounding stays in lockstep.
+const double appRadiusSm = 16;
+const double appRadiusMd = 18;
+const double appRadiusLg = 24;
+const double appRadiusXl = 28;
+const double appRadiusPill = 999;
+
 BoxDecoration appPageDecoration() => const BoxDecoration(
   gradient: LinearGradient(
     begin: Alignment.topCenter,
@@ -20,16 +28,21 @@ BoxDecoration appPageDecoration() => const BoxDecoration(
   ),
 );
 
-BoxDecoration appPanelDecoration({double radius = 28}) => BoxDecoration(
-  color: appSurface,
-  borderRadius: BorderRadius.circular(radius),
-  border: Border.all(color: appBorder),
-  boxShadow: const [
-    BoxShadow(color: Color(0x120F172A), blurRadius: 24, offset: Offset(0, 12)),
-  ],
-);
+BoxDecoration appPanelDecoration({double radius = appRadiusXl}) =>
+    BoxDecoration(
+      color: appSurface,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: appBorder),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x120F172A),
+          blurRadius: 24,
+          offset: Offset(0, 12),
+        ),
+      ],
+    );
 
-BoxDecoration appHeroDecoration({double radius = 28}) => BoxDecoration(
+BoxDecoration appHeroDecoration({double radius = appRadiusXl}) => BoxDecoration(
   color: appSurface,
   borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: appBorder),
@@ -59,7 +72,7 @@ class AppAccentBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(appRadiusMd),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
