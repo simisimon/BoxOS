@@ -2,6 +2,7 @@ import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/routing/router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class BoxOsApp extends ConsumerWidget {
   const BoxOsApp({super.key});
@@ -16,12 +17,30 @@ class BoxOsApp extends ConsumerWidget {
       surface: appSurface,
       background: appPageBackground,
     );
+    final baseTextTheme = ThemeData(
+      useMaterial3: true,
+      colorScheme: colorScheme,
+    ).textTheme;
+    // Oswald is the BoxOS brand display face; apply it to the large
+    // display/headline ramp and leave titles, body, and labels on the
+    // default UI font for readability.
+    final textTheme = baseTextTheme.copyWith(
+      displayLarge: GoogleFonts.oswald(textStyle: baseTextTheme.displayLarge),
+      displayMedium: GoogleFonts.oswald(textStyle: baseTextTheme.displayMedium),
+      displaySmall: GoogleFonts.oswald(textStyle: baseTextTheme.displaySmall),
+      headlineLarge: GoogleFonts.oswald(textStyle: baseTextTheme.headlineLarge),
+      headlineMedium: GoogleFonts.oswald(
+        textStyle: baseTextTheme.headlineMedium,
+      ),
+      headlineSmall: GoogleFonts.oswald(textStyle: baseTextTheme.headlineSmall),
+    );
 
     return MaterialApp.router(
       title: 'BoxOS',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: colorScheme,
+        textTheme: textTheme,
         scaffoldBackgroundColor: appPageBackground,
         appBarTheme: const AppBarTheme(
           backgroundColor: appSurface,
