@@ -1,0 +1,401 @@
+[
+  {
+    "id": "fran",
+    "name": "Fran",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Thruster",
+          "reps": "21-15-9",
+          "weight": "43/30 kg"
+        },
+        {
+          "name": "Pull-Up",
+          "reps": "21-15-9",
+          "weight": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "grace",
+    "name": "Grace",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Clean & Jerk",
+          "reps": "30",
+          "weight": "61/43 kg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "isabel",
+    "name": "Isabel",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Snatch",
+          "reps": "30",
+          "weight": "61/43 kg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cindy",
+    "name": "Cindy",
+    "category": "girl",
+    "structure": {
+      "format": "amrap",
+      "score_type": "rounds",
+      "movements": [
+        {
+          "name": "Pull-Up",
+          "reps": "5",
+          "weight": ""
+        },
+        {
+          "name": "Push-Up",
+          "reps": "10",
+          "weight": ""
+        },
+        {
+          "name": "Air Squat",
+          "reps": "15",
+          "weight": ""
+        }
+      ],
+      "time_cap_minutes": 20
+    }
+  },
+  {
+    "id": "annie",
+    "name": "Annie",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Double-Under",
+          "reps": "50-40-30-20-10",
+          "weight": ""
+        },
+        {
+          "name": "Sit-Up",
+          "reps": "50-40-30-20-10",
+          "weight": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "diane",
+    "name": "Diane",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Deadlift",
+          "reps": "21-15-9",
+          "weight": "102/70 kg"
+        },
+        {
+          "name": "Handstand Push-Up",
+          "reps": "21-15-9",
+          "weight": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "elizabeth",
+    "name": "Elizabeth",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Clean",
+          "reps": "21-15-9",
+          "weight": "61/43 kg"
+        },
+        {
+          "name": "Ring Dip",
+          "reps": "21-15-9",
+          "weight": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "helen",
+    "name": "Helen",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Run",
+          "reps": "400 m",
+          "weight": ""
+        },
+        {
+          "name": "Kettlebell Swing",
+          "reps": "21",
+          "weight": "24/16 kg"
+        },
+        {
+          "name": "Pull-Up",
+          "reps": "12",
+          "weight": ""
+        }
+      ],
+      "rounds": 3
+    }
+  },
+  {
+    "id": "karen",
+    "name": "Karen",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Wall Ball",
+          "reps": "150",
+          "weight": "9/6 kg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "nancy",
+    "name": "Nancy",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Run",
+          "reps": "400 m",
+          "weight": ""
+        },
+        {
+          "name": "Overhead Squat",
+          "reps": "15",
+          "weight": "43/30 kg"
+        }
+      ],
+      "rounds": 5
+    }
+  },
+  {
+    "id": "mary",
+    "name": "Mary",
+    "category": "girl",
+    "structure": {
+      "format": "amrap",
+      "score_type": "rounds",
+      "movements": [
+        {
+          "name": "Handstand Push-Up",
+          "reps": "5",
+          "weight": ""
+        },
+        {
+          "name": "Pistol",
+          "reps": "10",
+          "weight": ""
+        },
+        {
+          "name": "Pull-Up",
+          "reps": "15",
+          "weight": ""
+        }
+      ],
+      "time_cap_minutes": 20
+    }
+  },
+  {
+    "id": "angie",
+    "name": "Angie",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Pull-Up",
+          "reps": "100",
+          "weight": ""
+        },
+        {
+          "name": "Push-Up",
+          "reps": "100",
+          "weight": ""
+        },
+        {
+          "name": "Sit-Up",
+          "reps": "100",
+          "weight": ""
+        },
+        {
+          "name": "Air Squat",
+          "reps": "100",
+          "weight": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "barbara",
+    "name": "Barbara",
+    "category": "girl",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Pull-Up",
+          "reps": "20",
+          "weight": ""
+        },
+        {
+          "name": "Push-Up",
+          "reps": "30",
+          "weight": ""
+        },
+        {
+          "name": "Sit-Up",
+          "reps": "40",
+          "weight": ""
+        },
+        {
+          "name": "Air Squat",
+          "reps": "50",
+          "weight": ""
+        }
+      ],
+      "rounds": 5
+    }
+  },
+  {
+    "id": "murph",
+    "name": "Murph",
+    "category": "hero",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Run",
+          "reps": "1 mile",
+          "weight": ""
+        },
+        {
+          "name": "Pull-Up",
+          "reps": "100",
+          "weight": ""
+        },
+        {
+          "name": "Push-Up",
+          "reps": "200",
+          "weight": ""
+        },
+        {
+          "name": "Air Squat",
+          "reps": "300",
+          "weight": ""
+        },
+        {
+          "name": "Run",
+          "reps": "1 mile",
+          "weight": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "dt",
+    "name": "DT",
+    "category": "hero",
+    "structure": {
+      "format": "for_time",
+      "score_type": "time",
+      "movements": [
+        {
+          "name": "Deadlift",
+          "reps": "12",
+          "weight": "70/47 kg"
+        },
+        {
+          "name": "Hang Power Clean",
+          "reps": "9",
+          "weight": ""
+        },
+        {
+          "name": "Push Jerk",
+          "reps": "6",
+          "weight": ""
+        }
+      ],
+      "rounds": 5
+    }
+  },
+  {
+    "id": "fight_gone_bad",
+    "name": "Fight Gone Bad",
+    "category": "hero",
+    "structure": {
+      "format": "amrap",
+      "score_type": "reps",
+      "movements": [
+        {
+          "name": "Wall Ball",
+          "reps": "1 min",
+          "weight": ""
+        },
+        {
+          "name": "Sumo Deadlift High-Pull",
+          "reps": "1 min",
+          "weight": ""
+        },
+        {
+          "name": "Box Jump",
+          "reps": "1 min",
+          "weight": ""
+        },
+        {
+          "name": "Push Press",
+          "reps": "1 min",
+          "weight": ""
+        },
+        {
+          "name": "Row (cal)",
+          "reps": "1 min",
+          "weight": ""
+        }
+      ],
+      "time_cap_minutes": 17,
+      "rounds": 3
+    }
+  }
+]

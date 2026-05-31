@@ -5229,6 +5229,61 @@ class BackendServerTests(unittest.TestCase):
         )
         self.assertEqual(empty_again["workouts"], [])
 
+    def test_exercises_are_seeded_and_searchable(self) -> None:
+        login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        token = login["access_token"]
+
+        listed = self.get_json_with_auth(
+            "/exercises?limit=5",
+            access_token=token,
+        )
+        self.assertEqual(len(listed["exercises"]), 5)
+        first = listed["exercises"][0]
+        self.assertIn("name", first)
+        self.assertIn("primary_muscles", first)
+        self.assertIsInstance(first["primary_muscles"], list)
+
+        search = self.get_json_with_auth(
+            "/exercises?query=squat",
+            access_token=token,
+        )
+        self.assertGreater(len(search["exercises"]), 0)
+        self.assertTrue(
+            all('squat' in ex["name"].lower() for ex in search["exercises"]),
+        )
+
+    def test_exercises_require_authentication(self) -> None:
+        request = urllib.request.Request(
+            f"{self.base_url}/exercises",
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+        self.assertEqual(error_context.exception.code, 401)
+
+    def test_benchmark_workouts_are_seeded(self) -> None:
+        login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        token = login["access_token"]
+
+        listed = self.get_json_with_auth(
+            "/benchmark-workouts",
+            access_token=token,
+        )
+        workouts = listed["workouts"]
+        self.assertGreater(len(workouts), 0)
+        names = {workout["name"] for workout in workouts}
+        self.assertIn("Fran", names)
+        self.assertIn("Murph", names)
+        fran = next(w for w in workouts if w["name"] == "Fran")
+        self.assertEqual(fran["structure"]["format"], "for_time")
+        self.assertTrue(len(fran["structure"]["movements"]) >= 2)
+
     def test_personal_workouts_require_authentication(self) -> None:
         request = urllib.request.Request(
             f"{self.base_url}/personal-workouts",

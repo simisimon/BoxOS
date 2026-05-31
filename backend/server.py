@@ -29,6 +29,8 @@ except ImportError:  # pragma: no cover - optional runtime fallback
 DB_PATH = Path(__file__).with_name("boxos_dev.db")
 UPLOADS_ROOT = Path(__file__).with_name("uploads")
 ANNOUNCEMENT_UPLOADS_DIR = UPLOADS_ROOT / "announcements"
+EXERCISES_SEED_PATH = Path(__file__).with_name("data") / "exercises.json"
+BENCHMARKS_SEED_PATH = Path(__file__).with_name("data") / "benchmark_workouts.json"
 HOST = "127.0.0.1"
 PORT = 8080
 DELETE_RETENTION_DAYS = 30
@@ -354,6 +356,28 @@ def init_db() -> None:
             created_at text not null,
             updated_at text not null
           );
+
+          create table if not exists exercises (
+            id text primary key,
+            name text not null,
+            category text not null default '',
+            equipment text not null default '',
+            level text not null default '',
+            force text not null default '',
+            mechanic text not null default '',
+            primary_muscles text not null default '[]',
+            secondary_muscles text not null default '[]',
+            instructions text not null default '[]',
+            search text not null default ''
+          );
+
+          create table if not exists benchmark_workouts (
+            id text primary key,
+            name text not null,
+            category text not null default '',
+            structure_json text not null default '{}',
+            sort_order integer not null default 0
+          );
           """
       )
       ensure_user_columns(connection)
@@ -361,6 +385,8 @@ def init_db() -> None:
       ensure_class_booking_columns(connection)
       ensure_class_waitlist_tables(connection)
       ensure_workout_log_columns(connection)
+      seed_exercises(connection)
+      seed_benchmark_workouts(connection)
       migrate_legacy_auth_terms(connection)
       purge_deleted_users(connection)
     connection.close()
@@ -538,6 +564,95 @@ def ensure_workout_log_columns(connection: sqlite3.Connection) -> None:
         connection.execute(
             "alter table workout_logs add column pr_rank integer"
         )
+
+
+def seed_exercises(connection: sqlite3.Connection) -> None:
+    """Load the bundled free-exercise-db dataset once into the exercises table.
+
+    No-op if the table is already populated or the seed file is missing, so it
+    stays cheap on every startup and harmless in environments without the data.
+    """
+    existing = connection.execute(
+        "select count(*) as count from exercises"
+    ).fetchone()
+    if existing["count"] > 0:
+        return
+    if not EXERCISES_SEED_PATH.exists():
+        return
+    with open(EXERCISES_SEED_PATH, encoding="utf-8") as handle:
+        data = json.load(handle)
+    rows = []
+    for item in data:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        primary = item.get("primaryMuscles") or []
+        secondary = item.get("secondaryMuscles") or []
+        category = str(item.get("category") or "")
+        equipment = str(item.get("equipment") or "")
+        search = " ".join(
+            [name, " ".join(primary), " ".join(secondary), equipment, category]
+        ).lower()
+        rows.append(
+            (
+                str(item.get("id") or name),
+                name,
+                category,
+                equipment,
+                str(item.get("level") or ""),
+                str(item.get("force") or ""),
+                str(item.get("mechanic") or ""),
+                json.dumps(primary),
+                json.dumps(secondary),
+                json.dumps(item.get("instructions") or []),
+                search,
+            )
+        )
+    connection.executemany(
+        """
+        insert or ignore into exercises (
+          id, name, category, equipment, level, force, mechanic,
+          primary_muscles, secondary_muscles, instructions, search
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+
+
+def seed_benchmark_workouts(connection: sqlite3.Connection) -> None:
+    """Load the bundled CrossFit benchmark catalog once. No-op if already
+    populated or the seed file is missing."""
+    existing = connection.execute(
+        "select count(*) as count from benchmark_workouts"
+    ).fetchone()
+    if existing["count"] > 0:
+        return
+    if not BENCHMARKS_SEED_PATH.exists():
+        return
+    with open(BENCHMARKS_SEED_PATH, encoding="utf-8") as handle:
+        data = json.load(handle)
+    rows = []
+    for index, item in enumerate(data):
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        rows.append(
+            (
+                str(item.get("id") or name).lower(),
+                name,
+                str(item.get("category") or ""),
+                json.dumps(item.get("structure") or {}),
+                index,
+            )
+        )
+    connection.executemany(
+        """
+        insert or ignore into benchmark_workouts (
+          id, name, category, structure_json, sort_order
+        ) values (?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
 
 
 def migrate_legacy_auth_terms(connection: sqlite3.Connection) -> None:
@@ -1100,6 +1215,12 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/personal-workouts":
                 self.handle_list_personal_workouts()
+                return
+            if path == "/exercises":
+                self.handle_list_exercises(urlparse(self.path))
+                return
+            if path == "/benchmark-workouts":
+                self.handle_list_benchmark_workouts()
                 return
             if path == "/gyms/join-requests":
                 self.handle_list_join_requests()
@@ -3129,6 +3250,61 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"workout": payload})
+
+    def handle_list_exercises(self, parsed: Any) -> None:
+        self.require_session()
+        params = parse_qs(parsed.query)
+        query = (params.get("query", [""])[0] or "").strip().lower()
+        try:
+            limit = int(params.get("limit", ["50"])[0])
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 100))
+        connection = get_connection()
+        if query:
+            rows = connection.execute(
+                """
+                select id, name, category, equipment, level,
+                       primary_muscles, secondary_muscles
+                from exercises
+                where search like ?
+                order by name
+                limit ?
+                """,
+                (f"%{query}%", limit),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                select id, name, category, equipment, level,
+                       primary_muscles, secondary_muscles
+                from exercises
+                order by name
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {"exercises": [exercise_payload(row) for row in rows]},
+        )
+
+    def handle_list_benchmark_workouts(self) -> None:
+        self.require_session()
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select id, name, category, structure_json
+            from benchmark_workouts
+            order by sort_order, name
+            """
+        ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {"workouts": [benchmark_workout_payload(row) for row in rows]},
+        )
 
     def handle_list_personal_workouts(self) -> None:
         session = self.require_session()
@@ -5624,6 +5800,37 @@ def workout_log_payload(row: sqlite3.Row) -> dict[str, Any]:
         "updated_at": row["updated_at"],
         "is_pr": bool(row["is_pr"]) if "is_pr" in row.keys() else False,
         "pr_rank": row["pr_rank"] if "pr_rank" in row.keys() else None,
+    }
+
+
+def exercise_payload(row: sqlite3.Row) -> dict[str, Any]:
+    def _list(value: Any) -> list[Any]:
+        try:
+            return json.loads(value or "[]")
+        except (TypeError, ValueError):
+            return []
+
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "category": row["category"],
+        "equipment": row["equipment"],
+        "level": row["level"],
+        "primary_muscles": _list(row["primary_muscles"]),
+        "secondary_muscles": _list(row["secondary_muscles"]),
+    }
+
+
+def benchmark_workout_payload(row: sqlite3.Row) -> dict[str, Any]:
+    try:
+        structure = json.loads(row["structure_json"] or "{}")
+    except (TypeError, ValueError):
+        structure = {}
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "category": row["category"],
+        "structure": structure,
     }
 
 
