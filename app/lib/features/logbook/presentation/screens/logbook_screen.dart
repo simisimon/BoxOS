@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/features/logbook/data/repositories/api_benchmark_repository.dart';
+import 'package:app/features/logbook/data/repositories/api_exercise_repository.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/logbook/data/repositories/api_personal_workout_repository.dart';
+import 'package:app/features/logbook/domain/models/benchmark_workout.dart';
+import 'package:app/features/logbook/domain/models/exercise.dart';
 import 'package:app/features/logbook/domain/models/personal_workout.dart';
 import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -982,6 +988,7 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
 
   final _titleController = TextEditingController();
   final _timeCapController = TextEditingController();
+  final _roundsController = TextEditingController();
   final _movements = <_MovementControllers>[_MovementControllers()];
   String _format = 'for_time';
   String _scoreType = 'time';
@@ -991,10 +998,62 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
   void dispose() {
     _titleController.dispose();
     _timeCapController.dispose();
+    _roundsController.dispose();
     for (final movement in _movements) {
       movement.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadBenchmark() async {
+    final benchmark = await showModalBottomSheet<BenchmarkWorkout>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: appSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(appRadiusXl)),
+      ),
+      builder: (context) => const _BenchmarkPickerSheet(),
+    );
+    if (benchmark != null) {
+      _applyBenchmark(benchmark);
+    }
+  }
+
+  void _applyBenchmark(BenchmarkWorkout benchmark) {
+    final structure = benchmark.structure;
+    setState(() {
+      _error = null;
+      _titleController.text = benchmark.name;
+      final format = structure['format'] as String?;
+      if (format != null && _formats.containsKey(format)) {
+        _format = format;
+      }
+      final scoreType = structure['score_type'] as String?;
+      if (scoreType != null && _scoreTypes.containsKey(scoreType)) {
+        _scoreType = scoreType;
+      }
+      _timeCapController.text =
+          structure['time_cap_minutes']?.toString() ?? '';
+      _roundsController.text = structure['rounds']?.toString() ?? '';
+      for (final movement in _movements) {
+        movement.dispose();
+      }
+      _movements
+        ..clear()
+        ..addAll(
+          benchmark.movements.map((item) {
+            final controllers = _MovementControllers();
+            controllers.name.text = item['name']?.toString() ?? '';
+            controllers.reps.text = item['reps']?.toString() ?? '';
+            controllers.weight.text = item['weight']?.toString() ?? '';
+            return controllers;
+          }),
+        );
+      if (_movements.isEmpty) {
+        _movements.add(_MovementControllers());
+      }
+    });
   }
 
   void _save() {
@@ -1020,12 +1079,14 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
       return;
     }
     final timeCap = int.tryParse(_timeCapController.text.trim());
+    final rounds = int.tryParse(_roundsController.text.trim());
     Navigator.of(context).pop(
       _WorkoutDraft(
         title: title,
         structure: {
           'format': _format,
           'time_cap_minutes': ?timeCap,
+          'rounds': ?rounds,
           'score_type': _scoreType,
           'movements': movements,
         },
@@ -1045,6 +1106,12 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              OutlinedButton.icon(
+                onPressed: _loadBenchmark,
+                icon: const Icon(Icons.bookmark_outline_rounded),
+                label: const Text('Load a benchmark WOD'),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Workout name'),
@@ -1072,6 +1139,29 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _scoreType,
+                      decoration: const InputDecoration(labelText: 'Score'),
+                      items: [
+                        for (final entry in _scoreTypes.entries)
+                          DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _scoreType = value);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
                     child: TextField(
                       controller: _timeCapController,
                       keyboardType: TextInputType.number,
@@ -1080,24 +1170,15 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _scoreType,
-                decoration: const InputDecoration(labelText: 'Score'),
-                items: [
-                  for (final entry in _scoreTypes.entries)
-                    DropdownMenuItem(
-                      value: entry.key,
-                      child: Text(entry.value),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _roundsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Rounds'),
                     ),
+                  ),
                 ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _scoreType = value);
-                  }
-                },
               ),
               const SizedBox(height: 16),
               const Align(
@@ -1116,7 +1197,15 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
                   children: [
                     TextField(
                       controller: _movements[i].name,
-                      decoration: const InputDecoration(labelText: 'Movement'),
+                      decoration: InputDecoration(
+                        labelText: 'Movement',
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.search),
+                          tooltip: 'Search exercises',
+                          onPressed: () =>
+                              _pickExerciseInto(context, _movements[i].name),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -1257,7 +1346,15 @@ class _FitnessBuilderDialogState extends State<_FitnessBuilderDialog> {
                   children: [
                     TextField(
                       controller: _exercises[i].name,
-                      decoration: const InputDecoration(labelText: 'Exercise'),
+                      decoration: InputDecoration(
+                        labelText: 'Exercise',
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.search),
+                          tooltip: 'Search exercises',
+                          onPressed: () =>
+                              _pickExerciseInto(context, _exercises[i].name),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -1350,6 +1447,326 @@ class _BuilderItemCard extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+Future<void> _pickExerciseInto(
+  BuildContext context,
+  TextEditingController controller,
+) async {
+  final name = await showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: appSurface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(appRadiusXl)),
+    ),
+    builder: (context) => const _ExercisePickerSheet(),
+  );
+  if (name != null && name.isNotEmpty) {
+    controller.text = name;
+  }
+}
+
+class _ExercisePickerSheet extends ConsumerStatefulWidget {
+  const _ExercisePickerSheet();
+
+  @override
+  ConsumerState<_ExercisePickerSheet> createState() =>
+      _ExercisePickerSheetState();
+}
+
+class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
+  final _searchController = TextEditingController();
+  Timer? _debounce;
+  late Future<List<Exercise>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load('');
+  }
+
+  Future<List<Exercise>> _load(String query) {
+    return ref
+        .read(exerciseRepositoryProvider)
+        .fetchExercises(query: query, limit: 50);
+  }
+
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _future = _load(value.trim());
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.8,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: appBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                onChanged: _onQueryChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search exercises',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: appSurfaceAlt,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(appRadiusMd),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<Exercise>>(
+                future: _future,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        errorMessageFrom(
+                          snapshot.error!,
+                          fallback: 'Failed to load exercises',
+                        ),
+                        style: const TextStyle(color: appSubtleText),
+                      ),
+                    );
+                  }
+                  final exercises = snapshot.data ?? const <Exercise>[];
+                  if (exercises.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No matching exercises',
+                        style: TextStyle(color: appSubtleText),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: exercises.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1, color: appBorder),
+                    itemBuilder: (context, index) {
+                      final exercise = exercises[index];
+                      return ListTile(
+                        title: Text(
+                          exercise.name,
+                          style: const TextStyle(
+                            color: appText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: exercise.subtitle.isEmpty
+                            ? null
+                            : Text(
+                                exercise.subtitle,
+                                style: const TextStyle(color: appSubtleText),
+                              ),
+                        onTap: () => Navigator.of(context).pop(exercise.name),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BenchmarkPickerSheet extends ConsumerStatefulWidget {
+  const _BenchmarkPickerSheet();
+
+  @override
+  ConsumerState<_BenchmarkPickerSheet> createState() =>
+      _BenchmarkPickerSheetState();
+}
+
+class _BenchmarkPickerSheetState extends ConsumerState<_BenchmarkPickerSheet> {
+  late final Future<List<BenchmarkWorkout>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(benchmarkRepositoryProvider).fetchBenchmarks();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.8,
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: appBorder,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Benchmark WODs',
+                style: TextStyle(
+                  color: appText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<BenchmarkWorkout>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      errorMessageFrom(
+                        snapshot.error!,
+                        fallback: 'Failed to load benchmarks',
+                      ),
+                      style: const TextStyle(color: appSubtleText),
+                    ),
+                  );
+                }
+                final all = snapshot.data ?? const <BenchmarkWorkout>[];
+                final girls =
+                    all.where((item) => item.category == 'girl').toList();
+                final heroes =
+                    all.where((item) => item.category == 'hero').toList();
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    if (girls.isNotEmpty) ...[
+                      const _BenchmarkGroupHeader(label: 'The Girls'),
+                      for (final workout in girls)
+                        _BenchmarkTile(workout: workout),
+                    ],
+                    if (heroes.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const _BenchmarkGroupHeader(label: 'Hero WODs'),
+                      for (final workout in heroes)
+                        _BenchmarkTile(workout: workout),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BenchmarkGroupHeader extends StatelessWidget {
+  const _BenchmarkGroupHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: appSubtleText,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _BenchmarkTile extends StatelessWidget {
+  const _BenchmarkTile({required this.workout});
+
+  final BenchmarkWorkout workout;
+
+  String _summary() {
+    final format = _crossfitFormatLabel(workout.structure['format'] as String?);
+    final count = workout.movements.length;
+    return [
+      ?format,
+      '$count movement${count == 1 ? '' : 's'}',
+    ].join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: appSurfaceAlt,
+        borderRadius: BorderRadius.circular(appRadiusMd),
+        border: Border.all(color: appBorder),
+      ),
+      child: ListTile(
+        leading: const AppAccentBadge(
+          icon: Icons.local_fire_department_outlined,
+          color: _crossfitColor,
+          size: 42,
+        ),
+        title: Text(
+          workout.name,
+          style: const TextStyle(color: appText, fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          _summary(),
+          style: const TextStyle(color: appSubtleText),
+        ),
+        trailing: const Icon(Icons.add_rounded, color: _crossfitColor),
+        onTap: () => Navigator.of(context).pop(workout),
       ),
     );
   }
