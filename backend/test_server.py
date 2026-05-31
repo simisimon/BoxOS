@@ -5166,6 +5166,78 @@ class BackendServerTests(unittest.TestCase):
         with urllib.request.urlopen(request) as response:
             return json_loads(response.read())
 
+    def test_personal_workouts_crud_for_user(self) -> None:
+        login = self.post_json(
+            "/auth/login",
+            {"email": server.DEMO_EMAIL, "password": server.DEMO_PASSWORD},
+        )
+        token = login["access_token"]
+
+        empty = self.get_json_with_auth("/personal-workouts", access_token=token)
+        self.assertEqual(empty["workouts"], [])
+
+        created = self.post_json_with_auth(
+            "/personal-workouts",
+            {
+                "title": "Fran",
+                "type": "crossfit",
+                "structure": {
+                    "format": "for_time",
+                    "movements": [
+                        {"name": "Thruster", "reps": "21-15-9", "weight": "43kg"},
+                        {"name": "Pull-up", "reps": "21-15-9"},
+                    ],
+                    "score_type": "time",
+                },
+            },
+            access_token=token,
+        )
+        workout = created["workout"]
+        self.assertEqual(workout["title"], "Fran")
+        self.assertEqual(workout["type"], "crossfit")
+        self.assertEqual(workout["structure"]["score_type"], "time")
+        self.assertGreater(workout["id"], 0)
+
+        listed = self.get_json_with_auth("/personal-workouts", access_token=token)
+        self.assertEqual(len(listed["workouts"]), 1)
+        self.assertEqual(listed["workouts"][0]["title"], "Fran")
+
+        with self.assertRaises(urllib.error.HTTPError) as bad_type:
+            self.post_json_with_auth(
+                "/personal-workouts",
+                {"title": "Yoga Flow", "type": "yoga", "structure": {}},
+                access_token=token,
+            )
+        self.assertEqual(bad_type.exception.code, 400)
+
+        delete_request = urllib.request.Request(
+            f"{self.base_url}/personal-workouts",
+            data=json_bytes({"id": workout["id"]}),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            method="DELETE",
+        )
+        with urllib.request.urlopen(delete_request) as response:
+            deleted = json_loads(response.read())
+        self.assertTrue(deleted["deleted"])
+
+        empty_again = self.get_json_with_auth(
+            "/personal-workouts",
+            access_token=token,
+        )
+        self.assertEqual(empty_again["workouts"], [])
+
+    def test_personal_workouts_require_authentication(self) -> None:
+        request = urllib.request.Request(
+            f"{self.base_url}/personal-workouts",
+            method="GET",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error_context:
+            urllib.request.urlopen(request)
+        self.assertEqual(error_context.exception.code, 401)
+
     def test_schedule_requires_active_gym_context(self) -> None:
         athlete_login = self.post_json(
             "/auth/login",

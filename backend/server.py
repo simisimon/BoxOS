@@ -344,6 +344,16 @@ def init_db() -> None:
             created_at text not null,
             updated_at text not null
           );
+
+          create table if not exists personal_workouts (
+            id integer primary key autoincrement,
+            user_id integer not null references users(id) on delete cascade,
+            type text not null,
+            title text not null,
+            structure_json text not null default '{}',
+            created_at text not null,
+            updated_at text not null
+          );
           """
       )
       ensure_user_columns(connection)
@@ -1088,6 +1098,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/logbook/entries":
                 self.handle_list_workout_logs()
                 return
+            if path == "/personal-workouts":
+                self.handle_list_personal_workouts()
+                return
             if path == "/gyms/join-requests":
                 self.handle_list_join_requests()
                 return
@@ -1181,6 +1194,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             if path == "/logbook/entries":
                 self.handle_submit_workout_log(body)
                 return
+            if path == "/personal-workouts":
+                self.handle_create_personal_workout(body)
+                return
             if path == "/gyms/join-requests":
                 self.handle_create_join_request(body)
                 return
@@ -1216,6 +1232,9 @@ class BoxOsHandler(BaseHTTPRequestHandler):
                 return
             if path == "/schedule/waitlist":
                 self.handle_delete_class_waitlist(body)
+                return
+            if path == "/personal-workouts":
+                self.handle_delete_personal_workout(body)
                 return
             raise ApiError(HTTPStatus.NOT_FOUND, "Route not found.")
         except ApiError as error:
@@ -3110,6 +3129,80 @@ class BoxOsHandler(BaseHTTPRequestHandler):
             )
         connection.close()
         self.send_json(HTTPStatus.OK, {"workout": payload})
+
+    def handle_list_personal_workouts(self) -> None:
+        session = self.require_session()
+        connection = get_connection()
+        rows = connection.execute(
+            """
+            select id, type, title, structure_json, created_at, updated_at
+            from personal_workouts
+            where user_id = ?
+            order by updated_at desc
+            """,
+            (session["user_id"],),
+        ).fetchall()
+        connection.close()
+        self.send_json(
+            HTTPStatus.OK,
+            {"workouts": [personal_workout_payload(row) for row in rows]},
+        )
+
+    def handle_create_personal_workout(self, body: dict[str, Any]) -> None:
+        session = self.require_session()
+        title = require_personal_workout_title(body.get("title"))
+        workout_type = require_personal_workout_type(body.get("type"))
+        structure = require_personal_workout_structure(body.get("structure"))
+        timestamp = isoformat(now_utc())
+        connection = get_connection()
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into personal_workouts (
+                  user_id, type, title, structure_json, created_at, updated_at
+                ) values (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session["user_id"],
+                    workout_type,
+                    title,
+                    json.dumps(structure),
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            row = connection.execute(
+                """
+                select id, type, title, structure_json, created_at, updated_at
+                from personal_workouts
+                where id = ?
+                """,
+                (cursor.lastrowid,),
+            ).fetchone()
+        connection.close()
+        self.send_json(
+            HTTPStatus.CREATED,
+            {"workout": personal_workout_payload(row)},
+        )
+
+    def handle_delete_personal_workout(self, body: dict[str, Any]) -> None:
+        session = self.require_session()
+        workout_id = require_personal_workout_id(body.get("id"))
+        connection = get_connection()
+        with connection:
+            existing = connection.execute(
+                "select id from personal_workouts where id = ? and user_id = ?",
+                (workout_id, session["user_id"]),
+            ).fetchone()
+            if existing is None:
+                connection.close()
+                raise ApiError(HTTPStatus.NOT_FOUND, "Workout not found.")
+            connection.execute(
+                "delete from personal_workouts where id = ?",
+                (workout_id,),
+            )
+        connection.close()
+        self.send_json(HTTPStatus.OK, {"deleted": True})
 
     def handle_list_workout_logs(self) -> None:
         session = self.require_active_gym_member_session()
@@ -5532,6 +5625,57 @@ def workout_log_payload(row: sqlite3.Row) -> dict[str, Any]:
         "is_pr": bool(row["is_pr"]) if "is_pr" in row.keys() else False,
         "pr_rank": row["pr_rank"] if "pr_rank" in row.keys() else None,
     }
+
+
+def personal_workout_payload(row: sqlite3.Row) -> dict[str, Any]:
+    try:
+        structure = json.loads(row["structure_json"] or "{}")
+    except (TypeError, ValueError):
+        structure = {}
+    return {
+        "id": row["id"],
+        "type": row["type"],
+        "title": row["title"],
+        "structure": structure,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def require_personal_workout_title(value: Any) -> str:
+    title = str(value or "").strip()
+    if not title:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title is required.")
+    if len(title) > 120:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title must be 120 characters or fewer.")
+    return title
+
+
+def require_personal_workout_type(value: Any) -> str:
+    workout_type = str(value or "").strip().lower()
+    if workout_type not in {"fitness", "crossfit"}:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout type must be 'fitness' or 'crossfit'.")
+    return workout_type
+
+
+def require_personal_workout_structure(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout structure must be an object.")
+    if len(json.dumps(value)) > 20000:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout structure is too large.")
+    return value
+
+
+def require_personal_workout_id(value: Any) -> int:
+    try:
+        workout_id = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout id is required.")
+    if workout_id <= 0:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout id is required.")
+    return workout_id
 
 
 def get_workout_log_for_user(
