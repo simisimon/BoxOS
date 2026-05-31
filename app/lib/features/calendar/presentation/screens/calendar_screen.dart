@@ -188,8 +188,6 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     final canManage =
         profile?.activeGym != null &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
-    final roleLabel = profile?.role?.label ?? 'Athlete';
-    final gymName = profile?.activeGym?.name;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -208,12 +206,6 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            _CalendarHero(
-              canManage: canManage,
-              roleLabel: roleLabel,
-              gymName: gymName,
-            ),
-            const SizedBox(height: 16),
             if (profile?.activeGym == null)
               const _CalendarStateCard(
                 icon: Icons.store_mall_directory_outlined,
@@ -286,11 +278,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                       ),
                       const SizedBox(height: 16),
                       _CalendarSectionHeader(
-                        eyebrow: 'Schedule',
                         title: 'Classes on $selectedDateLabel',
-                        subtitle: canManage
-                            ? 'Coach, capacity, attendance, and booking controls stay anchored to the selected day.'
-                            : 'See exactly what is running that day and act on bookings without leaving the schedule.',
                       ),
                       const SizedBox(height: 12),
                       if (selectedItems.isEmpty)
@@ -347,148 +335,19 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
   }
 }
 
-class _CalendarHero extends StatelessWidget {
-  const _CalendarHero({
-    required this.canManage,
-    required this.roleLabel,
-    required this.gymName,
-  });
-
-  final bool canManage;
-  final String roleLabel;
-  final String? gymName;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final accentColor = canManage ? appPrimary : appPrimary;
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [accentColor.withOpacity(0.24), appSurface, appSurfaceAlt],
-        ),
-        border: Border.all(color: appBorder),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withOpacity(0.14),
-            blurRadius: 32,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -10,
-            top: -12,
-            child: _GlowOrb(color: accentColor, size: 84),
-          ),
-          Positioned(
-            right: 38,
-            bottom: -28,
-            child: _GlowOrb(color: appPrimary.withOpacity(0.6), size: 88),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _HeroPill(label: roleLabel, color: accentColor),
-                  _HeroPill(
-                    label: gymName ?? 'No active gym',
-                    color: appPrimary,
-                    outlined: true,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Schedule',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: appPrimary,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                canManage
-                    ? 'Run the floor with less friction.'
-                    : 'Plan the next training session.',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w900,
-                  height: 0.96,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                canManage
-                    ? 'Use one cleaner schedule surface for class creation, capacity control, attendance, and booking oversight.'
-                    : 'Check the day, book quickly, and keep your waitlist or attendance state visible at a glance.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: appMutedText,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CalendarSectionHeader extends StatelessWidget {
-  const _CalendarSectionHeader({
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-  });
+  const _CalendarSectionHeader({required this.title});
 
-  final String eyebrow;
   final String title;
-  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          eyebrow.toUpperCase(),
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: appPrimary,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            color: appText,
-            fontWeight: FontWeight.w800,
-            height: 0.96,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: appSubtleText,
-            height: 1.4,
-          ),
-        ),
-      ],
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+        color: appText,
+        fontWeight: FontWeight.w800,
+      ),
     );
   }
 }
@@ -603,7 +462,7 @@ class _WorkoutCalendarCard extends StatelessWidget {
                 primary: appPrimary,
                 onPrimary: Colors.white,
                 surface: appSurface,
-                onSurface: Colors.white,
+                onSurface: appText,
               ),
               textButtonTheme: TextButtonThemeData(
                 style: TextButton.styleFrom(foregroundColor: appPrimary),
@@ -1274,14 +1133,14 @@ class _ScheduleClassCard extends StatelessWidget {
                     Text(
                       'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
+                        color: appText,
                       ),
                     ),
                   if (item.isWaitlisted)
                     Text(
                       'Waitlist: Active',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
+                        color: appText,
                       ),
                     ),
                 ],
@@ -1321,7 +1180,7 @@ class _ScheduleClassCard extends StatelessWidget {
           ],
           if (item.bookings.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const Divider(color: Color(0x1FFFFFFF)),
+            const Divider(color: appBorder),
             const SizedBox(height: 12),
             Text(
               'Booked Members',
@@ -1479,53 +1338,25 @@ class _ContentPanel extends StatelessWidget {
 }
 
 class _HeroPill extends StatelessWidget {
-  const _HeroPill({
-    required this.label,
-    required this.color,
-    this.outlined = false,
-  });
+  const _HeroPill({required this.label, required this.color});
 
   final String label;
   final Color color;
-  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withOpacity(0.16),
+        color: color.withOpacity(0.16),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(outlined ? 0.55 : 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: appText,
           fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _GlowOrb extends StatelessWidget {
-  const _GlowOrb({required this.color, required this.size});
-
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
-          ),
         ),
       ),
     );
