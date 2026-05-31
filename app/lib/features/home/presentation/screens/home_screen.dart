@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:app/core/errors/error_message.dart';
@@ -6,6 +7,8 @@ import 'package:app/features/announcements/data/repositories/api_announcement_re
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
+import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -18,6 +21,15 @@ const _homeAccent = appPrimary;
 const _homeAccentSoft = Color(0x1F2563EB);
 const _homeDanger = Color(0xFFD64545);
 
+// Default weekly training-session goal driving the performance trackers.
+// Could be made per-user configurable later.
+const _weeklySessionGoal = 5;
+
+// Accent palette for the performance gauge (red → amber → green zones).
+const _perfRed = Color(0xFFE5533D);
+const _perfAmber = Color(0xFFE7A33C);
+const _perfGreen = Color(0xFF3FB264);
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -28,12 +40,14 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   late Future<List<Announcement>> _announcementsFuture;
   late Future<List<ScheduleClass>> _scheduleFuture;
+  late Future<List<WorkoutLogEntry>> _entriesFuture;
 
   @override
   void initState() {
     super.initState();
     _announcementsFuture = _loadAnnouncements();
     _scheduleFuture = _loadSchedule();
+    _entriesFuture = _loadEntries();
   }
 
   Future<List<Announcement>> _loadAnnouncements() {
@@ -42,6 +56,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<List<ScheduleClass>> _loadSchedule() {
     return ref.read(scheduleRepositoryProvider).fetchSchedule();
+  }
+
+  Future<List<WorkoutLogEntry>> _loadEntries() {
+    return ref.read(logbookRepositoryProvider).fetchEntries();
   }
 
   Future<void> _refreshAnnouncements() async {
@@ -235,13 +253,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
-    final notificationInboxAsync = ref.watch(notificationInboxProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
-    final unreadNotifications = notificationInboxAsync.hasValue
-        ? notificationInboxAsync.value!.unreadCount
-        : 0;
+    final hasActiveGym = profile?.activeGym != null;
     final canManageAnnouncements =
-        profile?.activeGym != null &&
+        hasActiveGym &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
 
     return DecoratedBox(
@@ -249,38 +264,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          _HeroPanel(
-            displayName: profile?.displayName ?? '',
-            profileRole: profile?.role,
-            activeGymName: profile?.activeGym?.name,
-            unreadNotifications: unreadNotifications,
-          ),
-          const SizedBox(height: 20),
-          const _SectionTitle(
-            eyebrow: 'Booking',
-            title: 'Class access',
-            subtitle:
-                'Jump straight into booking and keep your reserved classes one swipe away.',
-          ),
+          if (hasActiveGym) ...[
+            const _SectionHeading('Performance Board'),
+            const SizedBox(height: 12),
+            _PerformanceTracker(
+              entriesFuture: _entriesFuture,
+              weeklyGoal: _weeklySessionGoal,
+            ),
+            const SizedBox(height: 24),
+          ],
+          const _SectionHeading('Your Bookings', center: true),
           const SizedBox(height: 12),
           _BookingQuickAccessRail(
             scheduleFuture: _scheduleFuture,
-            hasActiveGym: profile?.activeGym != null,
+            hasActiveGym: hasActiveGym,
             onOpenBooking: () => context.go('/my-box'),
             onRefresh: _refreshSchedule,
           ),
-          const SizedBox(height: 20),
-          const _SectionTitle(
-            eyebrow: 'News',
-            title: 'Gym pulse',
-            subtitle:
-                'Announcements from your gym live here first, with expandable detail when you need it.',
-          ),
+          const SizedBox(height: 24),
+          const _SectionHeading('News'),
           const SizedBox(height: 12),
           _AnnouncementRail(
             announcementsFuture: _announcementsFuture,
             canManageAnnouncements: canManageAnnouncements,
-            hasActiveGym: profile?.activeGym != null,
+            hasActiveGym: hasActiveGym,
             onCreateAnnouncement: _openAnnouncementComposer,
             onEditAnnouncement: _openAnnouncementEditor,
             onDeleteAnnouncement: _deleteAnnouncement,
@@ -289,40 +296,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onEditComment: _editAnnouncementComment,
             onDeleteComment: _deleteAnnouncementComment,
           ),
-          const SizedBox(height: 20),
-          const _SectionTitle(
-            eyebrow: 'Today',
-            title: 'Readiness board',
-            subtitle:
-                'The next class, the daily workout, and anything that needs attention.',
-          ),
-          const SizedBox(height: 12),
-          _TodaySnapshot(
-            unreadNotifications: unreadNotifications,
-            profileRole: profile?.role,
-          ),
-          const SizedBox(height: 20),
-          const _SectionTitle(
-            eyebrow: 'Quick Access',
-            title: 'Move fast',
-            subtitle:
-                'Role-aware shortcuts without duplicating footer navigation.',
-          ),
+          const SizedBox(height: 24),
+          const _SectionHeading('Quick actions'),
           const SizedBox(height: 12),
           _QuickAccessGrid(
             profileAccountType: profile?.accountType,
             profileRole: profile?.role,
-            hasActiveGym: profile?.activeGym != null,
+            hasActiveGym: hasActiveGym,
           ),
-          if (profile?.accountType == AccountType.admin &&
-              profile?.activeGym == null) ...[
-            const SizedBox(height: 20),
-            const _SectionTitle(
-              eyebrow: 'Admin Setup',
-              title: 'Open the floor',
-              subtitle:
-                  'Create the first gym before members, bookings, and programming can go live.',
-            ),
+          if (profile?.accountType == AccountType.admin && !hasActiveGym) ...[
+            const SizedBox(height: 24),
+            const _SectionHeading('Set up your gym'),
             const SizedBox(height: 12),
             _ActionSpotlight(
               icon: Icons.storefront_outlined,
@@ -341,46 +325,200 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-  });
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading(this.title, {this.center = false});
 
-  final String eyebrow;
   final String title;
-  final String subtitle;
+  final bool center;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Text(
+      title,
+      textAlign: center ? TextAlign.center : TextAlign.start,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w800,
+        color: appText,
+      ),
+    );
+  }
+}
+
+/// Performance metrics derived from logbook entries. All values are real;
+/// "sessions" counts distinct training days so multiple logs on one day don't
+/// inflate the number.
+class _PerfStats {
+  const _PerfStats({
+    required this.sessionsThisWeek,
+    required this.sessionsLastWeek,
+    required this.weeklyGoal,
+    required this.streakWeeks,
+    required this.prsThisMonth,
+    required this.totalPrs,
+    required this.totalSessions,
+    required this.lastSixWeeks,
+  });
+
+  final int sessionsThisWeek;
+  final int sessionsLastWeek;
+  final int weeklyGoal;
+  final int streakWeeks;
+  final int prsThisMonth;
+  final int totalPrs;
+  final int totalSessions;
+  final List<int> lastSixWeeks; // oldest -> newest, length 6
+
+  double get weekProgress =>
+      weeklyGoal == 0 ? 0 : (sessionsThisWeek / weeklyGoal).clamp(0.0, 1.0);
+
+  int get sessionsTrend => sessionsThisWeek - sessionsLastWeek;
+
+  int get powerScore {
+    final sessions = (sessionsThisWeek / weeklyGoal).clamp(0.0, 1.0) * 55;
+    final streak = (streakWeeks / 4).clamp(0.0, 1.0) * 25;
+    final prs = (prsThisMonth / 2).clamp(0.0, 1.0) * 20;
+    return (sessions + streak + prs).round().clamp(0, 100);
+  }
+
+  String get powerLevel {
+    final value = powerScore;
+    if (value >= 85) {
+      return 'Peak';
+    }
+    if (value >= 65) {
+      return 'Strong';
+    }
+    if (value >= 40) {
+      return 'Building';
+    }
+    return 'Warming up';
+  }
+
+  factory _PerfStats.from(List<WorkoutLogEntry> entries, int weeklyGoal) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startOfWeek = today.subtract(Duration(days: today.weekday - 1));
+
+    int distinctDaysIn(DateTime start, DateTime end) {
+      final days = <int>{};
+      for (final entry in entries) {
+        final local = entry.scheduledDate.toLocal();
+        final day = DateTime(local.year, local.month, local.day);
+        if (!day.isBefore(start) && day.isBefore(end)) {
+          days.add(day.millisecondsSinceEpoch);
+        }
+      }
+      return days.length;
+    }
+
+    // weeks[0] = current week, weeks[5] = five weeks ago.
+    final weeks = <int>[];
+    for (var w = 0; w < 6; w++) {
+      final start = startOfWeek.subtract(Duration(days: 7 * w));
+      weeks.add(distinctDaysIn(start, start.add(const Duration(days: 7))));
+    }
+
+    // Consecutive weeks with at least one session. The current week gets grace
+    // if it's still empty (the week may just have started).
+    var streak = 0;
+    for (var i = weeks[0] > 0 ? 0 : 1; i < weeks.length; i++) {
+      if (weeks[i] > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    final monthStart = DateTime(now.year, now.month, 1);
+    var prsThisMonth = 0;
+    var totalPrs = 0;
+    for (final entry in entries) {
+      if (entry.isPr) {
+        totalPrs++;
+        if (!entry.scheduledDate.toLocal().isBefore(monthStart)) {
+          prsThisMonth++;
+        }
+      }
+    }
+
+    return _PerfStats(
+      sessionsThisWeek: weeks[0],
+      sessionsLastWeek: weeks[1],
+      weeklyGoal: weeklyGoal,
+      streakWeeks: streak,
+      prsThisMonth: prsThisMonth,
+      totalPrs: totalPrs,
+      totalSessions: entries.length,
+      lastSixWeeks: weeks.reversed.toList(),
+    );
+  }
+}
+
+class _PerformanceTracker extends StatelessWidget {
+  const _PerformanceTracker({
+    required this.entriesFuture,
+    required this.weeklyGoal,
+  });
+
+  final Future<List<WorkoutLogEntry>> entriesFuture;
+  final int weeklyGoal;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<WorkoutLogEntry>>(
+      future: entriesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 200,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final stats = _PerfStats.from(
+          snapshot.data ?? const <WorkoutLogEntry>[],
+          weeklyGoal,
+        );
+        return _GaugeTracker(stats: stats);
+      },
+    );
+  }
+}
+
+class _TrackerCard extends StatelessWidget {
+  const _TrackerCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: appPanelDecoration(),
+      child: child,
+    );
+  }
+}
+
+class _TrackerHeader extends StatelessWidget {
+  const _TrackerHeader({required this.icon, required this.title});
+
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
+        Icon(icon, size: 18, color: appPrimary),
+        const SizedBox(width: 8),
         Text(
-          eyebrow.toUpperCase(),
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: _homeAccent,
-            letterSpacing: 1.6,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: appText,
-            height: 0.96,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          title.toUpperCase(),
+          style: const TextStyle(
             color: appSubtleText,
-            height: 1.4,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.1,
+            fontSize: 12,
           ),
         ),
       ],
@@ -388,116 +526,88 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _HeroPanel extends StatelessWidget {
-  const _HeroPanel({
-    required this.displayName,
-    required this.profileRole,
-    required this.activeGymName,
-    required this.unreadNotifications,
-  });
+// Weekly-sessions performance tracker: a semicircular needle gauge
+// ("Tachometer") over a row of supporting stats.
+class _GaugeTracker extends StatelessWidget {
+  const _GaugeTracker({required this.stats});
 
-  final String displayName;
-  final UserRole? profileRole;
-  final String? activeGymName;
-  final int unreadNotifications;
+  final _PerfStats stats;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final roleLabel = profileRole?.label ?? 'Athlete';
-    final greeting = displayName.isEmpty ? roleLabel : displayName;
-    const accent = _homeAccent;
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [accent.withOpacity(0.14), appSurface, appSurfaceAlt],
-        ),
-        border: Border.all(color: appBorder),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(0.18),
-            blurRadius: 32,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Stack(
+    return _TrackerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -10,
-            top: -12,
-            child: _GlowOrb(color: accent, size: 86),
+          const _TrackerHeader(icon: Icons.speed_rounded, title: 'This week'),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            width: double.infinity,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _GaugePainter(progress: stats.weekProgress),
+                  ),
+                ),
+                Align(
+                  alignment: const Alignment(0, -0.18),
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${stats.sessionsThisWeek}',
+                          style: const TextStyle(
+                            color: appText,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' / ${stats.weeklyGoal}',
+                          style: const TextStyle(
+                            color: appSubtleText,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          Positioned(
-            right: 36,
-            bottom: -32,
-            child: _GlowOrb(color: _homeAccent.withOpacity(0.35), size: 92),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 16),
+          Container(height: 1, color: appBorder),
+          const SizedBox(height: 14),
+          Row(
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _HeroChip(label: roleLabel, color: accent),
-                  _HeroChip(
-                    label: activeGymName ?? 'No active gym',
-                    color: _homeAccent,
-                    outlined: true,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'News',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: _homeAccent,
-                  letterSpacing: 1.1,
+              Expanded(
+                child: _GaugeStat(
+                  icon: Icons.local_fire_department_rounded,
+                  iconColor: _perfRed,
+                  value: '${stats.streakWeeks}',
+                  label: 'week streak',
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Built for the next training block.',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w900,
-                  height: 0.95,
+              Container(width: 1, height: 34, color: appBorder),
+              Expanded(
+                child: _GaugeStat(
+                  value: '${stats.prsThisMonth}',
+                  label: 'PRs this month',
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Welcome back, $greeting. BoxOS now starts with a sharper operational snapshot instead of a generic dashboard.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: appMutedText,
-                  height: 1.45,
+              Container(width: 1, height: 34, color: appBorder),
+              Expanded(
+                child: _GaugeStat(
+                  value: stats.sessionsTrend > 0
+                      ? '+${stats.sessionsTrend}'
+                      : '${stats.sessionsTrend}',
+                  label: 'vs last week',
                 ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricBand(
-                      label: 'Inbox',
-                      value: unreadNotifications > 99
-                          ? '99+'
-                          : unreadNotifications.toString(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MetricBand(
-                      label: 'Mode',
-                      value: roleLabel.toUpperCase(),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -507,227 +617,86 @@ class _HeroPanel extends StatelessWidget {
   }
 }
 
-class _MetricBand extends StatelessWidget {
-  const _MetricBand({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: appSubtleText,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: appText,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GlowOrb extends StatelessWidget {
-  const _GlowOrb({required this.color, required this.size});
-
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withOpacity(0.95), color.withOpacity(0.0)],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroChip extends StatelessWidget {
-  const _HeroChip({
+class _GaugeStat extends StatelessWidget {
+  const _GaugeStat({
+    this.icon,
+    this.iconColor,
+    required this.value,
     required this.label,
-    required this.color,
-    this.outlined = false,
   });
 
+  final IconData? icon;
+  final Color? iconColor;
+  final String value;
   final String label;
-  final Color color;
-  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(outlined ? 0.55 : 0.3)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: appText,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _TodaySnapshot extends StatelessWidget {
-  const _TodaySnapshot({
-    required this.unreadNotifications,
-    required this.profileRole,
-  });
-
-  final int unreadNotifications;
-  final UserRole? profileRole;
-
-  @override
-  Widget build(BuildContext context) {
-    final rolePrompt = switch (profileRole) {
-      UserRole.admin =>
-        'Join requests, staffing, and payment alerts should surface here next.',
-      UserRole.trainer =>
-        'Coaching blocks, roster checks, and today\'s programming should surface here next.',
-      _ =>
-        'Your next booking, the daily WOD, and your logging prompt should surface here next.',
-    };
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _FeatureCard(
-          icon: Icons.calendar_month_rounded,
-          eyebrow: 'Next Class',
-          headline: 'No booking yet',
-          body:
-              'Your next reserved class will appear here with cleaner hierarchy and stronger status visibility.',
-          accentColor: _homeAccent,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: iconColor ?? appPrimary),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              value,
+              style: const TextStyle(
+                color: appText,
+                fontWeight: FontWeight.w900,
+                fontSize: 22,
+                height: 1,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        const _FeatureCard(
-          icon: Icons.local_fire_department_rounded,
-          eyebrow: 'Today\'s WOD',
-          headline: 'Not posted yet',
-          body:
-              'Programming for the active gym will surface here with better emphasis once the real data slice lands.',
-          accentColor: _homeAccent,
-        ),
-        const SizedBox(height: 12),
-        _FeatureCard(
-          icon: Icons.notifications_active_rounded,
-          eyebrow: 'Reminders',
-          headline: unreadNotifications == 0
-              ? 'Inbox clear'
-              : '$unreadNotifications unread',
-          body: rolePrompt,
-          accentColor: _homeAccent,
+        const SizedBox(height: 4),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: appSubtleText, fontSize: 12),
         ),
       ],
     );
   }
 }
 
-class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({
-    required this.icon,
-    required this.eyebrow,
-    required this.headline,
-    required this.body,
-    required this.accentColor,
-  });
+class _GaugePainter extends CustomPainter {
+  _GaugePainter({required this.progress});
 
-  final IconData icon;
-  final String eyebrow;
-  final String headline;
-  final String body;
-  final Color accentColor;
+  final double progress;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: appBorder),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withOpacity(0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppAccentBadge(icon: icon, color: accentColor),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  eyebrow.toUpperCase(),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: accentColor,
-                    letterSpacing: 1.3,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  headline,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: appText,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  body,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: appSubtleText,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height - 8);
+    final radius = math.min(size.width / 2, size.height - 12) - 14;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final track = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 16
+      ..strokeCap = StrokeCap.round
+      ..shader = const LinearGradient(
+        colors: [_perfRed, _perfAmber, _perfGreen],
+      ).createShader(rect);
+    canvas.drawArc(rect, math.pi, math.pi, false, track);
+
+    final angle = math.pi + progress.clamp(0.0, 1.0) * math.pi;
+    final tip = center + Offset(math.cos(angle), math.sin(angle)) * radius * 0.40;
+    final needle = Paint()
+      ..color = appText
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(center, tip, needle);
+    canvas.drawCircle(center, 7, Paint()..color = appText);
+    canvas.drawCircle(center, 3, Paint()..color = appSurface);
   }
+
+  @override
+  bool shouldRepaint(covariant _GaugePainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _BookingQuickAccessRail extends StatelessWidget {
@@ -1755,14 +1724,12 @@ class _HomeAction {
   const _HomeAction({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.route,
     required this.accentColor,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
   final String route;
   final Color accentColor;
 }
@@ -1786,7 +1753,6 @@ class _QuickAccessGrid extends StatelessWidget {
         const _HomeAction(
           icon: Icons.group_outlined,
           title: 'Review Join Requests',
-          subtitle: 'Approve or reject athletes requesting access to your gym.',
           route: '/gym-requests',
           accentColor: appPrimary,
         )
@@ -1794,7 +1760,6 @@ class _QuickAccessGrid extends StatelessWidget {
         const _HomeAction(
           icon: Icons.search_outlined,
           title: 'Find a Gym',
-          subtitle: 'Browse gyms and request access from the athlete flow.',
           route: '/gyms',
           accentColor: appPrimary,
         ),
@@ -1802,7 +1767,6 @@ class _QuickAccessGrid extends StatelessWidget {
         const _HomeAction(
           icon: Icons.edit_calendar_outlined,
           title: 'Open Schedule',
-          subtitle: 'Move into class planning and coaching workflows.',
           route: '/my-box',
           accentColor: appPrimary,
         )
@@ -1810,7 +1774,6 @@ class _QuickAccessGrid extends StatelessWidget {
         const _HomeAction(
           icon: Icons.menu_book_outlined,
           title: 'Open Logbook',
-          subtitle: 'Jump straight into workout history and recent efforts.',
           route: '/logbook',
           accentColor: appPrimary,
         ),
@@ -1819,9 +1782,6 @@ class _QuickAccessGrid extends StatelessWidget {
             ? Icons.local_fire_department_outlined
             : Icons.notifications_outlined,
         title: hasActiveGym ? 'See Programming' : 'Open Notifications',
-        subtitle: hasActiveGym
-            ? 'Check the current WOD and upcoming training flow.'
-            : 'Stay on top of inbox items until a gym is active.',
         route: hasActiveGym ? '/programming' : '/notifications',
         accentColor: _homeAccent,
       ),
@@ -1858,31 +1818,18 @@ class _ActionTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           onTap: () => context.go(action.route),
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             child: Row(
               children: [
                 AppAccentBadge(icon: action.icon, color: action.accentColor),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        action.title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: appText,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        action.subtitle,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: appSubtleText,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    action.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: appText,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

@@ -51,6 +51,83 @@ BoxDecoration appHeroDecoration({double radius = appRadiusXl}) => BoxDecoration(
   ],
 );
 
+/// Compact stat tile (label + value) used in snapshot/dashboard grids. Pass an
+/// optional [icon] for a trailing accent glyph and [onTap] to make the tile
+/// double as a quick-access shortcut. Shared by the Logbook and Home screens.
+class AppStatTile extends StatelessWidget {
+  const AppStatTile({
+    super.key,
+    required this.label,
+    required this.value,
+    this.icon,
+    this.accentColor = appPrimary,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData? icon;
+  final Color accentColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final decoration = BoxDecoration(
+      color: accentColor.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(appRadiusLg),
+      border: Border.all(color: accentColor.withValues(alpha: 0.22)),
+    );
+    final child = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: accentColor,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (icon != null) Icon(icon, size: 18, color: accentColor),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: appText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap == null) {
+      return Container(decoration: decoration, child: child);
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(appRadiusLg),
+        onTap: onTap,
+        child: Ink(decoration: decoration, child: child),
+      ),
+    );
+  }
+}
+
 /// Rounded square icon badge with an accent-tinted gradient, used across
 /// feature cards, list tiles, and section headers. Consolidates what used to
 /// be a dozen identical private `_AccentBadge` copies.
