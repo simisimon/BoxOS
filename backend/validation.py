@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import sqlite3
 from datetime import date, datetime, timedelta
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -278,7 +280,7 @@ def require_optional_user_id(value: Any) -> int | None:
 
 def require_account_type(value: Any) -> str:
     account_type = normalize_account_type_value(value)
-    if account_type not in ALLOWED_ACCOUNT_TYPES:
+    if account_type not in settings.ALLOWED_ACCOUNT_TYPES:
         raise ApiError(
             HTTPStatus.BAD_REQUEST,
             "Account type must be athlete or admin.",
@@ -485,7 +487,7 @@ def recurrence_delta_for(frequency: str) -> timedelta:
 def recurrence_occurrence_limit_for(frequency: str) -> int:
     if frequency == "none":
         return 1
-    return RECURRENCE_OCCURRENCE_LIMITS.get(frequency, MAX_RECURRENCE_OCCURRENCES)
+    return settings.RECURRENCE_OCCURRENCE_LIMITS.get(frequency, settings.MAX_RECURRENCE_OCCURRENCES)
 
 
 def build_recurrence_start_times(
@@ -757,6 +759,42 @@ def require_whiteboard_notes(value: Any) -> str:
     if len(notes) > 500:
         raise ApiError(HTTPStatus.BAD_REQUEST, "Notes must be 500 characters or fewer.")
     return notes
+
+
+def require_personal_workout_title(value: Any) -> str:
+    title = str(value or "").strip()
+    if not title:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title is required.")
+    if len(title) > 120:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title must be 120 characters or fewer.")
+    return title
+
+
+def require_personal_workout_type(value: Any) -> str:
+    workout_type = str(value or "").strip().lower()
+    allowed_types = {"amrap", "for_time", "emom", "interval", "strength", "custom"}
+    if workout_type not in allowed_types:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Workout type must be amrap, for_time, emom, interval, strength, or custom.",
+        )
+    return workout_type
+
+
+def require_personal_workout_structure(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout structure must be an object.")
+    return value
+
+
+def require_personal_workout_id(value: Any) -> int:
+    try:
+        workout_id = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout id is required.")
+    if workout_id <= 0:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout id is required.")
+    return workout_id
 
 
 def require_join_request_decision(value: Any) -> str:

@@ -4,6 +4,8 @@ import json
 import sqlite3
 from typing import Any
 
+from backend.security import isoformat, now_utc
+
 def audit_log_payload(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],

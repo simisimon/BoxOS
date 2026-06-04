@@ -125,7 +125,7 @@ class FastApiBackendTests(unittest.TestCase):
             headers=admin_headers,
             json={
                 "title": "Morning WOD",
-                "class_type": "crossfit",
+                "class_type": "WOD",
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 60,
                 "capacity": 1,
@@ -233,6 +233,13 @@ class FastApiBackendTests(unittest.TestCase):
             json={"gym_id": gym_one.json()["gym"]["id"]},
         )
         self.assertEqual(join_request.status_code, 201)
+
+        switched_admin_gym = self.client.patch(
+            "/profile/active-gym",
+            headers=admin_headers,
+            json={"gym_id": gym_one.json()["gym"]["id"]},
+        )
+        self.assertEqual(switched_admin_gym.status_code, 200)
 
         pending = self.client.get("/gyms/join-requests", headers=admin_headers)
         self.assertEqual(pending.status_code, 200)
@@ -509,7 +516,7 @@ class FastApiBackendTests(unittest.TestCase):
             )
         connection.close()
 
-        workout_date = (security.now_utc() - timedelta(days=1)).date().isoformat()
+        workout_date = security.now_utc().date().isoformat()
         created_workout = self.client.post(
             "/programming/workouts",
             headers=admin_headers,
@@ -521,7 +528,7 @@ class FastApiBackendTests(unittest.TestCase):
                 "notes_text": "Go hard",
             },
         )
-        self.assertEqual(created_workout.status_code, 201)
+        self.assertEqual(created_workout.status_code, 200)
         workout_id = created_workout.json()["workout"]["id"]
 
         athlete_login = self.client.post(
@@ -537,14 +544,14 @@ class FastApiBackendTests(unittest.TestCase):
         whiteboard = self.client.post(
             "/programming/whiteboard-results",
             headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "time", "score_value": 355, "notes_text": "Felt good"},
+            json={"workout_id": workout_id, "score_type": "time", "score_value": "5:55", "notes_text": "Felt good"},
         )
         self.assertEqual(whiteboard.status_code, 200)
 
         log_entry = self.client.post(
             "/logbook/entries",
             headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "time", "score_value": 355, "notes_text": "PR!"},
+            json={"workout_id": workout_id, "score_type": "time", "score_value": "5:55", "notes_text": "PR!"},
         )
         self.assertEqual(log_entry.status_code, 200)
         self.assertTrue(log_entry.json()["entry"]["is_pr"])

@@ -6,7 +6,7 @@ from typing import Any
 
 from backend import settings
 from backend.security import hash_password, isoformat, now_utc
-from backend.validation import normalize_account_type_value, normalize_role_value, encode_roles
+from backend.validation import encode_roles, normalize_account_type_value, normalize_role_value, normalize_roles, require_account_type
 
 class ManagedConnection(sqlite3.Connection):
     def __del__(self) -> None:
