@@ -63,3 +63,5 @@ Thumbs.db
 # Local backend artifacts
 backend/boxos_dev.db
 backend/__pycache__/
+**/__pycache__/
+*.py[cod]
