@@ -10,6 +10,8 @@
 build/
 **/build/
 coverage/
+htmlcov/
+.coverage
 
 # Generated files
 **/generated_plugin_registrant.dart

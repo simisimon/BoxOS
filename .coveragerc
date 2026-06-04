@@ -1,0 +1,10 @@
+[run]
+source = backend
+omit =
+    backend/tests/*
+    backend/test_fastapi_app.py
+    backend/__pycache__/*
+
+[report]
+show_missing = True
+skip_covered = False
