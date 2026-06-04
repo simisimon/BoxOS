@@ -317,7 +317,7 @@ def require_upload_filename(value: Any) -> str:
 
 def require_announcement_image_content_type(value: Any) -> str:
     content_type = str(value or "").strip().lower()
-    if content_type not in ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES:
+    if content_type not in settings.ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES:
         raise ApiError(
             HTTPStatus.BAD_REQUEST,
             "Announcement images must be JPEG, PNG, or WEBP.",

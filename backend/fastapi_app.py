@@ -2369,9 +2369,12 @@ def list_personal_workouts(session: dict[str, Any] = Depends(require_session)) -
 
 @app.post("/personal-workouts")
 def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    title = validation.require_personal_workout_title(body.title)
-    workout_type = validation.require_personal_workout_type(body.type)
-    structure = validation.require_personal_workout_structure(body.structure)
+    try:
+        title = validation.require_personal_workout_title(body.title)
+        workout_type = validation.require_personal_workout_type(body.type)
+        structure = validation.require_personal_workout_structure(body.structure)
+    except validation.ApiError as error:
+        raise_http_error(error)
     timestamp = security.isoformat(security.now_utc())
     connection = db.get_connection()
     try:
@@ -2406,7 +2409,10 @@ def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any
 
 @app.delete("/personal-workouts")
 def delete_personal_workout(body: PersonalWorkoutDeleteRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    workout_id = validation.require_personal_workout_id(body.id)
+    try:
+        workout_id = validation.require_personal_workout_id(body.id)
+    except validation.ApiError as error:
+        raise_http_error(error)
     connection = db.get_connection()
     try:
         with connection:
