@@ -89,6 +89,62 @@ cd /data/.openclaw/workspace/github/BoxOS
 python3 -m unittest backend.test_fastapi_app
 ```
 
+## Docker
+
+Frontend und Backend lassen sich zusammen per Docker Compose starten:
+
+```bash
+cd /data/.openclaw/workspace/github/BoxOS
+docker compose up --build
+```
+
+Danach erreichbar unter:
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8080`
+
+### Development-Umgebung
+
+Für die Weiterentwicklung gibt es zusätzliche Compose-Services mit dem Profil `dev`:
+
+```bash
+cd /data/.openclaw/workspace/github/BoxOS
+docker compose --profile dev up --build backend-dev frontend-dev
+```
+
+Danach erreichbar unter:
+- Frontend Dev Server: `http://localhost:3001`
+- Backend Dev Server: `http://localhost:8081`
+
+Dev-Setup:
+- `backend-dev` startet Uvicorn mit `--reload`
+- `frontend-dev` startet Flutter Web per `flutter run -d web-server`
+- Der Quellcode wird per Bind-Mount direkt aus `./backend` und `./app` eingebunden
+- Dev-Daten und Uploads landen in separaten Volumes, damit Prod/Dev getrennt bleiben
+
+Enthalten:
+- `backend/Dockerfile` für FastAPI/Uvicorn
+- `app/Dockerfile` für Flutter Web Build + Nginx Serving
+- `app/nginx.conf` mit SPA-Fallback für `go_router`
+- `docker-compose.yml` für Prod + Dev
+
+Persistente Backend-Daten liegen in Docker-Volumes:
+- `backend_data` für die SQLite-Datenbank (Prod)
+- `backend_uploads` für Upload-Dateien (Prod)
+- `backend_dev_data` für die SQLite-Datenbank (Dev)
+- `backend_dev_uploads` für Upload-Dateien (Dev)
+
+Wichtige Build-Args für das Frontend in `docker-compose.yml`:
+- `APP_ENV`
+- `API_BASE_URL`
+- `AUTH_REDIRECT_URL`
+
+Wichtige Backend-Umgebungsvariablen:
+- `BOXOS_HOST`
+- `BOXOS_PORT`
+- `BOXOS_DB_PATH`
+- `BOXOS_UPLOADS_ROOT`
+- `BOXOS_ANNOUNCEMENT_UPLOADS_DIR`
+
 ## Notes
 - Supabase is no longer the active backend path for the app.
 - The legacy `supabase/` project files have been removed from this repository.

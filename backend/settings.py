@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 try:
@@ -12,13 +13,16 @@ try:
 except ImportError:  # pragma: no cover - optional runtime fallback
     pytz = None
 
-DB_PATH = Path(__file__).with_name("boxos_dev.db")
-UPLOADS_ROOT = Path(__file__).with_name("uploads")
-ANNOUNCEMENT_UPLOADS_DIR = UPLOADS_ROOT / "announcements"
-EXERCISES_SEED_PATH = Path(__file__).with_name("data") / "exercises.json"
-BENCHMARKS_SEED_PATH = Path(__file__).with_name("data") / "benchmark_workouts.json"
-HOST = "127.0.0.1"
-PORT = 8080
+BACKEND_ROOT = Path(__file__).resolve().parent
+DB_PATH = Path(os.getenv("BOXOS_DB_PATH", str(BACKEND_ROOT / "boxos_dev.db")))
+UPLOADS_ROOT = Path(os.getenv("BOXOS_UPLOADS_ROOT", str(BACKEND_ROOT / "uploads")))
+ANNOUNCEMENT_UPLOADS_DIR = Path(
+    os.getenv("BOXOS_ANNOUNCEMENT_UPLOADS_DIR", str(UPLOADS_ROOT / "announcements"))
+)
+EXERCISES_SEED_PATH = BACKEND_ROOT / "data" / "exercises.json"
+BENCHMARKS_SEED_PATH = BACKEND_ROOT / "data" / "benchmark_workouts.json"
+HOST = os.getenv("BOXOS_HOST", "127.0.0.1")
+PORT = int(os.getenv("BOXOS_PORT", "8080"))
 DELETE_RETENTION_DAYS = 30
 MAX_RECURRENCE_OCCURRENCES = 365
 MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024
