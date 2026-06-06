@@ -14,6 +14,7 @@ if FASTAPI_AVAILABLE:
 
 if FASTAPI_AVAILABLE and TESTCLIENT_AVAILABLE:
     from fastapi.testclient import TestClient
+    from backend import fastapi_app
     from backend.fastapi_app import app
 else:  # pragma: no cover
     TestClient = None
@@ -30,6 +31,8 @@ class FastApiTestCase(unittest.TestCase):
         settings.UPLOADS_ROOT = Path(self.temp_dir.name) / "uploads"
         settings.ANNOUNCEMENT_UPLOADS_DIR = settings.UPLOADS_ROOT / "announcements"
         self.client = TestClient(app)
+        settings.RATE_LIMIT_ENABLED = False
+        fastapi_app.reset_rate_limits()
         db.init_db()
 
     def tearDown(self) -> None:

@@ -15,6 +15,7 @@ if FASTAPI_AVAILABLE:
 
 if FASTAPI_AVAILABLE and TESTCLIENT_AVAILABLE:
     from fastapi.testclient import TestClient
+    from backend import fastapi_app
     from backend.fastapi_app import app
 else:  # pragma: no cover
     TestClient = None
@@ -29,6 +30,8 @@ class FastApiBackendTests(unittest.TestCase):
         settings.UPLOADS_ROOT = Path(self.temp_dir.name) / "uploads"
         settings.ANNOUNCEMENT_UPLOADS_DIR = settings.UPLOADS_ROOT / "announcements"
         self.client = TestClient(app)
+        settings.RATE_LIMIT_ENABLED = False
+        fastapi_app.reset_rate_limits()
         db.init_db()
 
     def tearDown(self) -> None:
@@ -594,3 +597,27 @@ class FastApiBackendTests(unittest.TestCase):
             json={"id": personal_id},
         )
         self.assertEqual(deleted_personal.status_code, 200)
+
+    def test_validation_error_is_handled_globally(self) -> None:
+        response = self.client.post(
+            "/auth/login",
+            json={"email": "not-an-email", "password": "whatever"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Enter a valid email.")
+
+    def test_login_is_rate_limited_after_too_many_attempts(self) -> None:
+        settings.RATE_LIMIT_ENABLED = True
+        fastapi_app.reset_rate_limits()
+        for _ in range(10):
+            attempt = self.client.post(
+                "/auth/login",
+                json={"email": settings.DEMO_EMAIL, "password": "wrong-password"},
+            )
+            self.assertNotEqual(attempt.status_code, 429)
+        blocked = self.client.post(
+            "/auth/login",
+            json={"email": settings.DEMO_EMAIL, "password": "wrong-password"},
+        )
+        self.assertEqual(blocked.status_code, 429)
+        self.assertIn("retry-after", {key.lower() for key in blocked.headers})

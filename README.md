@@ -46,7 +46,6 @@ Production-oriented platform for running a CrossFit box and supporting athlete t
 ## Local backend
 FastAPI backend:
 ```bash
-cd /data/.openclaw/workspace/github/BoxOS
 python3 -m pip install -r backend/requirements-fastapi.txt
 sh backend/run-fastapi-dev.sh
 ```
@@ -85,16 +84,14 @@ flutter test
 
 Backend:
 ```bash
-cd /data/.openclaw/workspace/github/BoxOS
 python3 -m unittest backend.test_fastapi_app
 ```
 
 ## Docker
 
-Frontend und Backend lassen sich zusammen per Docker Compose starten:
+Frontend und Backend lassen sich zusammen per Docker Compose starten (aus dem Projekt-Root):
 
 ```bash
-cd /data/.openclaw/workspace/github/BoxOS
 docker compose up --build
 ```
 
@@ -107,7 +104,6 @@ Danach erreichbar unter:
 Für die Weiterentwicklung gibt es zusätzliche Compose-Services mit dem Profil `dev`:
 
 ```bash
-cd /data/.openclaw/workspace/github/BoxOS
 docker compose --profile dev up --build backend-dev frontend-dev
 ```
 
@@ -117,9 +113,10 @@ Danach erreichbar unter:
 
 Dev-Setup:
 - `backend-dev` startet Uvicorn mit `--reload`
-- `frontend-dev` startet Flutter Web per `flutter run -d web-server`
+- `frontend-dev` startet Flutter Web per `flutter run -d web-server` (offizielles `cirruslabs/flutter:stable` Image)
 - Der Quellcode wird per Bind-Mount direkt aus `./backend` und `./app` eingebunden
 - Dev-Daten und Uploads landen in separaten Volumes, damit Prod/Dev getrennt bleiben
+- Der Flutter-Pub-Cache wird im Volume `flutter_pub_cache` gehalten, um wiederholte `pub get`-Läufe zu beschleunigen
 
 Enthalten:
 - `backend/Dockerfile` für FastAPI/Uvicorn
@@ -144,6 +141,9 @@ Wichtige Backend-Umgebungsvariablen:
 - `BOXOS_DB_PATH`
 - `BOXOS_UPLOADS_ROOT`
 - `BOXOS_ANNOUNCEMENT_UPLOADS_DIR`
+- `BOXOS_CORS_ALLOW_ORIGINS` – kommaseparierte erlaubte Origins (Default: `http://localhost:3000,http://localhost:3001`)
+- `BOXOS_LOG_DELIVERY_TOKENS` – `1` (Default) loggt Verifizierungs-/Reset-Tokens; in Produktion auf `0` setzen
+- `BOXOS_RATE_LIMIT_ENABLED` – `1` (Default) aktiviert das Rate-Limiting der Auth-Endpunkte; `0` deaktiviert es
 
 ## Notes
 - Supabase is no longer the active backend path for the app.

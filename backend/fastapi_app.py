@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
@@ -10,10 +14,63 @@ from datetime import datetime, timedelta
 
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from backend import announcement_service, audit, auth_service, db, membership_service, notifications_core, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
+
+logger = logging.getLogger("boxos.backend")
+
+
+def _log_delivery_token(kind: str, email: str, token: str) -> None:
+    """Surface tokens that would normally be emailed. The value is only logged when
+    BOXOS_LOG_DELIVERY_TOKENS is enabled (dev default) so it never leaks in production."""
+    if settings.LOG_DELIVERY_TOKENS:
+        logger.info("%s token for %s: %s", kind, email, token)
+    else:
+        logger.info("%s token issued for %s (value suppressed).", kind, email)
+
+
+_rate_lock = threading.Lock()
+_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
+
+
+def reset_rate_limits() -> None:
+    """Clear all in-memory rate-limit state. Intended for test isolation."""
+    with _rate_lock:
+        _rate_buckets.clear()
+
+
+def _client_identifier(request: Request) -> str:
+    return request.client.host if request.client is not None else "unknown"
+
+
+def rate_limit(scope: str, *, limit: int, window_seconds: float):
+    """Build a dependency that throttles a client (by IP) to `limit` requests per
+    rolling `window_seconds` for the given scope. In-memory and per-process, which is
+    adequate for a single-instance deployment; swap for a shared store when scaling out."""
+
+    def dependency(request: Request) -> None:
+        if not settings.RATE_LIMIT_ENABLED:
+            return
+        key = f"{scope}:{_client_identifier(request)}"
+        now = time.monotonic()
+        cutoff = now - window_seconds
+        with _rate_lock:
+            bucket = _rate_buckets[key]
+            while bucket and bucket[0] <= cutoff:
+                bucket.popleft()
+            if len(bucket) >= limit:
+                retry_after = max(1, int(bucket[0] + window_seconds - now) + 1)
+                raise HTTPException(
+                    status_code=HTTPStatus.TOO_MANY_REQUESTS.value,
+                    detail="Too many requests. Please slow down and try again later.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+            bucket.append(now)
+
+    return dependency
 
 
 class LoginRequest(BaseModel):
@@ -23,6 +80,44 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+
+
+class EmailRequest(BaseModel):
+    email: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+    logout_other_sessions: bool = False
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    logout_other_sessions: bool = False
+
+
+class DeleteAccountRequest(BaseModel):
+    current_password: str
+
+
+class DeviceRegisterRequest(BaseModel):
+    device_token: str
+    platform: str
+
+
+class DeviceTokenRequest(BaseModel):
+    device_token: str
 
 
 class UpdateProfileRequest(BaseModel):
@@ -174,9 +269,27 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="BoxOS Backend", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def raise_http_error(error: validation.ApiError) -> None:
-    raise HTTPException(status_code=error.status.value, detail=error.message)
+
+@app.exception_handler(validation.ApiError)
+async def handle_api_error(_: Request, error: validation.ApiError) -> JSONResponse:
+    return JSONResponse(status_code=error.status.value, content={"detail": error.message})
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_error(_: Request, error: Exception) -> JSONResponse:
+    logger.exception("Unhandled error while processing request", exc_info=error)
+    return JSONResponse(
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+        content={"detail": "Internal server error."},
+    )
 
 
 def require_bearer_token(authorization: str | None = Header(default=None)) -> str:
@@ -279,9 +392,9 @@ def require_admin_gym_session(
     return session
 
 
-def _signup(body: dict[str, Any], *, account_type: str) -> dict[str, Any]:
-    email = validation.require_email(body.get("email"))
-    password = validation.require_password(body.get("password"))
+def _signup(body: SignupRequest, *, account_type: str) -> dict[str, Any]:
+    email = validation.require_email(body.email)
+    password = validation.require_password(body.password)
     normalized_account_type = validation.require_account_type(account_type)
     connection = db.get_connection()
     try:
@@ -310,7 +423,7 @@ def _signup(body: dict[str, Any], *, account_type: str) -> dict[str, Any]:
             )
             user_id = int(cursor.lastrowid)
             token = auth_service.issue_verification_token(connection, user_id)
-        print(f"[boxos-backend] Verification token for {email}: {token}")
+        _log_delivery_token("Verification", email, token)
         return {"message": "Account created. Check the backend log for the verification token."}
     finally:
         connection.close()
@@ -322,7 +435,10 @@ def health() -> dict[str, str]:
 
 
 @app.post("/auth/login")
-def login(body: LoginRequest) -> dict[str, str]:
+def login(
+    body: LoginRequest,
+    _: None = Depends(rate_limit("login", limit=10, window_seconds=60)),
+) -> dict[str, str]:
     email = validation.require_email(body.email)
     password = validation.require_password(body.password)
     connection = db.get_connection()
@@ -418,11 +534,8 @@ def update_profile(
     body: UpdateProfileRequest,
     session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
-    try:
-        display_name = validation.require_display_name(body.display_name)
-        nickname = validation.require_nickname(body.nickname)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    display_name = validation.require_display_name(body.display_name)
+    nickname = validation.require_nickname(body.nickname)
     connection = db.get_connection()
     try:
         with connection:
@@ -450,10 +563,7 @@ def update_active_role(
     body: UpdateActiveRoleRequest,
     session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
-    try:
-        role = validation.require_role_value(body.role)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    role = validation.require_role_value(body.role)
     assigned_roles = validation.decode_roles(session["roles_json"])
     if role not in assigned_roles:
         raise HTTPException(
@@ -544,10 +654,7 @@ def update_notification_preferences(
     session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, bool]:
     payload = body.model_dump()
-    try:
-        preferences = validation.require_notification_preferences(payload)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    preferences = validation.require_notification_preferences(payload)
     connection = db.get_connection()
     try:
         with connection:
@@ -651,12 +758,9 @@ def create_gym(
     body: CreateGymRequest,
     session: dict[str, Any] = Depends(require_admin_session),
 ) -> dict[str, Any]:
-    try:
-        name = validation.require_gym_name(body.name)
-        logo_url = validation.require_logo_url(body.logo_url)
-        timezone = validation.require_timezone(body.timezone)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    name = validation.require_gym_name(body.name)
+    logo_url = validation.require_logo_url(body.logo_url)
+    timezone = validation.require_timezone(body.timezone)
 
     connection = db.get_connection()
     try:
@@ -816,11 +920,8 @@ def review_join_request(
     body: ReviewJoinRequestBody,
     session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, str]:
-    try:
-        request_id = validation.require_user_id(body.request_id)
-        decision = validation.require_join_request_decision(body.decision)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    request_id = validation.require_user_id(body.request_id)
+    decision = validation.require_join_request_decision(body.decision)
     connection = db.get_connection()
     try:
         join_request = connection.execute(
@@ -899,11 +1000,8 @@ def assign_role(
     session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     payload = body.model_dump(exclude_none=True)
-    try:
-        user_id = validation.require_user_id(body.user_id)
-        roles = validation.require_role_list(payload)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    user_id = validation.require_user_id(body.user_id)
+    roles = validation.require_role_list(payload)
     managed_roles = [role for role in roles if role in {"athlete", "trainer"}]
     if not managed_roles:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Managed roles must include athlete or trainer.")
@@ -991,12 +1089,9 @@ def create_announcement(
     body: AnnouncementRequest,
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
-    try:
-        title = validation.require_announcement_title(body.title)
-        description = validation.require_announcement_description(body.description)
-        image_url = validation.require_optional_image_url(body.image_url)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    title = validation.require_announcement_title(body.title)
+    description = validation.require_announcement_description(body.description)
+    image_url = validation.require_optional_image_url(body.image_url)
     connection = db.get_connection()
     try:
         timestamp = security.isoformat(security.now_utc())
@@ -1027,12 +1122,9 @@ def upload_announcement_image(
     body: AnnouncementImageUploadRequest,
     _: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, str]:
-    try:
-        filename = validation.require_upload_filename(body.filename)
-        content_type = validation.require_announcement_image_content_type(body.content_type)
-        raw_bytes = validation.require_base64_bytes(body.data_base64, label="Image data", max_bytes=settings.MAX_ANNOUNCEMENT_IMAGE_BYTES)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    filename = validation.require_upload_filename(body.filename)
+    content_type = validation.require_announcement_image_content_type(body.content_type)
+    raw_bytes = validation.require_base64_bytes(body.data_base64, label="Image data", max_bytes=settings.MAX_ANNOUNCEMENT_IMAGE_BYTES)
     extension = settings.ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES[content_type]
     stored_name = f"announcement_{secrets.token_urlsafe(12)}{extension}"
     file_path = settings.ANNOUNCEMENT_UPLOADS_DIR / stored_name
@@ -1045,13 +1137,10 @@ def update_announcement(
     body: AnnouncementUpdateRequest,
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
-    try:
-        announcement_id = validation.require_user_id(body.id)
-        title = validation.require_announcement_title(body.title)
-        description = validation.require_announcement_description(body.description)
-        image_url = validation.require_optional_image_url(body.image_url)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    announcement_id = validation.require_user_id(body.id)
+    title = validation.require_announcement_title(body.title)
+    description = validation.require_announcement_description(body.description)
+    image_url = validation.require_optional_image_url(body.image_url)
     connection = db.get_connection()
     try:
         existing = connection.execute(
@@ -1060,10 +1149,7 @@ def update_announcement(
         ).fetchone()
         if existing is None:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Announcement not found.")
-        try:
-            announcement_service.ensure_announcement_manage_permission(existing, session)
-        except validation.ApiError as error:
-            raise_http_error(error)
+        announcement_service.ensure_announcement_manage_permission(existing, session)
         with connection:
             connection.execute(
                 "update announcements set title = ?, description = ?, image_url = ?, updated_at = ? where id = ? and gym_id = ?",
@@ -1092,10 +1178,7 @@ def delete_announcement(
         ).fetchone()
         if existing is None:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Announcement not found.")
-        try:
-            announcement_service.ensure_announcement_manage_permission(existing, session)
-        except validation.ApiError as error:
-            raise_http_error(error)
+        announcement_service.ensure_announcement_manage_permission(existing, session)
         with connection:
             connection.execute("delete from announcements where id = ? and gym_id = ?", (announcement_id, session["active_gym_id"]))
             audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="announcement_deleted", entity_type="announcement", entity_id=announcement_id, details={"title": existing["title"]})
@@ -1152,11 +1235,8 @@ def create_announcement_comment(
     body: AnnouncementCommentRequest,
     session: dict[str, Any] = Depends(require_active_gym_member_session),
 ) -> dict[str, Any]:
-    try:
-        announcement_id = validation.require_user_id(body.announcement_id)
-        comment_body = validation.require_announcement_comment_body(body.body)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    announcement_id = validation.require_user_id(body.announcement_id)
+    comment_body = validation.require_announcement_comment_body(body.body)
     connection = db.get_connection()
     try:
         announcement = announcement_service.get_announcement_row(connection, announcement_id=announcement_id, gym_id=session["active_gym_id"])
@@ -1183,20 +1263,14 @@ def update_announcement_comment(
     body: AnnouncementCommentUpdateRequest,
     session: dict[str, Any] = Depends(require_active_gym_member_session),
 ) -> dict[str, Any]:
-    try:
-        comment_id = validation.require_user_id(body.id)
-        comment_body = validation.require_announcement_comment_body(body.body)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    comment_id = validation.require_user_id(body.id)
+    comment_body = validation.require_announcement_comment_body(body.body)
     connection = db.get_connection()
     try:
         existing = announcement_service.get_announcement_comment_row(connection, comment_id)
         if existing is None or int(existing["gym_id"]) != int(session["active_gym_id"]):
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Comment not found.")
-        try:
-            announcement_service.ensure_announcement_comment_manage_permission(existing, session)
-        except validation.ApiError as error:
-            raise_http_error(error)
+        announcement_service.ensure_announcement_comment_manage_permission(existing, session)
         with connection:
             connection.execute("update announcement_comments set body = ?, updated_at = ? where id = ?", (comment_body, security.isoformat(security.now_utc()), comment_id))
             comment = announcement_service.get_announcement_comment_row(connection, comment_id)
@@ -1219,10 +1293,7 @@ def delete_announcement_comment(
         existing = announcement_service.get_announcement_comment_row(connection, comment_id)
         if existing is None or int(existing["gym_id"]) != int(session["active_gym_id"]):
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Comment not found.")
-        try:
-            announcement_service.ensure_announcement_comment_manage_permission(existing, session)
-        except validation.ApiError as error:
-            raise_http_error(error)
+        announcement_service.ensure_announcement_comment_manage_permission(existing, session)
         with connection:
             connection.execute("delete from announcement_comments where id = ?", (comment_id,))
             audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="announcement_comment_deleted", entity_type="announcement_comment", entity_id=comment_id, details={"announcement_id": existing["announcement_id"]})
@@ -1313,21 +1384,18 @@ def create_schedule_class(
     body: ScheduleClassRequest,
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
-    try:
-        title = validation.require_schedule_title(body.title)
-        class_type = validation.require_class_type(body.class_type)
-        start_time = validation.require_future_datetime(body.start_time, label="Start time")
-        duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
-        capacity = validation.require_capacity(body.capacity)
-        trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
-        wod_description = validation.require_wod_description(body.wod_description)
-        recurrence_frequency = validation.require_recurrence_frequency(body.recurrence_frequency)
-        occurrence_count = validation.require_occurrence_count(
-            body.occurrence_count,
-            recurrence_frequency=recurrence_frequency,
-        )
-    except validation.ApiError as error:
-        raise_http_error(error)
+    title = validation.require_schedule_title(body.title)
+    class_type = validation.require_class_type(body.class_type)
+    start_time = validation.require_future_datetime(body.start_time, label="Start time")
+    duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
+    capacity = validation.require_capacity(body.capacity)
+    trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
+    wod_description = validation.require_wod_description(body.wod_description)
+    recurrence_frequency = validation.require_recurrence_frequency(body.recurrence_frequency)
+    occurrence_count = validation.require_occurrence_count(
+        body.occurrence_count,
+        recurrence_frequency=recurrence_frequency,
+    )
     connection = db.get_connection()
     try:
         gym_row = connection.execute(
@@ -1336,15 +1404,12 @@ def create_schedule_class(
         ).fetchone()
         if gym_row is None:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Active gym not found.")
-        try:
-            start_times = schedule_service.build_recurrence_start_times(
-                start_time,
-                recurrence_frequency=recurrence_frequency,
-                occurrence_count=occurrence_count,
-                gym_timezone=gym_row["timezone"],
-            )
-        except validation.ApiError as error:
-            raise_http_error(error)
+        start_times = schedule_service.build_recurrence_start_times(
+            start_time,
+            recurrence_frequency=recurrence_frequency,
+            occurrence_count=occurrence_count,
+            gym_timezone=gym_row["timezone"],
+        )
         if recurrence_frequency != "none":
             for generated_start_time in start_times:
                 if generated_start_time <= security.now_utc():
@@ -1440,17 +1505,14 @@ def update_schedule_class(
     body: UpdateScheduleClassRequest,
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
-    try:
-        schedule_id = validation.require_user_id(body.id)
-        title = validation.require_schedule_title(body.title)
-        class_type = validation.require_class_type(body.class_type)
-        start_time = validation.require_future_datetime(body.start_time, label="Start time")
-        duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
-        capacity = validation.require_capacity(body.capacity)
-        trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
-        wod_description = validation.require_wod_description(body.wod_description)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    schedule_id = validation.require_user_id(body.id)
+    title = validation.require_schedule_title(body.title)
+    class_type = validation.require_class_type(body.class_type)
+    start_time = validation.require_future_datetime(body.start_time, label="Start time")
+    duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
+    capacity = validation.require_capacity(body.capacity)
+    trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
+    wod_description = validation.require_wod_description(body.wod_description)
     end_time = start_time + timedelta(minutes=duration_minutes)
     connection = db.get_connection()
     try:
@@ -1747,12 +1809,9 @@ def update_class_attendance(
     body: UpdateAttendanceRequest,
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
-    try:
-        schedule_id = validation.require_user_id(body.class_id)
-        user_id = validation.require_user_id(body.user_id)
-        attendance_status = validation.require_attendance_status(body.attendance_status)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    schedule_id = validation.require_user_id(body.class_id)
+    user_id = validation.require_user_id(body.user_id)
+    attendance_status = validation.require_attendance_status(body.attendance_status)
     connection = db.get_connection()
     try:
         schedule_row = connection.execute(
@@ -1793,13 +1852,19 @@ def update_class_attendance(
 
 
 @app.post("/auth/signup")
-def signup(body: dict[str, Any]) -> dict[str, Any]:
+def signup(
+    body: SignupRequest,
+    _: None = Depends(rate_limit("signup", limit=5, window_seconds=60)),
+) -> dict[str, Any]:
     return _signup(body, account_type="athlete")
 
 
 @app.post("/auth/signup-admin")
 @app.post("/auth/signup-owner")
-def signup_admin(body: dict[str, Any]) -> dict[str, Any]:
+def signup_admin(
+    body: SignupRequest,
+    _: None = Depends(rate_limit("signup-admin", limit=5, window_seconds=60)),
+) -> dict[str, Any]:
     return _signup(body, account_type="admin")
 
 
@@ -1834,8 +1899,11 @@ def logout_all(session: dict[str, Any] = Depends(require_session)) -> dict[str, 
 
 
 @app.post("/auth/request-password-reset")
-def request_password_reset(body: dict[str, Any]) -> dict[str, Any]:
-    email = validation.require_email(body.get("email"))
+def request_password_reset(
+    body: EmailRequest,
+    _: None = Depends(rate_limit("password-reset-request", limit=5, window_seconds=60)),
+) -> dict[str, Any]:
+    email = validation.require_email(body.email)
     connection = db.get_connection()
     try:
         user = connection.execute(
@@ -1845,17 +1913,20 @@ def request_password_reset(body: dict[str, Any]) -> dict[str, Any]:
         if user is not None:
             with connection:
                 token = auth_service.issue_password_reset_token(connection, user["id"])
-            print(f"[boxos-backend] Password reset token for {email}: {token}")
+            _log_delivery_token("Password reset", email, token)
         return {"message": "If the account exists, a reset token has been issued in the backend log."}
     finally:
         connection.close()
 
 
 @app.post("/auth/reset-password")
-def reset_password(body: dict[str, Any]) -> dict[str, Any]:
-    token = validation.require_token(body.get("token"), label="Reset token")
-    new_password = validation.require_password(body.get("new_password"))
-    logout_other_sessions = bool(body.get("logout_other_sessions", False))
+def reset_password(
+    body: ResetPasswordRequest,
+    _: None = Depends(rate_limit("password-reset", limit=5, window_seconds=60)),
+) -> dict[str, Any]:
+    token = validation.require_token(body.token, label="Reset token")
+    new_password = validation.require_password(body.new_password)
+    logout_other_sessions = body.logout_other_sessions
     connection = db.get_connection()
     try:
         reset_row = connection.execute(
@@ -1878,8 +1949,11 @@ def reset_password(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/auth/verify-email")
-def verify_email(body: dict[str, Any]) -> dict[str, Any]:
-    token = validation.require_token(body.get("token"), label="Verification token")
+def verify_email(
+    body: VerifyEmailRequest,
+    _: None = Depends(rate_limit("verify-email", limit=10, window_seconds=60)),
+) -> dict[str, Any]:
+    token = validation.require_token(body.token, label="Verification token")
     connection = db.get_connection()
     try:
         verification_row = connection.execute(
@@ -1900,8 +1974,11 @@ def verify_email(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/auth/resend-verification")
-def resend_verification(body: dict[str, Any]) -> dict[str, Any]:
-    email = validation.require_email(body.get("email"))
+def resend_verification(
+    body: EmailRequest,
+    _: None = Depends(rate_limit("resend-verification", limit=5, window_seconds=60)),
+) -> dict[str, Any]:
+    email = validation.require_email(body.email)
     connection = db.get_connection()
     try:
         user = connection.execute(
@@ -1914,17 +1991,17 @@ def resend_verification(body: dict[str, Any]) -> dict[str, Any]:
             return {"message": "Email is already verified."}
         with connection:
             token = auth_service.issue_verification_token(connection, user["id"])
-        print(f"[boxos-backend] Verification token for {email}: {token}")
+        _log_delivery_token("Verification", email, token)
         return {"message": "Verification token reissued. Check the backend log."}
     finally:
         connection.close()
 
 
 @app.post("/auth/change-password")
-def change_password(body: dict[str, Any], session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    current_password = validation.require_password(body.get("current_password"), label="Current password")
-    new_password = validation.require_password(body.get("new_password"), label="New password")
-    logout_other_sessions = bool(body.get("logout_other_sessions", False))
+def change_password(body: ChangePasswordRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    current_password = validation.require_password(body.current_password, label="Current password")
+    new_password = validation.require_password(body.new_password, label="New password")
+    logout_other_sessions = body.logout_other_sessions
     connection = db.get_connection()
     try:
         user = connection.execute(
@@ -1948,8 +2025,8 @@ def change_password(body: dict[str, Any], session: dict[str, Any] = Depends(requ
 
 
 @app.delete("/auth/account")
-def delete_account(body: dict[str, Any], session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    current_password = validation.require_password(body.get("current_password"), label="Current password")
+def delete_account(body: DeleteAccountRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    current_password = validation.require_password(body.current_password, label="Current password")
     connection = db.get_connection()
     try:
         user = connection.execute(
@@ -1987,9 +2064,9 @@ def delete_account(body: dict[str, Any], session: dict[str, Any] = Depends(requi
 
 
 @app.post("/devices/register")
-def register_device(body: dict[str, Any], session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    device_token = validation.require_token(body.get("device_token"), label="Device token")
-    platform = validation.require_platform(body.get("platform"))
+def register_device(body: DeviceRegisterRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    device_token = validation.require_token(body.device_token, label="Device token")
+    platform = validation.require_platform(body.platform)
     connection = db.get_connection()
     try:
         now = security.isoformat(security.now_utc())
@@ -2013,8 +2090,8 @@ def register_device(body: dict[str, Any], session: dict[str, Any] = Depends(requ
 
 
 @app.delete("/devices/current")
-def unregister_device(body: dict[str, Any], session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    device_token = validation.require_token(body.get("device_token"), label="Device token")
+def unregister_device(body: DeviceTokenRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    device_token = validation.require_token(body.device_token, label="Device token")
     connection = db.get_connection()
     try:
         with connection:
@@ -2369,12 +2446,9 @@ def list_personal_workouts(session: dict[str, Any] = Depends(require_session)) -
 
 @app.post("/personal-workouts")
 def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    try:
-        title = validation.require_personal_workout_title(body.title)
-        workout_type = validation.require_personal_workout_type(body.type)
-        structure = validation.require_personal_workout_structure(body.structure)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    title = validation.require_personal_workout_title(body.title)
+    workout_type = validation.require_personal_workout_type(body.type)
+    structure = validation.require_personal_workout_structure(body.structure)
     timestamp = security.isoformat(security.now_utc())
     connection = db.get_connection()
     try:
@@ -2409,10 +2483,7 @@ def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any
 
 @app.delete("/personal-workouts")
 def delete_personal_workout(body: PersonalWorkoutDeleteRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    try:
-        workout_id = validation.require_personal_workout_id(body.id)
-    except validation.ApiError as error:
-        raise_http_error(error)
+    workout_id = validation.require_personal_workout_id(body.id)
     connection = db.get_connection()
     try:
         with connection:
@@ -2421,7 +2492,7 @@ def delete_personal_workout(body: PersonalWorkoutDeleteRequest, session: dict[st
                 (workout_id, session["user_id"]),
             ).fetchone()
             if existing is None:
-                raise_http_error(validation.ApiError(HTTPStatus.NOT_FOUND, "Workout not found."))
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
             connection.execute("delete from personal_workouts where id = ?", (workout_id,))
         return {"deleted": True}
     finally:

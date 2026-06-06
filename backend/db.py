@@ -19,6 +19,9 @@ class ManagedConnection(sqlite3.Connection):
 def get_connection() -> sqlite3.Connection:
     connection = sqlite3.connect(settings.DB_PATH, factory=ManagedConnection)
     connection.row_factory = sqlite3.Row
+    connection.execute("pragma journal_mode = wal")
+    connection.execute("pragma busy_timeout = 5000")
+    connection.execute("pragma foreign_keys = on")
     return connection
 
 def init_db() -> None:

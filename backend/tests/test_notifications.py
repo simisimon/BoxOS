@@ -225,13 +225,13 @@ class NotificationCoreTests(FastApiTestCase):
     def test_notification_payload_helpers_map_database_rows(self) -> None:
         connection = db.get_connection()
         try:
+            user = connection.execute("select * from users where email = ?", (settings.DEMO_EMAIL,)).fetchone()
             with connection:
                 connection.execute(
-                    "insert into notifications (user_id, gym_id, type, title, body, entity_type, entity_id, created_at) values (1, 1, 'demo', 'Hello', 'World', 'thing', 9, ?)",
-                    (security.isoformat(security.now_utc()),),
+                    "insert into notifications (user_id, gym_id, type, title, body, entity_type, entity_id, created_at) values (?, NULL, 'demo', 'Hello', 'World', 'thing', 9, ?)",
+                    (user["id"], security.isoformat(security.now_utc())),
                 )
             row = connection.execute("select * from notifications order by id desc limit 1").fetchone()
-            user = connection.execute("select * from users where email = ?", (settings.DEMO_EMAIL,)).fetchone()
         finally:
             connection.close()
 

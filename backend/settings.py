@@ -23,6 +23,13 @@ EXERCISES_SEED_PATH = BACKEND_ROOT / "data" / "exercises.json"
 BENCHMARKS_SEED_PATH = BACKEND_ROOT / "data" / "benchmark_workouts.json"
 HOST = os.getenv("BOXOS_HOST", "127.0.0.1")
 PORT = int(os.getenv("BOXOS_PORT", "8080"))
+CORS_ALLOW_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("BOXOS_CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+    if origin.strip()
+]
+LOG_DELIVERY_TOKENS = os.getenv("BOXOS_LOG_DELIVERY_TOKENS", "1") == "1"
+RATE_LIMIT_ENABLED = os.getenv("BOXOS_RATE_LIMIT_ENABLED", "1") == "1"
 DELETE_RETENTION_DAYS = 30
 MAX_RECURRENCE_OCCURRENCES = 365
 MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024
