@@ -22,7 +22,7 @@ Production-oriented platform for running a CrossFit box and supporting athlete t
 ### Core infrastructure
 - `backend/settings.py` — shared constants, paths, seed file locations, limits, runtime settings
 - `backend/security.py` — password hashing, token hashing/creation, timestamp helpers
-- `backend/db.py` — SQLite connection, schema init, migrations, seed/bootstrap logic
+- `backend/db.py` — PostgreSQL connection wrapper, schema init, seed/bootstrap logic
 - `backend/session_auth.py` — session creation/deletion and verification/reset token issuance
 - `backend/validation.py` — request/domain validation and normalization helpers
 - `backend/notifications_core.py` — notification creation and shared notification/schedule helper logic
@@ -44,13 +44,22 @@ Production-oriented platform for running a CrossFit box and supporting athlete t
 - FastAPI is now the only backend runtime.
 
 ## Local backend
-FastAPI backend:
+The backend uses PostgreSQL. The simplest way to get a database is via Compose:
+
+```bash
+docker compose up -d db
+```
+
+This exposes Postgres on `localhost:5432` with user/password/db `boxos` — matching the
+default `BOXOS_DATABASE_URL`. Then start the FastAPI backend:
+
 ```bash
 python3 -m pip install -r backend/requirements-fastapi.txt
 sh backend/run-fastapi-dev.sh
 ```
 
-The backend starts on `http://127.0.0.1:8080`.
+The backend starts on `http://127.0.0.1:8080` and creates its schema and seed users on
+first launch. Point it at a different database with `BOXOS_DATABASE_URL`.
 
 Permanent dev logins:
 - Athlete: `demo@boxos.app` / `BoxOS123!`
@@ -82,9 +91,11 @@ dart analyze
 flutter test
 ```
 
-Backend:
+Backend (tests spin up a throwaway PostgreSQL container via testcontainers, so a running
+Docker daemon is required; suites skip automatically when it is unavailable):
 ```bash
-python3 -m unittest backend.test_fastapi_app
+python3 -m pip install -r backend/requirements-dev.txt
+python3 -m unittest discover -s backend -p "test_*.py"
 ```
 
 ## Docker
@@ -124,10 +135,11 @@ Enthalten:
 - `app/nginx.conf` mit SPA-Fallback für `go_router`
 - `docker-compose.yml` für Prod + Dev
 
-Persistente Backend-Daten liegen in Docker-Volumes:
-- `backend_data` für die SQLite-Datenbank (Prod)
+Die Datenbank läuft als eigener `db`-Service (`postgres:16-alpine`); der Dev-Stack nutzt
+einen getrennten `db-dev`-Service. Persistente Backend-Daten liegen in Docker-Volumes:
+- `backend_db` für die PostgreSQL-Datenbank (Prod)
 - `backend_uploads` für Upload-Dateien (Prod)
-- `backend_dev_data` für die SQLite-Datenbank (Dev)
+- `backend_dev_db` für die PostgreSQL-Datenbank (Dev)
 - `backend_dev_uploads` für Upload-Dateien (Dev)
 
 Wichtige Build-Args für das Frontend in `docker-compose.yml`:
@@ -138,12 +150,27 @@ Wichtige Build-Args für das Frontend in `docker-compose.yml`:
 Wichtige Backend-Umgebungsvariablen:
 - `BOXOS_HOST`
 - `BOXOS_PORT`
-- `BOXOS_DB_PATH`
+- `BOXOS_DATABASE_URL` – PostgreSQL-Verbindung (Default: `postgresql://boxos:boxos@localhost:5432/boxos`)
 - `BOXOS_UPLOADS_ROOT`
 - `BOXOS_ANNOUNCEMENT_UPLOADS_DIR`
 - `BOXOS_CORS_ALLOW_ORIGINS` – kommaseparierte erlaubte Origins (Default: `http://localhost:3000,http://localhost:3001`)
 - `BOXOS_LOG_DELIVERY_TOKENS` – `1` (Default) loggt Verifizierungs-/Reset-Tokens; in Produktion auf `0` setzen
 - `BOXOS_RATE_LIMIT_ENABLED` – `1` (Default) aktiviert das Rate-Limiting der Auth-Endpunkte; `0` deaktiviert es
+
+## Migration von SQLite zu PostgreSQL
+
+Frühere Versionen nutzten SQLite. Eine vorhandene SQLite-Datenbank lässt sich mit dem
+mitgelieferten Skript nach PostgreSQL übertragen (aus dem Projekt-Root, Ziel sollte leer
+sein):
+
+```bash
+python scripts/migrate_sqlite_to_postgres.py \
+  --sqlite backend/boxos_dev.db \
+  --postgres postgresql://boxos:boxos@localhost:5432/boxos
+```
+
+Das Skript legt das Schema an, kopiert alle Tabellen (Eltern vor Kindern) und setzt die
+Identity-Sequenzen zurück, sodass neue Einträge hinter den kopierten IDs weiterzählen.
 
 ## Notes
 - Supabase is no longer the active backend path for the app.

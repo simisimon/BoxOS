@@ -226,7 +226,7 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
                         if (!user.canEditRole) ...[
                           const SizedBox(height: 12),
                           const Text(
-                            'Admin memberships are managed outside this screen.',
+                            'Owner memberships are managed outside this screen.',
                           ),
                         ],
                         const SizedBox(height: 12),

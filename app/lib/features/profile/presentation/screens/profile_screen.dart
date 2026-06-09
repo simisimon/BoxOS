@@ -91,7 +91,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             if (profile?.role == UserRole.admin)
               _ActionSection(
-                eyebrow: 'Admin',
+                eyebrow: 'Owner',
                 title: 'Operate the gym',
                 subtitle:
                     'Member management and join-request review stay available as dedicated admin controls.',

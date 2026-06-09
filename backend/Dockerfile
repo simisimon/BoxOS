@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     BOXOS_HOST=0.0.0.0 \
     BOXOS_PORT=8080 \
-    BOXOS_DB_PATH=/app/data/boxos.db \
+    BOXOS_DATABASE_URL=postgresql://boxos:boxos@db:5432/boxos \
     BOXOS_UPLOADS_ROOT=/app/uploads
 
 WORKDIR /app
@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r backend/requirements-fastapi.txt
 
 COPY backend ./backend
 
-RUN mkdir -p /app/data /app/uploads
+RUN mkdir -p /app/uploads
 
 EXPOSE 8080
 

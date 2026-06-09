@@ -19,7 +19,7 @@ extension UserRoleX on UserRole {
       case UserRole.trainer:
         return 'Trainer';
       case UserRole.admin:
-        return 'Admin';
+        return 'Owner';
     }
   }
 }

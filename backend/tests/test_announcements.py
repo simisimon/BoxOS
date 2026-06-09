@@ -31,7 +31,7 @@ class AnnouncementApiTests(FastApiTestCase):
             json={"id": announcement_id, "title": "Changed", "description": "Nope", "image_url": None},
         )
         self.assertEqual(updated.status_code, 403)
-        self.assertEqual(updated.json()["detail"], "Only the announcement author or an admin can modify this announcement.")
+        self.assertEqual(updated.json()["detail"], "Only the announcement author or an owner can modify this announcement.")
 
         deleted = self.client.request(
             "DELETE",
@@ -40,7 +40,7 @@ class AnnouncementApiTests(FastApiTestCase):
             json={"id": announcement_id},
         )
         self.assertEqual(deleted.status_code, 403)
-        self.assertEqual(deleted.json()["detail"], "Only the announcement author or an admin can modify this announcement.")
+        self.assertEqual(deleted.json()["detail"], "Only the announcement author or an owner can modify this announcement.")
 
         admin_delete = self.client.request(
             "DELETE",
@@ -83,7 +83,7 @@ class AnnouncementApiTests(FastApiTestCase):
             json={"id": comment_id, "body": "Hijacked"},
         )
         self.assertEqual(updated.status_code, 403)
-        self.assertEqual(updated.json()["detail"], "Only the comment author or an admin can modify this comment.")
+        self.assertEqual(updated.json()["detail"], "Only the comment author or an owner can modify this comment.")
 
         deleted = self.client.request(
             "DELETE",
@@ -92,7 +92,7 @@ class AnnouncementApiTests(FastApiTestCase):
             json={"id": comment_id},
         )
         self.assertEqual(deleted.status_code, 403)
-        self.assertEqual(deleted.json()["detail"], "Only the comment author or an admin can modify this comment.")
+        self.assertEqual(deleted.json()["detail"], "Only the comment author or an owner can modify this comment.")
 
     def test_upload_announcement_image_stores_file(self) -> None:
         admin_headers, _ = self.create_gym_as_admin("Upload Box")

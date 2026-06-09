@@ -17,7 +17,7 @@ class PermissionApiTests(FastApiTestCase):
             },
         )
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"], "The admin role is required for this action.")
+        self.assertEqual(response.json()["detail"], "The owner role is required for this action.")
 
     def test_member_without_active_gym_cannot_access_schedule(self) -> None:
         athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
@@ -80,4 +80,4 @@ class PermissionApiTests(FastApiTestCase):
             json={"user_id": admin_member["id"], "roles": ["athlete"]},
         )
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"], "Admin memberships cannot be changed from this screen.")
+        self.assertEqual(response.json()["detail"], "Owner memberships cannot be changed from this screen.")

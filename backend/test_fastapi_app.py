@@ -17,16 +17,22 @@ if FASTAPI_AVAILABLE and TESTCLIENT_AVAILABLE:
     from fastapi.testclient import TestClient
     from backend import fastapi_app
     from backend.fastapi_app import app
+    from backend.tests import pg
 else:  # pragma: no cover
     TestClient = None
     app = None
+    pg = None
 
 
 @unittest.skipUnless(FASTAPI_AVAILABLE and TESTCLIENT_AVAILABLE, "fastapi is not installed")
 class FastApiBackendTests(unittest.TestCase):
     def setUp(self) -> None:
+        dsn = pg.get_dsn()
+        if dsn is None:
+            self.skipTest("PostgreSQL test database is unavailable (Docker/testcontainers required).")
+        settings.DATABASE_URL = dsn
+        pg.reset_database()
         self.temp_dir = tempfile.TemporaryDirectory()
-        settings.DB_PATH = Path(self.temp_dir.name) / "test.db"
         settings.UPLOADS_ROOT = Path(self.temp_dir.name) / "uploads"
         settings.ANNOUNCEMENT_UPLOADS_DIR = settings.UPLOADS_ROOT / "announcements"
         self.client = TestClient(app)

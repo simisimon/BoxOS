@@ -1,17 +1,35 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: boxos
+      POSTGRES_PASSWORD: boxos
+      POSTGRES_DB: boxos
+    volumes:
+      - backend_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boxos -d boxos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       BOXOS_HOST: 0.0.0.0
       BOXOS_PORT: 8080
-      BOXOS_DB_PATH: /app/data/boxos.db
+      BOXOS_DATABASE_URL: postgresql://boxos:boxos@db:5432/boxos
       BOXOS_UPLOADS_ROOT: /app/uploads
     volumes:
-      - backend_data:/app/data
       - backend_uploads:/app/uploads
 
   frontend:
@@ -27,11 +45,31 @@ services:
     ports:
       - "3000:80"
 
+  db-dev:
+    image: postgres:16-alpine
+    profiles: ["dev"]
+    environment:
+      POSTGRES_USER: boxos
+      POSTGRES_PASSWORD: boxos
+      POSTGRES_DB: boxos
+    volumes:
+      - backend_dev_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boxos -d boxos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5433:5432"
+
   backend-dev:
     build:
       context: .
       dockerfile: backend/Dockerfile
     profiles: ["dev"]
+    depends_on:
+      db-dev:
+        condition: service_healthy
     working_dir: /app
     command: ["python", "-m", "uvicorn", "backend.fastapi_app:app", "--reload", "--host", "0.0.0.0", "--port", "8080"]
     ports:
@@ -39,11 +77,10 @@ services:
     environment:
       BOXOS_HOST: 0.0.0.0
       BOXOS_PORT: 8080
-      BOXOS_DB_PATH: /app/data/boxos-dev.db
+      BOXOS_DATABASE_URL: postgresql://boxos:boxos@db-dev:5432/boxos
       BOXOS_UPLOADS_ROOT: /app/uploads
     volumes:
       - ./backend:/app/backend
-      - backend_dev_data:/app/data
       - backend_dev_uploads:/app/uploads
 
   frontend-dev:
@@ -71,8 +108,8 @@ services:
       - flutter_pub_cache:/sdks/flutter/.pub-cache
 
 volumes:
-  backend_data:
+  backend_db:
   backend_uploads:
-  backend_dev_data:
+  backend_dev_db:
   backend_dev_uploads:
   flutter_pub_cache:

@@ -333,7 +333,7 @@ def require_admin_session(session: dict[str, Any] = Depends(require_session)) ->
     if session["role"] != "admin":
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN.value,
-            detail="The admin role is required for this action.",
+            detail="The owner role is required for this action.",
         )
     return session
 
@@ -371,7 +371,7 @@ def require_schedule_manager_session(
     if session["role"] not in {"admin", "trainer"}:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN.value,
-            detail="The admin or trainer role is required for this action.",
+            detail="The owner or trainer role is required for this action.",
         )
     return session
 
@@ -382,12 +382,12 @@ def require_admin_gym_session(
     if session["role"] != "admin":
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN.value,
-            detail="The admin role is required for this action.",
+            detail="The owner role is required for this action.",
         )
     if session["active_gym_id"] is None:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN.value,
-            detail="An active admin gym context is required.",
+            detail="An active owner gym context is required.",
         )
     return session
 
@@ -410,6 +410,7 @@ def _signup(body: SignupRequest, *, account_type: str) -> dict[str, Any]:
                 """
                 insert into users (email, password_hash, email_verified, role, roles_json, account_type, created_at, updated_at)
                 values (?, ?, 0, ?, ?, ?, ?, ?)
+                returning id
                 """,
                 (
                     email,
@@ -421,7 +422,7 @@ def _signup(body: SignupRequest, *, account_type: str) -> dict[str, Any]:
                     timestamp,
                 ),
             )
-            user_id = int(cursor.lastrowid)
+            user_id = int(cursor.fetchone()["id"])
             token = auth_service.issue_verification_token(connection, user_id)
         _log_delivery_token("Verification", email, token)
         return {"message": "Account created. Check the backend log for the verification token."}
@@ -771,10 +772,11 @@ def create_gym(
                 """
                 insert into gyms (name, slug, logo_url, timezone, created_by_user_id, created_at, updated_at)
                 values (?, ?, ?, ?, ?, ?, ?)
+                returning id
                 """,
                 (name, slug, logo_url, timezone, session["user_id"], timestamp, timestamp),
             )
-            gym_id = int(cursor.lastrowid)
+            gym_id = int(cursor.fetchone()["id"])
             connection.execute(
                 """
                 insert into gym_memberships (
@@ -1014,7 +1016,7 @@ def assign_role(
         if membership_before is None:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Gym member not found.")
         if membership_before["active_role"] == "admin":
-            raise HTTPException(status_code=HTTPStatus.FORBIDDEN.value, detail="Admin memberships cannot be changed from this screen.")
+            raise HTTPException(status_code=HTTPStatus.FORBIDDEN.value, detail="Owner memberships cannot be changed from this screen.")
         active_role = membership_before["active_role"] if membership_before["active_role"] in managed_roles else managed_roles[0]
         with connection:
             updated = connection.execute(
@@ -1097,10 +1099,11 @@ def create_announcement(
         timestamp = security.isoformat(security.now_utc())
         with connection:
             cursor = connection.execute(
-                "insert into announcements (gym_id, title, description, image_url, created_by_user_id, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+                "insert into announcements (gym_id, title, description, image_url, created_by_user_id, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?) returning id",
                 (session["active_gym_id"], title, description, image_url, session["user_id"], timestamp, timestamp),
             )
-            row = announcement_service.get_announcement_row(connection, announcement_id=int(cursor.lastrowid), gym_id=session["active_gym_id"])
+            new_announcement_id = int(cursor.fetchone()["id"])
+            row = announcement_service.get_announcement_row(connection, announcement_id=new_announcement_id, gym_id=session["active_gym_id"])
             if row is None:
                 raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Announcement creation failed.")
             audit.write_audit_log(
@@ -1109,7 +1112,7 @@ def create_announcement(
                 actor_user_id=session["user_id"],
                 action="announcement_created",
                 entity_type="announcement",
-                entity_id=int(cursor.lastrowid),
+                entity_id=new_announcement_id,
                 details={"title": title, "has_image": bool(image_url)},
             )
         return {"announcement": announcement_service.announcement_payload(connection, row, current_user_id=session["user_id"], session_role=str(session["role"]))}
@@ -1200,7 +1203,7 @@ def like_announcement(
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Announcement not found.")
         with connection:
             cursor = connection.execute(
-                "insert or ignore into announcement_likes (announcement_id, user_id, created_at) values (?, ?, ?)",
+                "insert into announcement_likes (announcement_id, user_id, created_at) values (?, ?, ?) on conflict do nothing",
                 (announcement_id, session["user_id"], security.isoformat(security.now_utc())),
             )
             if cursor.rowcount:
@@ -1245,14 +1248,15 @@ def create_announcement_comment(
         timestamp = security.isoformat(security.now_utc())
         with connection:
             cursor = connection.execute(
-                "insert into announcement_comments (announcement_id, gym_id, user_id, body, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
+                "insert into announcement_comments (announcement_id, gym_id, user_id, body, created_at, updated_at) values (?, ?, ?, ?, ?, ?) returning id",
                 (announcement_id, session["active_gym_id"], session["user_id"], comment_body, timestamp, timestamp),
             )
-            comment = announcement_service.get_announcement_comment_row(connection, int(cursor.lastrowid))
+            new_comment_id = int(cursor.fetchone()["id"])
+            comment = announcement_service.get_announcement_comment_row(connection, new_comment_id)
             if comment is None:
                 raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Comment creation failed.")
             announcement_service.create_announcement_comment_notification(connection, recipient_user_id=int(announcement["created_by_user_id"]), actor_user_id=int(session["user_id"]), gym_id=int(session["active_gym_id"]), announcement_id=announcement_id, announcement_title=str(announcement["title"]), comment_body=comment_body)
-            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="announcement_comment_created", entity_type="announcement_comment", entity_id=int(cursor.lastrowid), details={"announcement_id": announcement_id})
+            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="announcement_comment_created", entity_type="announcement_comment", entity_id=new_comment_id, details={"announcement_id": announcement_id})
         return {"comment": announcement_service.announcement_comment_payload(comment, current_user_id=session["user_id"], session_role=str(session["role"]))}
     finally:
         connection.close()
@@ -1445,6 +1449,7 @@ def create_schedule_class(
                       created_by_user_id, updated_by_user_id, created_at, updated_at
                     )
                     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    returning id
                     """,
                     (
                         session["active_gym_id"],
@@ -1462,7 +1467,7 @@ def create_schedule_class(
                         timestamp,
                     ),
                 )
-                schedule_ids.append(int(cursor.lastrowid))
+                schedule_ids.append(int(cursor.fetchone()["id"]))
             payloads = []
             for schedule_id in schedule_ids:
                 row = schedule_service.get_schedule_class_row(connection, schedule_id)
@@ -2167,6 +2172,7 @@ def create_daily_workout(
                   created_by_user_id, updated_by_user_id, created_at, updated_at
                 )
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                returning id
                 """,
                 (
                     session["active_gym_id"],
@@ -2181,7 +2187,7 @@ def create_daily_workout(
                     timestamp,
                 ),
             )
-            workout_id = int(cursor.lastrowid)
+            workout_id = int(cursor.fetchone()["id"])
             row = connection.execute(
                 "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
                 (workout_id,),
@@ -2458,6 +2464,7 @@ def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any
                 insert into personal_workouts (
                   user_id, type, title, structure_json, created_at, updated_at
                 ) values (?, ?, ?, ?, ?, ?)
+                returning id
                 """,
                 (
                     session["user_id"],
@@ -2468,13 +2475,14 @@ def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any
                     timestamp,
                 ),
             )
+            new_workout_id = int(cursor.fetchone()["id"])
             row = connection.execute(
                 """
                 select id, type, title, structure_json, created_at, updated_at
                 from personal_workouts
                 where id = ?
                 """,
-                (cursor.lastrowid,),
+                (new_workout_id,),
             ).fetchone()
         return {"workout": programming_service.personal_workout_payload(row)}
     finally:
@@ -2657,14 +2665,14 @@ def admin_analytics_overview(
               coalesce(sum(classes_by_day.bookings), 0) as bookings, coalesce(sum(classes_by_day.attended), 0) as attended,
               coalesce(sum(classes_by_day.no_shows), 0) as no_shows
             from (
-              select date(class_schedules.start_time) as day, class_schedules.id, class_schedules.capacity as capacity,
+              select substr(class_schedules.start_time, 1, 10) as day, class_schedules.id, class_schedules.capacity as capacity,
                 count(class_bookings.id) as bookings,
                 coalesce(sum(case when class_bookings.attendance_status = 'attended' then 1 else 0 end), 0) as attended,
                 coalesce(sum(case when class_bookings.attendance_status = 'no_show' then 1 else 0 end), 0) as no_shows
               from class_schedules
               left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
-              where class_schedules.gym_id = ? and date(class_schedules.start_time) between ? and ?
-              group by date(class_schedules.start_time), class_schedules.id, class_schedules.capacity
+              where class_schedules.gym_id = ? and substr(class_schedules.start_time, 1, 10) between ? and ?
+              group by substr(class_schedules.start_time, 1, 10), class_schedules.id, class_schedules.capacity
             ) classes_by_day
             group by classes_by_day.day
             order by classes_by_day.day asc
@@ -2684,7 +2692,7 @@ def admin_analytics_overview(
               from class_schedules
               left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
               left join class_waitlist_entries on class_waitlist_entries.class_schedule_id = class_schedules.id
-              where class_schedules.gym_id = ? and date(class_schedules.start_time) between ? and ?
+              where class_schedules.gym_id = ? and substr(class_schedules.start_time, 1, 10) between ? and ?
               group by class_schedules.id, class_schedules.title, class_schedules.start_time, class_schedules.capacity
             ) upcoming_classes
             """,
@@ -2698,7 +2706,7 @@ def admin_analytics_overview(
             from class_schedules
             left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
             left join class_waitlist_entries on class_waitlist_entries.class_schedule_id = class_schedules.id
-            where class_schedules.gym_id = ? and date(class_schedules.start_time) between ? and ?
+            where class_schedules.gym_id = ? and substr(class_schedules.start_time, 1, 10) between ? and ?
             group by class_schedules.id, class_schedules.title, class_schedules.start_time, class_schedules.capacity
             having count(distinct class_waitlist_entries.id) > 0 or count(distinct class_bookings.id) >= class_schedules.capacity
             order by count(distinct class_waitlist_entries.id) desc,
@@ -2717,7 +2725,7 @@ def admin_analytics_overview(
               coalesce(sum(case when class_bookings.attendance_status = 'no_show' then 1 else 0 end), 0) as no_shows
             from class_schedules
             left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
-            where class_schedules.gym_id = ? and date(class_schedules.start_time) between ? and ?
+            where class_schedules.gym_id = ? and substr(class_schedules.start_time, 1, 10) between ? and ?
             group by class_schedules.id, class_schedules.title, class_schedules.start_time, class_schedules.capacity
             having count(class_bookings.id) > 0 and (
               cast(count(class_bookings.id) as real) / case when class_schedules.capacity <= 0 then 1 else class_schedules.capacity end < 0.5

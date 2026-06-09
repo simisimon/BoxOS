@@ -72,7 +72,7 @@ def announcement_payload(connection: sqlite3.Connection, row: sqlite3.Row, *, cu
         nickname_key="author_nickname",
         email_key="author_email",
     )
-    like_count = int(connection.execute("select count(*) from announcement_likes where announcement_id = ?", (row["id"],)).fetchone()[0])
+    like_count = int(connection.execute("select count(*) as count from announcement_likes where announcement_id = ?", (row["id"],)).fetchone()["count"])
     liked_by_me = connection.execute(
         "select 1 from announcement_likes where announcement_id = ? and user_id = ?",
         (row["id"], current_user_id),
@@ -129,7 +129,7 @@ def ensure_announcement_manage_permission(announcement: sqlite3.Row, session: sq
         return
     if int(announcement["created_by_user_id"]) == int(session["user_id"]):
         return
-    raise ApiError(HTTPStatus.FORBIDDEN, "Only the announcement author or an admin can modify this announcement.")
+    raise ApiError(HTTPStatus.FORBIDDEN, "Only the announcement author or an owner can modify this announcement.")
 
 
 def ensure_announcement_comment_manage_permission(comment: sqlite3.Row, session: sqlite3.Row | dict[str, Any]) -> None:
@@ -137,7 +137,7 @@ def ensure_announcement_comment_manage_permission(comment: sqlite3.Row, session:
         return
     if int(comment["user_id"]) == int(session["user_id"]):
         return
-    raise ApiError(HTTPStatus.FORBIDDEN, "Only the comment author or an admin can modify this comment.")
+    raise ApiError(HTTPStatus.FORBIDDEN, "Only the comment author or an owner can modify this comment.")
 
 
 def create_announcement_like_notification(connection: sqlite3.Connection, *, recipient_user_id: int, actor_user_id: int, gym_id: int, announcement_id: int, announcement_title: str) -> None:

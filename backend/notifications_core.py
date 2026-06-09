@@ -117,9 +117,9 @@ def announcement_payload(
     )
     like_count = int(
         connection.execute(
-            "select count(*) from announcement_likes where announcement_id = ?",
+            "select count(*) as count from announcement_likes where announcement_id = ?",
             (row["id"],),
-        ).fetchone()[0]
+        ).fetchone()["count"]
     )
     liked_by_me = connection.execute(
         "select 1 from announcement_likes where announcement_id = ? and user_id = ?",
