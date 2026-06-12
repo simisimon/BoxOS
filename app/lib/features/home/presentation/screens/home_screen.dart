@@ -3,10 +3,14 @@ import 'dart:typed_data';
 
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
+import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
+import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -75,9 +79,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _openAnnouncementComposer() async {
+    final repository = ref.read(announcementRepositoryProvider);
     final saved = await showDialog<bool>(
       context: context,
-      builder: (context) => const _AnnouncementComposerDialog(),
+      barrierDismissible: false,
+      builder: (context) => _AnnouncementComposerDialog(repository: repository),
     );
     if (saved == true) {
       await _refreshAnnouncements();
@@ -85,9 +91,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _openAnnouncementEditor(Announcement announcement) async {
+    final repository = ref.read(announcementRepositoryProvider);
     final saved = await showDialog<bool>(
       context: context,
-      builder: (context) => _AnnouncementComposerDialog(existing: announcement),
+      barrierDismissible: false,
+      builder: (context) => _AnnouncementComposerDialog(
+        existing: announcement,
+        repository: repository,
+      ),
     );
     if (saved == true) {
       await _refreshAnnouncements();
@@ -255,10 +266,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final hasActiveGym = profile?.activeGym != null;
+    final isOwner = profile?.accountType == AccountType.admin &&
+        profile?.role == UserRole.admin;
     final canManageAnnouncements =
         hasActiveGym &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
 
+    // Owner/Admin workflow
+    if (isOwner) {
+      return _buildOwnerHome(
+        context: context,
+        hasActiveGym: hasActiveGym,
+        canManageAnnouncements: canManageAnnouncements,
+      );
+    }
+
+    // Athlete/Trainer workflow (existing behavior)
     return DecoratedBox(
       decoration: appPageDecoration(),
       child: ListView(
@@ -304,20 +327,67 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             profileRole: profile?.role,
             hasActiveGym: hasActiveGym,
           ),
-          if (profile?.accountType == AccountType.admin && !hasActiveGym) ...[
-            const SizedBox(height: 24),
-            const _SectionHeading('Set up your gym'),
-            const SizedBox(height: 12),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOwnerHome({
+    required BuildContext context,
+    required bool hasActiveGym,
+    required bool canManageAnnouncements,
+  }) {
+    if (!hasActiveGym) {
+      // Owner without a box - show only "Create your first box"
+      return DecoratedBox(
+        decoration: appPageDecoration(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          children: [
+            const SizedBox(height: 40),
             _ActionSpotlight(
               icon: Icons.storefront_outlined,
-              title: 'Create Your First Gym',
+              title: 'Create Your First Box',
               subtitle:
-                  'Finish admin onboarding and unlock member flows, scheduling, and workout delivery.',
-              actionLabel: 'Create Gym',
+                  'Set up your box to unlock member flows, scheduling, and workout delivery.',
+              actionLabel: 'Create Box',
               accentColor: _homeAccent,
               onTap: () => context.go('/create-gym'),
             ),
           ],
+        ),
+      );
+    }
+
+    // Owner with active box - show Dashboard, News, Quick Access
+    return DecoratedBox(
+      decoration: appPageDecoration(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          const _SectionHeading('Your Box Dashboard'),
+          const SizedBox(height: 12),
+          const _OwnerDashboard(),
+          const SizedBox(height: 24),
+          const _SectionHeading('News'),
+          const SizedBox(height: 12),
+          _AnnouncementRail(
+            announcementsFuture: _announcementsFuture,
+            canManageAnnouncements: canManageAnnouncements,
+            hasActiveGym: hasActiveGym,
+            onCreateAnnouncement: _openAnnouncementComposer,
+            onEditAnnouncement: _openAnnouncementEditor,
+            onDeleteAnnouncement: _deleteAnnouncement,
+            onToggleLike: _toggleAnnouncementLike,
+            onCreateComment: _createAnnouncementComment,
+            onEditComment: _editAnnouncementComment,
+            onDeleteComment: _deleteAnnouncementComment,
+          ),
+          const SizedBox(height: 24),
+          const _SectionHeading('Quick actions'),
+          const SizedBox(height: 12),
+          const _OwnerQuickAccessGrid(),
           const SizedBox(height: 8),
         ],
       ),
@@ -717,9 +787,9 @@ class _BookingQuickAccessRail extends StatelessWidget {
     if (!hasActiveGym) {
       return _AnnouncementEmptyState(
         icon: Icons.calendar_month_outlined,
-        title: 'No active gym selected',
+        title: 'No active box selected',
         subtitle:
-            'Pick or join a gym first, then your booking shortcut and reserved classes appear here.',
+            'Pick or join a box first, then your booking shortcut and reserved classes appear here.',
         actionLabel: null,
         onTap: null,
       );
@@ -1002,7 +1072,7 @@ class _BookedClassCard extends StatelessWidget {
   }
 }
 
-class _AnnouncementRail extends StatelessWidget {
+class _AnnouncementRail extends StatefulWidget {
   const _AnnouncementRail({
     required this.announcementsFuture,
     required this.canManageAnnouncements,
@@ -1030,27 +1100,44 @@ class _AnnouncementRail extends StatelessWidget {
   final Future<void> Function(AnnouncementComment comment) onDeleteComment;
 
   @override
+  State<_AnnouncementRail> createState() => _AnnouncementRailState();
+}
+
+class _AnnouncementRailState extends State<_AnnouncementRail> {
+  List<Announcement>? _cached;
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Announcement>>(
-      future: announcementsFuture,
+      future: widget.announcementsFuture,
       builder: (context, snapshot) {
-        if (!hasActiveGym) {
+        if (!widget.hasActiveGym) {
           return _AnnouncementEmptyState(
             icon: Icons.campaign_outlined,
-            title: 'No active gym selected',
+            title: 'No active box selected',
             subtitle:
-                'Announcements appear once you are inside an active gym context.',
+                'Announcements appear once you are inside an active box context.',
             actionLabel: null,
             onTap: null,
           );
         }
-        if (snapshot.connectionState == ConnectionState.waiting) {
+
+        // Keep the cached list up-to-date whenever fresh data arrives.
+        if (snapshot.hasData) {
+          _cached = snapshot.data;
+        }
+
+        // On initial load (no cache yet) show a spinner.
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            _cached == null) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        if (snapshot.hasError) {
+
+        // Show errors only when there is no cached data to fall back on.
+        if (snapshot.hasError && _cached == null) {
           return _AnnouncementEmptyState(
             icon: Icons.error_outline,
             title: 'Failed to load announcements',
@@ -1058,41 +1145,51 @@ class _AnnouncementRail extends StatelessWidget {
               snapshot.error!,
               fallback: 'Announcements could not be loaded.',
             ),
-            actionLabel: canManageAnnouncements ? 'Try posting instead' : null,
-            onTap: canManageAnnouncements ? onCreateAnnouncement : null,
+            actionLabel:
+                widget.canManageAnnouncements ? 'Try posting instead' : null,
+            onTap:
+                widget.canManageAnnouncements
+                    ? widget.onCreateAnnouncement
+                    : null,
           );
         }
 
-        final announcements = snapshot.data ?? const <Announcement>[];
+        final announcements = _cached ?? const <Announcement>[];
         if (announcements.isEmpty) {
           return _AnnouncementEmptyState(
             icon: Icons.campaign_outlined,
             title: 'No announcements yet',
-            subtitle: canManageAnnouncements
+            subtitle: widget.canManageAnnouncements
                 ? 'Post the first update so athletes see a real gym news feed instead of placeholders.'
                 : 'Your coaches and admins have not posted any announcements yet.',
-            actionLabel: canManageAnnouncements ? 'Create Announcement' : null,
-            onTap: canManageAnnouncements ? onCreateAnnouncement : null,
+            actionLabel:
+                widget.canManageAnnouncements ? 'Create Announcement' : null,
+            onTap:
+                widget.canManageAnnouncements
+                    ? widget.onCreateAnnouncement
+                    : null,
           );
         }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (canManageAnnouncements) ...[
-              _AnnouncementComposerBanner(onTap: onCreateAnnouncement),
+            if (widget.canManageAnnouncements) ...[
+              _AnnouncementComposerBanner(onTap: widget.onCreateAnnouncement),
               const SizedBox(height: 12),
             ],
             for (final (index, announcement) in announcements.indexed) ...[
               _AnnouncementCard(
+                key: ValueKey(announcement.id),
                 announcement: announcement,
                 canManage: announcement.canManage,
-                onEdit: () => onEditAnnouncement(announcement),
-                onDelete: () => onDeleteAnnouncement(announcement),
-                onToggleLike: () => onToggleLike(announcement),
-                onCreateComment: (body) => onCreateComment(announcement, body),
-                onEditComment: onEditComment,
-                onDeleteComment: onDeleteComment,
+                onEdit: () => widget.onEditAnnouncement(announcement),
+                onDelete: () => widget.onDeleteAnnouncement(announcement),
+                onToggleLike: () => widget.onToggleLike(announcement),
+                onCreateComment: (body) =>
+                    widget.onCreateComment(announcement, body),
+                onEditComment: widget.onEditComment,
+                onDeleteComment: widget.onDeleteComment,
               ),
               if (index < announcements.length - 1) const SizedBox(height: 12),
             ],
@@ -1289,12 +1386,46 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       'Posted by ${widget.announcement.authorName} · ${_formatAnnouncementDate(widget.announcement.createdAt)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: appSubtleText,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          widget.announcement.likedByMe
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          size: 13,
+                          color: widget.announcement.likedByMe
+                              ? _homeDanger
+                              : appSubtleText,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${widget.announcement.likeCount}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: appSubtleText,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 13,
+                          color: appSubtleText,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${widget.announcement.commentCount}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: appSubtleText,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1759,7 +1890,7 @@ class _QuickAccessGrid extends StatelessWidget {
       else
         const _HomeAction(
           icon: Icons.search_outlined,
-          title: 'Find a Gym',
+          title: 'Find a Box',
           route: '/gyms',
           accentColor: appPrimary,
         ),
@@ -1916,18 +2047,22 @@ class _ActionSpotlight extends StatelessWidget {
   }
 }
 
-class _AnnouncementComposerDialog extends ConsumerStatefulWidget {
-  const _AnnouncementComposerDialog({this.existing});
+class _AnnouncementComposerDialog extends StatefulWidget {
+  const _AnnouncementComposerDialog({
+    this.existing,
+    required this.repository,
+  });
 
   final Announcement? existing;
+  final AnnouncementRepository repository;
 
   @override
-  ConsumerState<_AnnouncementComposerDialog> createState() =>
+  State<_AnnouncementComposerDialog> createState() =>
       _AnnouncementComposerDialogState();
 }
 
 class _AnnouncementComposerDialogState
-    extends ConsumerState<_AnnouncementComposerDialog> {
+    extends State<_AnnouncementComposerDialog> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -1982,13 +2117,11 @@ class _AnnouncementComposerDialogState
         _isUploadingImage = true;
         _selectedImageBytes = bytes;
       });
-      final imageUrl = await ref
-          .read(announcementRepositoryProvider)
-          .uploadAnnouncementImage(
-            bytes: bytes,
-            filename: picked.name,
-            contentType: contentType,
-          );
+      final imageUrl = await widget.repository.uploadAnnouncementImage(
+        bytes: bytes,
+        filename: picked.name,
+        contentType: contentType,
+      );
       if (!mounted) {
         return;
       }
@@ -2014,16 +2147,15 @@ class _AnnouncementComposerDialogState
   }
 
   Future<void> _submit() async {
-    if (_isSaving || !_formKey.currentState!.validate()) {
+    if (_isSaving || !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     setState(() {
       _isSaving = true;
     });
     try {
-      final repository = ref.read(announcementRepositoryProvider);
       if (_isEditing) {
-        await repository.updateAnnouncement(
+        await widget.repository.updateAnnouncement(
           id: widget.existing!.id,
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim(),
@@ -2032,7 +2164,7 @@ class _AnnouncementComposerDialogState
               : _imageUrlController.text.trim(),
         );
       } else {
-        await repository.createAnnouncement(
+        await widget.repository.createAnnouncement(
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim(),
           imageUrl: _imageUrlController.text.trim().isEmpty
@@ -2071,18 +2203,25 @@ class _AnnouncementComposerDialogState
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dialogWidth = (screenWidth - 32).clamp(
+      100.0,
+      mobileContentMaxWidth.toDouble(),
+    );
+
     return AlertDialog(
       backgroundColor: appSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
         side: const BorderSide(color: appBorder),
       ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: Text(
         _isEditing ? 'Edit Announcement' : 'Create Announcement',
         style: const TextStyle(color: appText),
       ),
       content: SizedBox(
-        width: 520,
+        width: dialogWidth,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -2130,7 +2269,9 @@ class _AnnouncementComposerDialogState
                         ),
                         const SizedBox(height: 12),
                       ],
-                      Row(
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
                         children: [
                           FilledButton.icon(
                             onPressed: _isUploadingImage
@@ -2139,6 +2280,7 @@ class _AnnouncementComposerDialogState
                             style: FilledButton.styleFrom(
                               backgroundColor: _homeAccent,
                               foregroundColor: Colors.white,
+                              minimumSize: const Size(0, 44),
                             ),
                             icon: _isUploadingImage
                                 ? const SizedBox(
@@ -2156,8 +2298,7 @@ class _AnnouncementComposerDialogState
                                   : 'Choose from gallery',
                             ),
                           ),
-                          if (_imageUrlController.text.trim().isNotEmpty) ...[
-                            const SizedBox(width: 10),
+                          if (_imageUrlController.text.trim().isNotEmpty)
                             TextButton(
                               onPressed: () {
                                 setState(() {
@@ -2167,7 +2308,6 @@ class _AnnouncementComposerDialogState
                               },
                               child: const Text('Remove image'),
                             ),
-                          ],
                         ],
                       ),
                     ],
@@ -2226,6 +2366,283 @@ class _AnnouncementComposerDialogState
             _isSaving
                 ? (_isEditing ? 'Saving...' : 'Posting...')
                 : (_isEditing ? 'Save Changes' : 'Post Announcement'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Owner Dashboard Widget - displays gym statistics
+class _OwnerDashboard extends ConsumerWidget {
+  const _OwnerDashboard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final analyticsAsync = ref.watch(adminAnalyticsOverviewProvider);
+
+    return analyticsAsync.when(
+      data: (overview) => _OwnerDashboardContent(overview: overview),
+      loading: () => Container(
+        height: 200,
+        decoration: appPanelDecoration(),
+        child: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: appPanelDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, color: _homeDanger, size: 32),
+            const SizedBox(height: 12),
+            const Text(
+              'Failed to load dashboard',
+              style: TextStyle(
+                color: appText,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              error.toString(),
+              style: const TextStyle(color: appMutedText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OwnerDashboardContent extends StatelessWidget {
+  const _OwnerDashboardContent({required this.overview});
+
+  final AdminAnalyticsOverview overview;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Key metrics row
+        Row(
+          children: [
+            Expanded(
+              child: _DashboardMetricCard(
+                icon: Icons.people_outline,
+                label: 'Active Members',
+                value: '${overview.activeMembers}',
+                accentColor: appPrimary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _DashboardMetricCard(
+                icon: Icons.person_add_outlined,
+                label: 'Join Requests',
+                value: '${overview.pendingJoinRequests}',
+                accentColor:
+                    overview.pendingJoinRequests > 0 ? _perfAmber : appPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _DashboardMetricCard(
+                icon: Icons.event_available_outlined,
+                label: 'Attendance Rate',
+                value: '${(overview.attendanceRateInWindow * 100).toStringAsFixed(0)}%',
+                accentColor: _getPerformanceColor(overview.attendanceRateInWindow),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _DashboardMetricCard(
+                icon: Icons.trending_up_outlined,
+                label: 'Utilization',
+                value: '${(overview.utilizationRateInWindow * 100).toStringAsFixed(0)}%',
+                accentColor: _getPerformanceColor(overview.utilizationRateInWindow),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Quick stats banner
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [appSurface, appSurfaceAlt],
+            ),
+            border: Border.all(color: appBorder),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _DashboardStat(
+                label: 'Classes',
+                value: '${overview.upcomingClassesNext7Days}',
+                sublabel: 'next 7 days',
+              ),
+              Container(width: 1, height: 32, color: appBorder),
+              _DashboardStat(
+                label: 'Bookings',
+                value: '${overview.upcomingBookingsNext7Days}',
+                sublabel: 'upcoming',
+              ),
+              Container(width: 1, height: 32, color: appBorder),
+              _DashboardStat(
+                label: 'No-shows',
+                value: '${overview.noShowsInWindow}',
+                sublabel: 'last ${overview.windowDays}d',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getPerformanceColor(double rate) {
+    if (rate >= 0.75) return _perfGreen;
+    if (rate >= 0.50) return _perfAmber;
+    return _perfRed;
+  }
+}
+
+class _DashboardMetricCard extends StatelessWidget {
+  const _DashboardMetricCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accentColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: appPanelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppAccentBadge(icon: icon, color: accentColor),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              color: appText,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: appSubtleText,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardStat extends StatelessWidget {
+  const _DashboardStat({
+    required this.label,
+    required this.value,
+    required this.sublabel,
+  });
+
+  final String label;
+  final String value;
+  final String sublabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: appSubtleText,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            color: appText,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          sublabel,
+          style: const TextStyle(
+            color: appMutedText,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Owner Quick Access Grid
+class _OwnerQuickAccessGrid extends StatelessWidget {
+  const _OwnerQuickAccessGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _ActionTile(
+          action: const _HomeAction(
+            icon: Icons.group_outlined,
+            title: 'Review Join Requests',
+            route: '/gym-requests',
+            accentColor: appPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _ActionTile(
+          action: const _HomeAction(
+            icon: Icons.edit_calendar_outlined,
+            title: 'Operate the Box',
+            route: '/my-box',
+            accentColor: appPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _ActionTile(
+          action: const _HomeAction(
+            icon: Icons.analytics_outlined,
+            title: 'View Full Analytics',
+            route: '/admin-analytics',
+            accentColor: _homeAccent,
           ),
         ),
       ],

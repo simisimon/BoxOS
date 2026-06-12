@@ -128,7 +128,7 @@ class UpdateProfileRequest(BaseModel):
 class CreateGymRequest(BaseModel):
     name: str
     logo_url: str
-    timezone: str
+    timezone: str = "UTC"  # Default to UTC if not provided
 
 
 class ScheduleClassRequest(BaseModel):
@@ -219,6 +219,12 @@ class AnnouncementCommentUpdateRequest(BaseModel):
 
 
 class AnnouncementImageUploadRequest(BaseModel):
+    filename: str
+    content_type: str
+    data_base64: str
+
+
+class GymLogoUploadRequest(BaseModel):
     filename: str
     content_type: str
     data_base64: str
@@ -760,8 +766,8 @@ def create_gym(
     session: dict[str, Any] = Depends(require_admin_session),
 ) -> dict[str, Any]:
     name = validation.require_gym_name(body.name)
-    logo_url = validation.require_logo_url(body.logo_url)
-    timezone = validation.require_timezone(body.timezone)
+    logo_url = body.logo_url.strip() if body.logo_url else ""
+    timezone = body.timezone or "UTC"
 
     connection = db.get_connection()
     try:
@@ -810,6 +816,21 @@ def create_gym(
         }
     finally:
         connection.close()
+
+
+@app.post("/gyms/logo", status_code=HTTPStatus.CREATED.value)
+def upload_gym_logo(
+    body: GymLogoUploadRequest,
+    _: dict[str, Any] = Depends(require_admin_session),
+) -> dict[str, str]:
+    filename = validation.require_upload_filename(body.filename)
+    content_type = validation.require_gym_logo_content_type(body.content_type)
+    raw_bytes = validation.require_base64_bytes(body.data_base64, label="Logo data", max_bytes=settings.MAX_GYM_LOGO_BYTES)
+    extension = settings.ALLOWED_GYM_LOGO_CONTENT_TYPES[content_type]
+    stored_name = f"gym_logo_{secrets.token_urlsafe(12)}{extension}"
+    file_path = settings.GYM_LOGOS_DIR / stored_name
+    file_path.write_bytes(raw_bytes)
+    return {"filename": filename, "logo_url": f"/uploads/gym_logos/{stored_name}"}
 
 
 @app.post("/gyms/join-requests", status_code=HTTPStatus.CREATED.value)

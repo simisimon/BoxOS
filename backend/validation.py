@@ -227,6 +227,16 @@ def require_announcement_image_content_type(value: Any) -> str:
     return content_type
 
 
+def require_gym_logo_content_type(value: Any) -> str:
+    content_type = str(value or "").strip().lower()
+    if content_type not in settings.ALLOWED_GYM_LOGO_CONTENT_TYPES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Gym logos must be JPEG, PNG, or WEBP.",
+        )
+    return content_type
+
+
 def require_base64_bytes(value: Any, *, label: str, max_bytes: int) -> bytes:
     data = str(value or "").strip()
     if not data:

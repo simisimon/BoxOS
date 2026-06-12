@@ -125,9 +125,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   : () => context.go('/forgot-password'),
               child: const Text('Forgot Password?'),
             ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(
+              'Quick Login (Dev/Testing)',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: isLoading ? null : () => _quickLogin('demo@boxos.app', 'BoxOS123!'),
+              icon: const Icon(Icons.person_outline, size: 18),
+              label: const Text('Demo Athlete'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.blue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: isLoading ? null : () => _quickLogin('trainer@boxos.app', 'BoxOS123!'),
+              icon: const Icon(Icons.fitness_center_outlined, size: 18),
+              label: const Text('Demo Trainer'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: isLoading ? null : () => _quickLogin('admin@boxos.app', 'BoxOS123!'),
+              icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+              label: const Text('Demo Owner'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.purple,
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _quickLogin(String email, String password) {
+    _emailController.text = email;
+    _passwordController.text = password;
+    ref.read(authControllerProvider.notifier).signIn(
+          email: email,
+          password: password,
+        );
   }
 }

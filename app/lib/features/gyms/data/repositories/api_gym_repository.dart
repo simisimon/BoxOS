@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
@@ -43,6 +46,25 @@ class ApiGymRepository implements GymRepository {
       options: Options(headers: await _authHeaders()),
     );
     return _gymFromJson(response.data?['gym'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<String> uploadGymLogo({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  }) async {
+    final base64Data = base64Encode(bytes);
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/gyms/logo',
+      data: {
+        'filename': filename,
+        'content_type': contentType,
+        'data_base64': base64Data,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return response.data?['logo_url'] as String? ?? '';
   }
 
   @override

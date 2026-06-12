@@ -72,30 +72,34 @@ BoxOS ist kein MVP mehr. Das Ziel ist eine **production-ready core platform** f�
 
 ### Snapshot
 - Status: **In Progress**
-- Repository-Fokus: Flutter-App plus lokales REST-Backend
+- Repository-Fokus: Flutter-App plus containerisiertes REST-Backend
 - Frontend: `app/`
-- Backend: `backend/server.py`
-- Aktive Datenbank im Dev-Stand: **SQLite**
-- Geplante Modernisierung: **PostgreSQL + FastAPI**
+- Backend: `backend/fastapi_app.py` (FastAPI)
+- Aktive Datenbank: **PostgreSQL 16** (Docker Container)
+- Backend-Runtime: **FastAPI + uvicorn**
+- Datenbankzugriff: **psycopg** (raw PostgreSQL driver, kein ORM)
 
 ### Aktuelle Entwicklungsrichtung
 - production-ready core platform für ein einzelnes Gym
 - mobile Athlete-App plus Admin-Funktionen
 - Community-/Engagement-Slice ist bereits teilweise ausgeliefert
-- nächste technische Hauptinitiative: Backend- und Persistenz-Modernisierung
+- Backend-Modernisierung (PostgreSQL + FastAPI): **✅ ABGESCHLOSSEN**
+- nächste Hauptinitiative: **Production Blockers** adressieren
 
 ### Aktueller Validierungsstand
-- `python3 -m unittest backend.test_server`: zuletzt grün
-- `cd app && flutter test test/widget_test.dart --reporter compact`: zuletzt grün
+- Backend-Tests: `pytest backend/tests/` läuft gegen PostgreSQL
+- Flutter-Tests: `cd app && flutter test`
+- Docker-Setup: `docker compose up` für vollständigen Stack
 - Analytics-bezogene Flutter-Analyse hatte nur geringe Info-Level-Hinweise (`deprecated_member_use` / `withOpacity`)
 
 ### Wichtige aktuelle Risiken
-1. Backend ist noch stark in `backend/server.py` konzentriert.
-2. Persistenz basiert noch auf SQLite.
-3. Verifikations- und Reset-Tokens gehen lokal noch über Backend-Logs statt E-Mail.
-4. Externe Push-Zustellung fehlt noch.
-5. Memberships, Billing, tiefere Community- und Progress-Module sind noch nicht abgeschlossen.
-6. Profilfoto-/Avatar-Upload fehlt noch.
+1. Verifikations- und Reset-Tokens gehen lokal noch über Backend-Logs statt E-Mail.
+2. Externe Push-Zustellung fehlt noch.
+3. Memberships & Billing sind noch nicht implementiert.
+4. Tiefere Community- und Progress-Module sind noch nicht abgeschlossen.
+5. Profilfoto-/Avatar-Upload fehlt noch.
+6. Kein Schema-Migrations-Tool (kein Alembic) - Schema wird direkt in `db.py` definiert.
+7. Production-Deployment-Setup fehlt noch.
 
 ---
 
@@ -290,19 +294,27 @@ Soll umfassen:
 
 ## 8. Delivery-Status nach Modulen
 
-### Fertig
-- Accounts & Authentication
-- Profile / Notification Preferences / Device Registration
-- Gym Creation / Discovery / Join Requests / Active Gym Switching
-- Schedule Booking / Waitlists / Attendance Tracking
-- Programming Calendar / Digital Whiteboard
-- Workout Logging / Workout History / Basic PR Detection
-- In-App WOD- und PR-Notifications
-- Role Switching
-- Gym Member Management / Trainer Promotion
-- Audit Log Basis
+### ✅ Fertig
+- **Backend-Modernisierung**
+  - PostgreSQL 16 als primäre Datenbank
+  - FastAPI als Backend-Runtime
+  - psycopg als PostgreSQL-Treiber
+  - Service-Layer-Architektur (auth, membership, schedule, programming, announcements, workout)
+  - Docker-basiertes Setup (db, backend, frontend)
+  - Tests laufen gegen PostgreSQL
+- **Core Features**
+  - Accounts & Authentication
+  - Profile / Notification Preferences / Device Registration
+  - Gym Creation / Discovery / Join Requests / Active Gym Switching
+  - Schedule Booking / Waitlists / Attendance Tracking
+  - Programming Calendar / Digital Whiteboard
+  - Workout Logging / Workout History / Basic PR Detection
+  - In-App WOD- und PR-Notifications
+  - Role Switching
+  - Gym Member Management / Trainer Promotion
+  - Audit Log Basis
 
-### In Arbeit
+### 🚧 In Arbeit
 - **Admin Analytics v1**
   - Attendance / Utilization Overview
   - Review Windows 7 / 14 / 30 Tage
@@ -310,16 +322,17 @@ Soll umfassen:
   - Low-fill / High-no-show Drilldowns
   - Membership Health Basissicht
 
-### Noch nicht gestartet oder nicht fertig
+### ❌ Noch nicht gestartet oder nicht fertig
 - Memberships & Payments
 - produktive E-Mail-Zustellung
 - echte Push-Infrastruktur
-- production-grade Backend-Deployment
+- production-grade Backend-Deployment (Hosted PostgreSQL, Secrets Management, etc.)
 - tiefere Community-Loops
 - erweiterte Performance-Analysen
 - coach-grade Programming Workflows
 - Revenue Snapshot
 - dediziertes stärkeres Admin-Backoffice
+- Schema-Migrations-Tool (Alembic oder Alternative)
 
 ---
 
@@ -436,6 +449,24 @@ Offene Punkte:
 
 ## 10. Technische Zielarchitektur
 
+### Backend-Architektur ✅
+**Aktueller Stack:**
+- **Runtime**: FastAPI + uvicorn
+- **Datenbank**: PostgreSQL 16
+- **Treiber**: psycopg (raw SQL, kein ORM)
+- **Deployment**: Docker Compose
+- **Architektur**: Service-Layer-Pattern
+
+**Schichten:**
+1. **Route-Layer**: `fastapi_app.py` - HTTP-Endpunkte
+2. **Core Infrastructure**: `db.py`, `settings.py`, `security.py`, `session_auth.py`, `validation.py`, `notifications_core.py`, `audit.py`
+3. **Domain Services**: `auth_service.py`, `membership_service.py`, `schedule_service.py`, `announcement_service.py`, `workout_service.py`, `programming_service.py`
+
+**Besonderheiten:**
+- Raw SQL statt ORM (bewusste Entscheidung)
+- Schema direkt in `db.py` (kein Alembic)
+- ManagedConnection-Wrapper für psycopg
+
 ### Frontend-Richtung
 - Flutter Mobile App für Athleten
 - mobile Admin-Zugriffe bleiben wichtig
@@ -482,114 +513,76 @@ lib/
   - `results`
   - perspektivisch Outbox für Offline-Aktionen
 
-Wichtig: Die App kann lokal weiterhin SQLite/Drift für Offline-Caching nutzen, auch wenn das Backend auf PostgreSQL umgestellt wird.
+**Wichtig:** Die App kann lokal weiterhin SQLite/Drift für Offline-Caching nutzen. Das Backend verwendet PostgreSQL.
 
 ---
 
-## 11. Backend-Modernisierung: SQLite -> PostgreSQL -> FastAPI
+## 11. Backend-Modernisierung: SQLite -> PostgreSQL -> FastAPI ✅
 
-### Ziel
-Modernisierung in zwei verbundenen Schritten:
-1. Persistenzmigration von **SQLite** auf **PostgreSQL**
-2. Backend-Modernisierung von einfachem Python-HTTP-Server auf **FastAPI**
+### Status: **ABGESCHLOSSEN**
 
-### Ziel-Stack
-- FastAPI
-- psycopg
-- SQLAlchemy
-- Alembic
-- PostgreSQL
+Die Backend-Modernisierung wurde erfolgreich umgesetzt.
 
-### Grundsatzentscheidung für die Reihenfolge
-Empfohlene Reihenfolge:
-1. lokale PostgreSQL-Datenbank aufsetzen
-2. bestehendes Schema und Verhalten auf Postgres portieren
-3. Tests gegen Postgres grün bekommen
-4. danach oder parallel die HTTP-Struktur auf FastAPI umstellen
-5. später Hosted Postgres anschließen
+### Umgesetzter Stack
+- ✅ **FastAPI** als HTTP-Runtime
+- ✅ **uvicorn** als ASGI-Server
+- ✅ **PostgreSQL 16** (Docker Container)
+- ✅ **psycopg** als PostgreSQL-Treiber (raw driver, kein ORM)
+- ✅ **Docker Compose** Setup für Dev und Production
+- ❌ **SQLAlchemy** - bewusst NICHT verwendet (stattdessen raw SQL)
+- ❌ **Alembic** - bewusst NICHT verwendet (Schema direkt in `db.py`)
 
-### Phase 1 – Vorbereitung
-- SQLite-Einstiegspunkte in `backend/server.py` inventarisieren
-- Tabellen, Constraints und Initialisierung dokumentieren
-- SQLite-spezifische Stellen markieren:
-  - `sqlite3.connect(...)`
-  - `?`-Platzhalter
-  - `lastrowid`
-  - SQLite-spezifische Migrationen
-  - implizites Typverhalten
-- Tests mit SQLite-Annahmen identifizieren
-- Zielstruktur für neues Backend definieren
-- `DATABASE_URL` als zentrale Config einführen
+### Architektur-Entscheidungen
 
-### Phase 2 – Lokale PostgreSQL-Entwicklungsumgebung
-- lokalen Postgres-Container bereitstellen
-- Zugangsdaten und `DATABASE_URL` definieren
-- optional Compose-Setup anlegen
-- lokale Setup-Doku und Test-/Migrationsabläufe dokumentieren
+**Raw SQL statt ORM:**
+Das Projekt verwendet bewusst raw SQL mit psycopg statt SQLAlchemy ORM. Die `db.py` enthält einen `ManagedConnection`-Wrapper, der die SQLite-ähnliche API auf psycopg abbildet.
 
-### Phase 3 – SQLite -> PostgreSQL Portierung
-- DB-Zugriffe zentralisieren
-- Connection-/Session-Verwaltung einführen
-- erstes Postgres-Schema modellieren
-- Datentypen anpassen (Booleans, Timestamps, JSON/Text, Foreign Keys)
-- Primärschlüssel-/Autoincrement-Strategie anpassen
-- erste Alembic-Migration erzeugen
-- SQL-Unterschiede bereinigen
-- `lastrowid` durch Postgres-kompatible Rückgabemuster ersetzen
-- CRUD-Flows gegen Postgres verifizieren
-- Tests gegen Postgres migrieren
+**Schema-Management:**
+Das Schema wird direkt in `db.py` als `SCHEMA_SQL` definiert und bei Startup angewendet. Es gibt kein separates Migrations-Tool wie Alembic.
 
-### Phase 4 – FastAPI-Migration
-- FastAPI-App-Grundgerüst anlegen
-- Health-/Status-Route bereitstellen
-- Endpoints in Router aufteilen, z. B.:
-  - auth
-  - profile
-  - gyms
-  - schedule
-  - programming
-  - announcements
-  - notifications
-  - logbook
-  - analytics
-- SQLAlchemy-Modelle definieren
-- Pydantic-Schemas definieren
-- Domain-/Service-Logik aus `server.py` herauslösen
-- Auth- und Permission-Helfer als Dependencies / Services kapseln
-- Uploads / statische Assets prüfen
+**Service-Layer:**
+Das Backend ist in eine klare Schichtenarchitektur aufgeteilt:
+1. **Route-Layer**: `fastapi_app.py`
+2. **Core Infrastructure**: `db.py`, `settings.py`, `security.py`, `session_auth.py`, `validation.py`, `notifications_core.py`, `audit.py`
+3. **Domain Services**: `auth_service.py`, `membership_service.py`, `schedule_service.py`, `announcement_service.py`, `workout_service.py`, `programming_service.py`
 
-### Phase 5 – Datenmigration bestehender Daten
-Falls SQLite-Daten übernommen werden sollen:
-- Export-/Import-Skript definieren
-- tabellenweises Mapping festlegen
-- IDs, Foreign Keys, Timestamps korrekt übernehmen
-- Stichprobenprüfung nach Import
+### Was erreicht wurde
 
-Falls keine Produktivdaten übernommen werden müssen:
-- frisches Postgres-Schema nutzen
-- Seed-/Demo-Daten neu erzeugen
+✅ **Alle Phasen 1-4 abgeschlossen:**
+1. SQLite-Abhängigkeiten entfernt
+2. Lokale PostgreSQL-Entwicklungsumgebung (Docker)
+3. PostgreSQL-Migration mit psycopg
+4. FastAPI-Migration mit Service-Layer
 
-### Phase 6 – Vorbereitung auf Hosted PostgreSQL
-- `DATABASE_URL`-basierte Config finalisieren
-- lokale und gehostete Konfiguration trennen
-- Migrationslauf als Deployment-Schritt definieren
-- Hosted Postgres auswählen
-- SSL-/Connection-Anforderungen dokumentieren
-- Rollback-/Fallback-Idee vorbereiten
+✅ **Tests:**
+- Alle Tests laufen gegen PostgreSQL
+- Test-Suite unter `backend/tests/`
+- Coverage-Reporting eingerichtet
 
-### Definition of Done
-- Backend läuft lokal vollständig auf PostgreSQL
-- Tests laufen zuverlässig gegen PostgreSQL
-- FastAPI ist primäre API-Laufzeit
-- Alembic verwaltet Schemaänderungen
-- SQLite ist backendseitig nicht mehr produktionsrelevant
-- Hosted-Postgres-Wechsel ist danach primär Infrastrukturarbeit
+✅ **Docker-Setup:**
+- Production: `docker compose up` (db, backend, frontend)
+- Development: `docker compose --profile dev up` (db-dev, backend-dev, frontend-dev)
+
+### Verbleibende technische Schulden
+
+1. **Type Hints:** Einige Service-Module verwenden noch `sqlite3.Connection` Type Hints statt psycopg-Typen (technische Schuld, funktioniert aber)
+2. **Kein Alembic:** Schema-Änderungen müssen manuell in `db.py` gepflegt werden
+3. **Kein ORM:** Alle Datenbankzugriffe erfolgen via raw SQL
+
+### Nächste Schritte
+
+Die Backend-Modernisierung ist abgeschlossen. Der Fokus liegt jetzt auf:
+1. **Production Deployment** (Hosted PostgreSQL, Secrets, SSL)
+2. **Schema-Migrations-Strategie** evaluieren (Alembic hinzufügen oder manuell weiterführen)
+3. **Production Blockers** adressieren (siehe Sektion 12)
 
 ---
 
 ## 12. Production Blockers
 
 Diese Punkte müssen vor echtem Produktionsbetrieb für ein reales Gym erfüllt sein.
+
+**Status-Update:** Die Backend-Modernisierung (PostgreSQL + FastAPI) ist abgeschlossen (siehe Sektion 11). Die verbleibenden Blocker sind primär Feature-basiert, nicht technologiebasiert.
 
 ### 12.1 Rollen- und Rechte-Härtung abschließen
 Erforderlich:
@@ -892,31 +885,53 @@ Mindestens für:
 
 ## 17. Empfohlene Delivery-Reihenfolge
 
-### Kurzfristig
-1. PostgreSQL lokal aufsetzen
-2. `DATABASE_URL` einführen
-3. SQLite-Hotspots inventarisieren
-4. Postgres-Schema + Alembic vorbereiten
-5. Tests gegen Postgres migrieren
-6. FastAPI-Grundgerüst aufsetzen
+### ✅ Abgeschlossen
+1. ✅ PostgreSQL lokal aufsetzen
+2. ✅ `DATABASE_URL` einführen
+3. ✅ SQLite-Abhängigkeiten entfernen
+4. ✅ Postgres-Schema implementieren
+5. ✅ Tests gegen Postgres migrieren
+6. ✅ FastAPI-Migration abschließen
+7. ✅ Service-Layer-Architektur implementieren
+8. ✅ Docker-Setup für Dev und Production
 
-### Danach
-7. Rollen-/Rechte-Härtung finalisieren
-8. Admin Analytics vervollständigen
-9. Memberships & Payments bauen
-10. produktive E-Mail-Zustellung bauen
-11. reale Push-Zustellung bauen
+### 🎯 Hohe Priorität (Production Blockers)
+9. **Rollen-/Rechte-Härtung finalisieren**
+   - Backend-Autorisierung für alle Endpoints auditieren
+   - Regressionstests für Rechte-Matrix
+10. **Memberships & Payments implementieren**
+    - Plan-CRUD
+    - Billing-Provider-Integration
+    - Booking Restrictions
+11. **Produktive E-Mail-Zustellung**
+    - E-Mail-Provider-Integration
+    - Verify/Reset-Flow ohne Logs
+12. **Reale Push Notifications**
+    - FCM/APNs-Integration
+    - Device Token Management
+13. **Production Deployment vorbereiten**
+    - Hosted PostgreSQL auswählen
+    - Secrets Management
+    - SSL/HTTPS
+    - Monitoring & Logging
 
-### Danach Produktdifferenzierung
-12. Community Interactions v1 ausbauen
-13. Performance Tracking vertiefen
-14. Coach Programming Workflows ausbauen
-15. Revenue / Engagement / Churn Reporting erweitern
+### 📊 Mittlere Priorität (Produktdifferenzierung)
+14. Admin Analytics vervollständigen (Revenue Snapshot)
+15. Community Interactions v1 ausbauen
+16. Performance Tracking vertiefen
+17. Coach Programming Workflows ausbauen
+18. Avatar/Profile Photo Upload
 
-### Später
-16. dediziertes Admin-Backoffice stärken
-17. Marketplace / Partner-Ecosystem evaluieren
-18. erweiterte Business Intelligence / Retention-Module
+### 🔮 Später (Expansion)
+19. Dediziertes Admin-Backoffice stärken
+20. Marketplace / Partner-Ecosystem evaluieren
+21. Erweiterte Business Intelligence / Retention-Module
+22. Multi-Location Support (nach starker Single-Gym-Basis)
+
+### 🔧 Technische Verbesserungen (Optional)
+- Alembic für Schema-Migrationen einführen
+- Type Hints von sqlite3 auf psycopg migrieren
+- SQLAlchemy evaluieren (falls ORM gewünscht)
 
 ---
 

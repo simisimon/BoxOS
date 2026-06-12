@@ -337,6 +337,7 @@ alter table users add constraint users_active_gym_id_fkey
 
 def init_db() -> None:
     settings.ANNOUNCEMENT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    settings.GYM_LOGOS_DIR.mkdir(parents=True, exist_ok=True)
     connection = get_connection()
     try:
         with connection:
