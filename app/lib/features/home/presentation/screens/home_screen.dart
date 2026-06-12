@@ -1312,6 +1312,7 @@ class _AnnouncementEmptyState extends StatelessWidget {
 
 class _AnnouncementCard extends StatefulWidget {
   const _AnnouncementCard({
+    super.key,
     required this.announcement,
     required this.canManage,
     required this.onEdit,
