@@ -1,4 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/gyms/domain/models/my_gym_join_request.dart';
@@ -69,20 +71,23 @@ class _GymDirectoryScreenState extends ConsumerState<GymDirectoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Find a Gym')),
+    return AppMobileScaffold(
+      title: 'Find a Gym',
+      eyebrow: 'Discover',
       body: FutureBuilder<List<Object>>(
         future: Future.wait<Object>([_gymsFuture, _requestsFuture]),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const AppLoadingState();
           }
           if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                errorMessageFrom(
+            return Padding(
+              padding: const EdgeInsets.all(appSpaceLg),
+              child: AppEmptyState.error(
+                title: 'Failed to load gyms',
+                subtitle: errorMessageFrom(
                   snapshot.error ?? Exception('Unknown error'),
-                  fallback: 'Failed to load gyms',
+                  fallback: '',
                 ),
               ),
             );
@@ -107,12 +112,20 @@ class _GymDirectoryScreenState extends ConsumerState<GymDirectoryScreen> {
             for (final request in requests) request.gym.id: request,
           };
           if (gyms.isEmpty) {
-            return const Center(child: Text('No gyms available yet.'));
+            return Padding(
+              padding: const EdgeInsets.all(appSpaceLg),
+              child: AppEmptyState(
+                icon: Icons.location_off_outlined,
+                title: 'No gyms available yet',
+                subtitle:
+                    'Check back later or contact your box admin to register their gym.',
+              ),
+            );
           }
           return MobileContent(
             padding: EdgeInsets.zero,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(appSpaceLg),
               children: [
                 TextField(
                   controller: _searchController,

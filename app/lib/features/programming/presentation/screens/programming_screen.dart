@@ -1,5 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -57,9 +58,9 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
     final roleLabel = profileRole?.label ?? 'Athlete';
     final gymName = activeGym?.name;
 
-    return Scaffold(
-      backgroundColor: appPageBackground,
-      appBar: AppBar(title: const Text('Programming')),
+    return AppMobileScaffold(
+      title: 'Programming',
+      eyebrow: 'Workouts',
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               backgroundColor: appPrimary,
@@ -69,22 +70,11 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
               label: const Text('New WOD'),
             )
           : null,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              appPageBackground,
-              appPageBackgroundSoft,
-              appPageBackgroundEnd,
-            ],
-          ),
-        ),
-        child: MobileContent(
-          child: RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
+      body: MobileContent(
+        padding: EdgeInsets.zero,
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
               children: [
                 _ProgrammingHero(
@@ -182,8 +172,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'dart:ui';
 
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
@@ -21,105 +22,56 @@ class AdminAnalyticsScreen extends ConsumerWidget {
     final hasAccess =
         profile?.role == UserRole.admin && profile?.activeGym != null;
 
-    return Scaffold(
-      backgroundColor: appPageBackground,
-      body: SafeArea(
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                appPageBackground,
-                appPageBackgroundSoft,
-                appPageBackgroundEnd,
-              ],
-            ),
-          ),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => context.go('/profile'),
-                    icon: const Icon(Icons.arrow_back),
-                    color: appText,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: _HeaderBlock(
-                      eyebrow: 'Admin Analytics',
-                      title: 'Read the floor fast',
-                      subtitle:
-                          'Attendance, utilization, and operational pressure in one quick scan.',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              if (!hasAccess)
-                const _BlockedState()
-              else
-                analyticsAsync.when(
-                  data: (overview) => _OverviewContent(
-                    overview: overview,
-                    selectedWindowDays: selectedWindowDays,
-                    onWindowChanged: (windowDays) => ref
-                        .read(adminAnalyticsWindowDaysProvider.notifier)
-                        .setWindowDays(windowDays),
-                  ),
-                  loading: () => const _LoadingState(),
-                  error: (error, _) => _ErrorState(message: error.toString()),
-                ),
-            ],
-          ),
+    return AppMobileScaffold(
+      title: 'Read the floor fast',
+      eyebrow: 'Analytics',
+      onBack: () => context.go('/profile'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          appSpaceLg,
+          appSpaceLg,
+          appSpaceLg,
+          appSpace2xl,
         ),
+        children: [
+          const _HeaderSubtitle(
+            text:
+                'Attendance, utilization, and operational pressure in one quick scan.',
+          ),
+          const SizedBox(height: appSpaceLg),
+          if (!hasAccess)
+            const _BlockedState()
+          else
+            analyticsAsync.when(
+              data: (overview) => _OverviewContent(
+                overview: overview,
+                selectedWindowDays: selectedWindowDays,
+                onWindowChanged: (windowDays) => ref
+                    .read(adminAnalyticsWindowDaysProvider.notifier)
+                    .setWindowDays(windowDays),
+              ),
+              loading: () => const _LoadingState(),
+              error: (error, _) => _ErrorState(message: error.toString()),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _HeaderBlock extends StatelessWidget {
-  const _HeaderBlock({
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-  });
+class _HeaderSubtitle extends StatelessWidget {
+  const _HeaderSubtitle({required this.text});
 
-  final String eyebrow;
-  final String title;
-  final String subtitle;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          eyebrow.toUpperCase(),
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: appPrimary,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.8,
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: appMutedText,
+            height: 1.45,
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          title,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: appText,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          subtitle,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: appMutedText, height: 1.45),
-        ),
-      ],
     );
   }
 }

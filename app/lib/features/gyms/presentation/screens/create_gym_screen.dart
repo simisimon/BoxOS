@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -163,35 +164,16 @@ class _CreateGymScreenState extends ConsumerState<CreateGymScreen> {
     final hasAccess = profile?.accountType == AccountType.admin;
 
     if (!hasAccess) {
-      return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.lock_outline, size: 64, color: appMutedText),
-                const SizedBox(height: 16),
-                Text(
-                  'Access Denied',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: appText,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Only admin accounts can create a box.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: appMutedText),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: () => context.go('/home'),
-                  child: const Text('Go to Home'),
-                ),
-              ],
-            ),
+      return AppMobileScaffold(
+        title: 'Access denied',
+        body: Padding(
+          padding: const EdgeInsets.all(appSpaceLg),
+          child: AppEmptyState(
+            icon: Icons.lock_outline_rounded,
+            title: 'Admin accounts only',
+            subtitle: 'Only admin accounts can create a box.',
+            actionLabel: 'Go to home',
+            onAction: () => context.go('/home'),
           ),
         ),
       );

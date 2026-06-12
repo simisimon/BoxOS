@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
@@ -22,17 +23,18 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 const _homeAccent = appPrimary;
-const _homeAccentSoft = Color(0x1F2563EB);
-const _homeDanger = Color(0xFFD64545);
+const _homeDanger = appDanger;
 
 // Default weekly training-session goal driving the performance trackers.
 // Could be made per-user configurable later.
 const _weeklySessionGoal = 5;
 
-// Accent palette for the performance gauge (red → amber → green zones).
-const _perfRed = Color(0xFFE5533D);
-const _perfAmber = Color(0xFFE7A33C);
-const _perfGreen = Color(0xFF3FB264);
+// Performance gauge zones. Stays as data-viz red→amber→green regardless of
+// theme accent: training intensity is universally read this way and the
+// indigo brand color is reserved for chrome.
+const _perfRed = Color(0xFFFF5C6E);
+const _perfAmber = Color(0xFFFFB454);
+const _perfGreen = Color(0xFF3DDC97);
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -285,28 +287,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return DecoratedBox(
       decoration: appPageDecoration(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(
+          appSpaceLg,
+          appSpaceLg,
+          appSpaceLg,
+          appSpace3xl,
+        ),
         children: [
           if (hasActiveGym) ...[
-            const _SectionHeading('Performance Board'),
-            const SizedBox(height: 12),
+            const _SectionHeading(
+              'This Week',
+              eyebrow: 'Performance',
+            ),
+            const SizedBox(height: appSpaceMd),
             _PerformanceTracker(
               entriesFuture: _entriesFuture,
               weeklyGoal: _weeklySessionGoal,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: appSpace2xl),
           ],
-          const _SectionHeading('Your Bookings', center: true),
-          const SizedBox(height: 12),
+          const _SectionHeading(
+            'Your Bookings',
+            eyebrow: 'Schedule',
+          ),
+          const SizedBox(height: appSpaceMd),
           _BookingQuickAccessRail(
             scheduleFuture: _scheduleFuture,
             hasActiveGym: hasActiveGym,
             onOpenBooking: () => context.go('/my-box'),
             onRefresh: _refreshSchedule,
           ),
-          const SizedBox(height: 24),
-          const _SectionHeading('News'),
-          const SizedBox(height: 12),
+          const SizedBox(height: appSpace2xl),
+          const _SectionHeading('News', eyebrow: 'From your box'),
+          const SizedBox(height: appSpaceMd),
           _AnnouncementRail(
             announcementsFuture: _announcementsFuture,
             canManageAnnouncements: canManageAnnouncements,
@@ -319,15 +332,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onEditComment: _editAnnouncementComment,
             onDeleteComment: _deleteAnnouncementComment,
           ),
-          const SizedBox(height: 24),
-          const _SectionHeading('Quick actions'),
-          const SizedBox(height: 12),
+          const SizedBox(height: appSpace2xl),
+          const _SectionHeading('Quick actions', eyebrow: 'Shortcuts'),
+          const SizedBox(height: appSpaceMd),
           _QuickAccessGrid(
             profileAccountType: profile?.accountType,
             profileRole: profile?.role,
             hasActiveGym: hasActiveGym,
           ),
-          const SizedBox(height: 8),
         ],
       ),
     );
@@ -364,14 +376,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return DecoratedBox(
       decoration: appPageDecoration(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(
+          appSpaceLg,
+          appSpaceLg,
+          appSpaceLg,
+          appSpace3xl,
+        ),
         children: [
-          const _SectionHeading('Your Box Dashboard'),
-          const SizedBox(height: 12),
+          const _SectionHeading(
+            'Box Dashboard',
+            eyebrow: 'Operations',
+          ),
+          const SizedBox(height: appSpaceMd),
           const _OwnerDashboard(),
-          const SizedBox(height: 24),
-          const _SectionHeading('News'),
-          const SizedBox(height: 12),
+          const SizedBox(height: appSpace2xl),
+          const _SectionHeading('News', eyebrow: 'Announcements'),
+          const SizedBox(height: appSpaceMd),
           _AnnouncementRail(
             announcementsFuture: _announcementsFuture,
             canManageAnnouncements: canManageAnnouncements,
@@ -384,33 +404,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onEditComment: _editAnnouncementComment,
             onDeleteComment: _deleteAnnouncementComment,
           ),
-          const SizedBox(height: 24),
-          const _SectionHeading('Quick actions'),
-          const SizedBox(height: 12),
+          const SizedBox(height: appSpace2xl),
+          const _SectionHeading('Quick actions', eyebrow: 'Shortcuts'),
+          const SizedBox(height: appSpaceMd),
           const _OwnerQuickAccessGrid(),
-          const SizedBox(height: 8),
         ],
       ),
     );
   }
 }
 
+/// Thin wrapper around [AppSectionHeader] preserving the original positional
+/// constructor so the dozens of call sites in this file stay untouched.
 class _SectionHeading extends StatelessWidget {
-  const _SectionHeading(this.title, {this.center = false});
+  const _SectionHeading(this.title, {this.eyebrow});
 
   final String title;
-  final bool center;
+  final String? eyebrow;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      textAlign: center ? TextAlign.center : TextAlign.start,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w800,
-        color: appText,
-      ),
-    );
+    return AppSectionHeader(title: title, eyebrow: eyebrow);
   }
 }
 
@@ -539,10 +553,7 @@ class _PerformanceTracker extends StatelessWidget {
       future: entriesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 200,
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const AppLoadingState(height: 220);
         }
         final stats = _PerfStats.from(
           snapshot.data ?? const <WorkoutLogEntry>[],
@@ -561,10 +572,8 @@ class _TrackerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: appPanelDecoration(),
+    return AppCard.elevated(
+      padding: const EdgeInsets.all(appSpaceXl),
       child: child,
     );
   }
@@ -580,15 +589,22 @@ class _TrackerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: appPrimary),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: appPrimarySoft,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, size: 12, color: appPrimary),
+        ),
         const SizedBox(width: 8),
         Text(
           title.toUpperCase(),
           style: const TextStyle(
             color: appSubtleText,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1.1,
-            fontSize: 12,
+            letterSpacing: 1.4,
+            fontSize: 10.5,
           ),
         ),
       ],
@@ -623,28 +639,45 @@ class _GaugeTracker extends StatelessWidget {
                 ),
                 Align(
                   alignment: const Alignment(0, -0.18),
-                  child: RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${stats.sessionsThisWeek}',
-                          style: const TextStyle(
-                            color: appText,
-                            fontSize: 34,
-                            fontWeight: FontWeight.w900,
-                            height: 1,
-                          ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${stats.sessionsThisWeek}',
+                              style: const TextStyle(
+                                color: appText,
+                                fontSize: 40,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                                letterSpacing: -1.2,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '  /  ${stats.weeklyGoal}',
+                              style: const TextStyle(
+                                color: appSubtleText,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                          ],
                         ),
-                        TextSpan(
-                          text: ' / ${stats.weeklyGoal}',
-                          style: const TextStyle(
-                            color: appSubtleText,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        stats.powerLevel.toUpperCase(),
+                        style: const TextStyle(
+                          color: appPrimary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.6,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -744,24 +777,37 @@ class _GaugePainter extends CustomPainter {
     final radius = math.min(size.width / 2, size.height - 12) - 14;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
+    // Quiet base ring so the unfilled portion of the gauge still reads as a
+    // track on near-black instead of disappearing.
+    final base = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14
+      ..strokeCap = StrokeCap.round
+      ..color = appSurfaceElevated;
+    canvas.drawArc(rect, math.pi, math.pi, false, base);
+
     final track = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 16
+      ..strokeWidth = 14
       ..strokeCap = StrokeCap.round
       ..shader = const LinearGradient(
         colors: [_perfRed, _perfAmber, _perfGreen],
       ).createShader(rect);
-    canvas.drawArc(rect, math.pi, math.pi, false, track);
+    final sweep = progress.clamp(0.0, 1.0) * math.pi;
+    if (sweep > 0) {
+      canvas.drawArc(rect, math.pi, sweep, false, track);
+    }
 
     final angle = math.pi + progress.clamp(0.0, 1.0) * math.pi;
-    final tip = center + Offset(math.cos(angle), math.sin(angle)) * radius * 0.40;
+    final tip =
+        center + Offset(math.cos(angle), math.sin(angle)) * radius * 0.46;
     final needle = Paint()
       ..color = appText
-      ..strokeWidth = 4
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center, tip, needle);
     canvas.drawCircle(center, 7, Paint()..color = appText);
-    canvas.drawCircle(center, 3, Paint()..color = appSurface);
+    canvas.drawCircle(center, 3, Paint()..color = appPageBackground);
   }
 
   @override
@@ -799,10 +845,7 @@ class _BookingQuickAccessRail extends StatelessWidget {
       future: scheduleFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const AppLoadingState(height: 220);
         }
         if (snapshot.hasError) {
           return _AnnouncementEmptyState(
@@ -858,40 +901,40 @@ class _BookingLauncherCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 184,
+      width: 196,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(appRadiusXl),
           onTap: onTap,
           child: Ink(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(appRadiusXl),
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [appPrimary, Color(0xFF1D4ED8)],
+                colors: [appPrimary, Color(0xFF3D4FE0)],
               ),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x1F2563EB),
-                  blurRadius: 28,
-                  offset: Offset(0, 18),
+                  color: appPrimarySoft,
+                  blurRadius: 32,
+                  offset: Offset(0, 20),
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(appSpaceLg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Color(0x22FFFFFF),
+                    radius: 20,
+                    backgroundColor: Color(0x33FFFFFF),
                     child: Icon(
                       Icons.add_rounded,
                       color: Colors.white,
-                      size: 26,
+                      size: 24,
                     ),
                   ),
                   Spacer(),
@@ -900,15 +943,20 @@ class _BookingLauncherCard extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
                     ),
                   ),
-                  SizedBox(height: 6),
+                  SizedBox(height: 4),
                   Text(
-                    'Open the schedule and reserve your next slot fast.',
+                    'Reserve your next slot in seconds.',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white, height: 1.35),
+                    style: TextStyle(
+                      color: Color(0xCCFFFFFF),
+                      height: 1.35,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -925,41 +973,41 @@ class _BookingPlaceholderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: appSurface,
-        border: Border.all(color: appBorder),
-      ),
-      child: const SingleChildScrollView(
-        physics: NeverScrollableScrollPhysics(),
-        child: Align(
-          alignment: Alignment.bottomLeft,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.event_busy_outlined, color: appPrimary, size: 26),
-              SizedBox(height: 14),
-              Text(
-                'No class booked yet',
-                style: TextStyle(
-                  color: appText,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                ),
+    return SizedBox(
+      width: 232,
+      child: AppCard(
+        radius: appRadiusXl,
+        padding: const EdgeInsets.all(appSpaceLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            AppAccentBadge(
+              icon: Icons.event_busy_outlined,
+              color: appPrimary,
+            ),
+            Spacer(),
+            Text(
+              'No class booked',
+              style: TextStyle(
+                color: appText,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
               ),
-              SizedBox(height: 6),
-              Text(
-                'Reserve one and it stays pinned here for quick access.',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: appSubtleText, height: 1.4),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Reserve one and it stays pinned here.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: appSubtleText,
+                height: 1.4,
+                fontSize: 13,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -982,90 +1030,58 @@ class _BookedClassCard extends StatelessWidget {
     );
     final dayLabel = localizations.formatShortDate(item.startTime.toLocal());
     return SizedBox(
-      width: 240,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: onTap,
-          child: Ink(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [appSurface, appSurfaceAlt],
-              ),
-              border: Border.all(color: appBorder),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const AppAccentBadge(
-                      icon: Icons.check_circle_outline_rounded,
-                      color: appPrimary,
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        color: _homeAccentSoft,
-                        border: Border.all(color: appBorder),
-                      ),
-                      child: const Text(
-                        'BOOKED',
-                        style: TextStyle(
-                          color: appPrimary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                  ],
+      width: 248,
+      child: AppCard(
+        onTap: onTap,
+        radius: appRadiusXl,
+        padding: const EdgeInsets.all(appSpaceLg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                AppAccentBadge(
+                  icon: Icons.check_circle_outline_rounded,
+                  color: appPrimary,
                 ),
-                const Spacer(),
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: appText,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 20,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$dayLabel · $startLabel',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: appMutedText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.assignedTrainer == null
-                      ? item.classType
-                      : '${item.classType} · ${item.assignedTrainer!.displayName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: appSubtleText,
-                  ),
-                ),
+                Spacer(),
+                AppPill(label: 'Booked', intent: AppPillIntent.primary),
               ],
             ),
-          ),
+            const Spacer(),
+            Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: appText,
+                fontWeight: FontWeight.w800,
+                fontSize: 19,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$dayLabel · $startLabel',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: appMutedText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.assignedTrainer == null
+                  ? item.classType
+                  : '${item.classType} · ${item.assignedTrainer!.displayName}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: appSubtleText,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1130,10 +1146,7 @@ class _AnnouncementRailState extends State<_AnnouncementRail> {
         // On initial load (no cache yet) show a spinner.
         if (snapshot.connectionState == ConnectionState.waiting &&
             _cached == null) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const AppLoadingState(height: 180);
         }
 
         // Show errors only when there is no cached data to fall back on.
@@ -1244,6 +1257,11 @@ class _AnnouncementComposerBanner extends StatelessWidget {
   }
 }
 
+/// Thin shim around the shared [AppEmptyState] so the rest of this file's
+/// call sites stay unchanged. The signature collapses to whatever the shared
+/// primitive offers; tap callbacks become a synchronous VoidCallback (the
+/// async work is fire-and-forget — the parent already handles its own loading
+/// state).
 class _AnnouncementEmptyState extends StatelessWidget {
   const _AnnouncementEmptyState({
     required this.icon,
@@ -1261,51 +1279,12 @@ class _AnnouncementEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [appSurface, appSurfaceAlt],
-        ),
-        border: Border.all(color: appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppAccentBadge(icon: icon, color: _homeAccent),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: appText,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: appSubtleText,
-              height: 1.45,
-            ),
-          ),
-          if (actionLabel != null && onTap != null) ...[
-            const SizedBox(height: 14),
-            FilledButton(
-              onPressed: onTap,
-              style: FilledButton.styleFrom(
-                backgroundColor: _homeAccent,
-                foregroundColor: Colors.white,
-              ),
-              child: Text(actionLabel!),
-            ),
-          ],
-        ],
-      ),
+    return AppEmptyState(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      actionLabel: actionLabel,
+      onAction: onTap == null ? null : () => onTap!(),
     );
   }
 }
@@ -1726,16 +1705,19 @@ class _AnnouncementCommentComposer extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: isSubmitting ? null : onSubmit,
               style: FilledButton.styleFrom(
-                backgroundColor: _homeAccent,
-                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
               icon: isSubmitting
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
                     )
-                  : const Icon(Icons.send_rounded),
+                  : const Icon(Icons.send_rounded, size: 18),
               label: const Text('Post'),
             ),
           ),
@@ -1938,38 +1920,30 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: appBorder),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: () => context.go(action.route),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            child: Row(
-              children: [
-                AppAccentBadge(icon: action.icon, color: action.accentColor),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    action.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: appText,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(Icons.north_east_rounded, color: action.accentColor),
-              ],
+    return AppCard(
+      onTap: () => context.go(action.route),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          AppAccentBadge(icon: action.icon, color: action.accentColor),
+          const SizedBox(width: appSpaceMd),
+          Expanded(
+            child: Text(
+              action.title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: appText,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
-        ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: appSubtleText,
+            size: 22,
+          ),
+        ],
       ),
     );
   }
@@ -2035,6 +2009,7 @@ class _ActionSpotlight extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: accentColor,
                     foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(48),
                   ),
                   onPressed: onTap,
                   child: Text(actionLabel),
@@ -2233,12 +2208,8 @@ class _AnnouncementComposerDialogState
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [_homeAccentSoft, Color(0x0F2563EB)],
-                    ),
+                    borderRadius: BorderRadius.circular(appRadiusLg),
+                    color: appSurfaceAlt,
                     border: Border.all(color: appBorder),
                   ),
                   child: Column(
@@ -2279,8 +2250,6 @@ class _AnnouncementComposerDialogState
                                 ? null
                                 : _pickImageFromGallery,
                             style: FilledButton.styleFrom(
-                              backgroundColor: _homeAccent,
-                              foregroundColor: Colors.white,
                               minimumSize: const Size(0, 44),
                             ),
                             icon: _isUploadingImage
@@ -2289,7 +2258,7 @@ class _AnnouncementComposerDialogState
                                     height: 16,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: appText,
+                                      color: Colors.white,
                                     ),
                                   )
                                 : const Icon(Icons.photo_library_outlined),
@@ -2359,10 +2328,6 @@ class _AnnouncementComposerDialogState
         ),
         FilledButton(
           onPressed: _isSaving ? null : _submit,
-          style: FilledButton.styleFrom(
-            backgroundColor: _homeAccent,
-            foregroundColor: Colors.white,
-          ),
           child: Text(
             _isSaving
                 ? (_isEditing ? 'Saving...' : 'Posting...')
@@ -2384,34 +2349,10 @@ class _OwnerDashboard extends ConsumerWidget {
 
     return analyticsAsync.when(
       data: (overview) => _OwnerDashboardContent(overview: overview),
-      loading: () => Container(
-        height: 200,
-        decoration: appPanelDecoration(),
-        child: const Center(child: CircularProgressIndicator()),
-      ),
-      error: (error, _) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: appPanelDecoration(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.error_outline, color: _homeDanger, size: 32),
-            const SizedBox(height: 12),
-            const Text(
-              'Failed to load dashboard',
-              style: TextStyle(
-                color: appText,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              error.toString(),
-              style: const TextStyle(color: appMutedText),
-            ),
-          ],
-        ),
+      loading: () => const AppLoadingState(height: 220),
+      error: (error, _) => AppEmptyState.error(
+        title: 'Failed to load dashboard',
+        subtitle: error.toString(),
       ),
     );
   }
@@ -2472,18 +2413,8 @@ class _OwnerDashboardContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        // Quick stats banner
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [appSurface, appSurfaceAlt],
-            ),
-            border: Border.all(color: appBorder),
-          ),
+        AppCard(
+          padding: const EdgeInsets.all(appSpaceLg),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -2492,13 +2423,13 @@ class _OwnerDashboardContent extends StatelessWidget {
                 value: '${overview.upcomingClassesNext7Days}',
                 sublabel: 'next 7 days',
               ),
-              Container(width: 1, height: 32, color: appBorder),
+              Container(width: 1, height: 36, color: appBorder),
               _DashboardStat(
                 label: 'Bookings',
                 value: '${overview.upcomingBookingsNext7Days}',
                 sublabel: 'upcoming',
               ),
-              Container(width: 1, height: 32, color: appBorder),
+              Container(width: 1, height: 36, color: appBorder),
               _DashboardStat(
                 label: 'No-shows',
                 value: '${overview.noShowsInWindow}',
@@ -2533,30 +2464,31 @@ class _DashboardMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: appPanelDecoration(),
+    return AppCard(
+      padding: const EdgeInsets.all(appSpaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppAccentBadge(icon: icon, color: accentColor),
-          const SizedBox(height: 12),
+          const SizedBox(height: appSpaceMd),
           Text(
             value,
             style: const TextStyle(
               color: appText,
               fontSize: 28,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
               height: 1,
+              letterSpacing: -0.6,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            label,
+            label.toUpperCase(),
             style: const TextStyle(
               color: appSubtleText,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.3,
             ),
           ),
         ],
@@ -2586,7 +2518,7 @@ class _DashboardStat extends StatelessWidget {
             color: appSubtleText,
             fontSize: 10,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1,
+            letterSpacing: 1.3,
           ),
         ),
         const SizedBox(height: 6),
@@ -2594,9 +2526,10 @@ class _DashboardStat extends StatelessWidget {
           value,
           style: const TextStyle(
             color: appText,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
             height: 1,
+            letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 4),

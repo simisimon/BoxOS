@@ -1,4 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
@@ -126,61 +128,61 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
       Future.microtask(_loadUsers);
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Gym Members')),
+    return AppMobileScaffold(
+      title: 'Gym Members',
+      eyebrow: 'Roles',
       body: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              errorMessageFrom(error, fallback: 'Failed to load profile'),
-              textAlign: TextAlign.center,
-            ),
+        loading: () => const AppLoadingState(),
+        error: (error, _) => Padding(
+          padding: const EdgeInsets.all(appSpaceLg),
+          child: AppEmptyState.error(
+            title: 'Failed to load profile',
+            subtitle: errorMessageFrom(error, fallback: ''),
           ),
         ),
         data: (_) {
           if (!hasAccess) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'You need an active admin gym to manage member roles.',
-                  textAlign: TextAlign.center,
-                ),
+            return Padding(
+              padding: const EdgeInsets.all(appSpaceLg),
+              child: AppEmptyState(
+                icon: Icons.lock_outline_rounded,
+                title: 'Admin access required',
+                subtitle:
+                    'You need an active admin gym to manage member roles.',
               ),
             );
           }
 
           if (_isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const AppLoadingState();
           }
 
           if (_errorText != null) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(_errorText!, textAlign: TextAlign.center),
+            return Padding(
+              padding: const EdgeInsets.all(appSpaceLg),
+              child: AppEmptyState.error(
+                title: 'Could not load members',
+                subtitle: _errorText!,
               ),
             );
           }
 
           final users = _users ?? const <RoleManagedUser>[];
           if (users.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No active members were found for the selected gym.',
-                  textAlign: TextAlign.center,
-                ),
+            return Padding(
+              padding: const EdgeInsets.all(appSpaceLg),
+              child: AppEmptyState(
+                icon: Icons.group_outlined,
+                title: 'No active members',
+                subtitle:
+                    'No active members were found for the selected gym.',
               ),
             );
           }
           return MobileContent(
             padding: EdgeInsets.zero,
             child: ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(appSpaceLg),
               itemBuilder: (context, index) {
                 final user = users[index];
                 final isSaving = _savingUserId == user.id;

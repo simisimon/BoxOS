@@ -4,11 +4,6 @@ import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 
 const boxOsLogoAsset = 'assets/images/boxOS_logo.png';
-const _shellBlue = appPrimary;
-const _shellBackground = appPageBackground;
-const _shellBorder = appBorder;
-const _shellText = appText;
-const _shellMuted = appSubtleText;
 
 class AuthenticatedScaffold extends StatelessWidget {
   const AuthenticatedScaffold({
@@ -45,11 +40,10 @@ class AuthenticatedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _shellBackground,
+      backgroundColor: appPageBackground,
+      extendBodyBehindAppBar: false,
       appBar: PreferredSize(
-        // Status-bar inset + content height (12 + 56 row + 12). Sizing to
-        // content avoids the dead gap a fixed height used to leave below it.
-        preferredSize: Size.fromHeight(MediaQuery.of(context).padding.top + 80),
+        preferredSize: Size.fromHeight(MediaQuery.of(context).padding.top + 72),
         child: _ShellHeader(
           displayName: displayName,
           roleLabel: roleLabel,
@@ -61,23 +55,13 @@ class AuthenticatedScaffold extends StatelessWidget {
         ),
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              _shellBackground,
-              appPageBackgroundSoft,
-              appPageBackgroundEnd,
-            ],
-          ),
-        ),
+        decoration: appPageDecoration(),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final horizontalPadding =
                 constraints.maxWidth > mobileContentMaxWidth
-                ? (constraints.maxWidth - mobileContentMaxWidth) / 2
-                : 0.0;
+                    ? (constraints.maxWidth - mobileContentMaxWidth) / 2
+                    : 0.0;
             return Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               child: body,
@@ -117,27 +101,22 @@ class _ShellHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accentColor = appPrimary;
-    final titleLine = displayName.isEmpty
-        ? roleLabel
-        : '$displayName • $roleLabel';
-
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
         child: DecoratedBox(
           decoration: const BoxDecoration(
-            color: appSurface,
-            border: Border(bottom: BorderSide(color: _shellBorder)),
+            color: appPageBackground,
+            border: Border(bottom: BorderSide(color: appBorder)),
           ),
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Row(
                 children: [
-                  _LogoBadge(accentColor: accentColor),
+                  const _LogoBadge(),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -145,18 +124,25 @@ class _ShellHeader extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'BoxOS',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: _shellText,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          displayName.isEmpty ? 'BoxOS' : displayName,
+                          style: const TextStyle(
+                            color: appText,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          titleLine,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: _shellMuted),
+                          roleLabel.toUpperCase(),
+                          style: const TextStyle(
+                            color: appSubtleText,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.4,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -166,7 +152,7 @@ class _ShellHeader extends StatelessWidget {
                   if (availableRoles.length > 1) ...[
                     _HeaderIconButton(
                       icon: Icons.swap_horiz_rounded,
-                      tooltip: 'Switch Role',
+                      tooltip: 'Switch role',
                       onTap: () async {
                         final renderBox =
                             context.findRenderObject() as RenderBox?;
@@ -198,7 +184,7 @@ class _ShellHeader extends StatelessWidget {
                         }
                       },
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                   ],
                   _HeaderIconButton(
                     icon: Icons.notifications_none_rounded,
@@ -206,28 +192,10 @@ class _ShellHeader extends StatelessWidget {
                     badge: unreadNotifications,
                     onTap: onNotificationsTap,
                   ),
-                  const SizedBox(width: 4),
-                  GestureDetector(
+                  const SizedBox(width: 6),
+                  _AvatarButton(
+                    displayName: displayName,
                     onTap: onProfileTap,
-                    behavior: HitTestBehavior.opaque,
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Center(
-                        child: CircleAvatar(
-                          radius: 20,
-                          backgroundColor: accentColor.withOpacity(0.14),
-                          child: Text(
-                            _initials(displayName),
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(
-                                  color: _shellText,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -237,43 +205,24 @@ class _ShellHeader extends StatelessWidget {
       ),
     );
   }
-
-  static String _initials(String value) {
-    final normalized = value.trim();
-    if (normalized.isEmpty) {
-      return 'U';
-    }
-    final parts = normalized.split(RegExp(r'\s+'));
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
-  }
 }
 
 class _LogoBadge extends StatelessWidget {
-  const _LogoBadge({required this.accentColor});
-
-  final Color accentColor;
+  const _LogoBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 56,
-      height: 56,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, accentColor.withOpacity(0.12)],
-        ),
-        border: Border.all(color: _shellBorder),
+        borderRadius: BorderRadius.circular(appRadiusMd),
+        color: appSurface,
+        border: Border.all(color: appBorderStrong),
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(6),
         child: Image.asset(boxOsLogoAsset, fit: BoxFit.contain),
       ),
     );
@@ -298,17 +247,17 @@ class _HeaderIconButton extends StatelessWidget {
     final button = Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(appRadiusMd),
         onTap: onTap,
         child: Container(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _shellBorder),
+            color: appSurface,
+            borderRadius: BorderRadius.circular(appRadiusMd),
+            border: Border.all(color: appBorder),
           ),
-          child: Icon(icon, color: _shellText),
+          child: Icon(icon, color: appText, size: 20),
         ),
       ),
     );
@@ -318,11 +267,60 @@ class _HeaderIconButton extends StatelessWidget {
       child: badge > 0
           ? Badge(
               isLabelVisible: true,
+              backgroundColor: appPrimary,
+              textColor: Colors.white,
               label: Text(badge > 99 ? '99+' : '$badge'),
               child: button,
             )
           : button,
     );
+  }
+}
+
+class _AvatarButton extends StatelessWidget {
+  const _AvatarButton({required this.displayName, required this.onTap});
+
+  final String displayName;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: appPrimarySoft,
+          borderRadius: BorderRadius.circular(appRadiusPill),
+          border: Border.all(color: appPrimaryHairline),
+        ),
+        child: Text(
+          _initials(displayName),
+          style: const TextStyle(
+            color: appText,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _initials(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return 'U';
+    }
+    final parts = normalized.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+        .toUpperCase();
   }
 }
 
@@ -343,11 +341,6 @@ class _ShellFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Flat footer matching the header: white surface with a top border,
-    // capped to the same width as the main content and centered. heightFactor
-    // keeps the footer at its intrinsic height instead of filling the slot.
-    // The NavigationBar is transparent so the surrounding white shows through
-    // (incl. the bottom safe-area inset the bar manages itself).
     return Align(
       alignment: Alignment.bottomCenter,
       heightFactor: 1,
@@ -355,68 +348,114 @@ class _ShellFooter extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
         child: DecoratedBox(
           decoration: const BoxDecoration(
-            color: appSurface,
-            border: Border(top: BorderSide(color: _shellBorder)),
+            color: appPageBackground,
+            border: Border(top: BorderSide(color: appBorder)),
           ),
-          child: NavigationBarTheme(
-            data: NavigationBarThemeData(
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              indicatorColor: const Color(0x1F2563EB),
-              labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                final selected = states.contains(WidgetState.selected);
-                return TextStyle(
-                  color: selected ? _shellBlue : _shellMuted,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                );
-              }),
-              iconTheme: WidgetStateProperty.resolveWith((states) {
-                final selected = states.contains(WidgetState.selected);
-                return IconThemeData(
-                  color: selected ? _shellBlue : _shellMuted,
-                );
-              }),
+          child: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.only(bottom: 8),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+              child: Row(
+                children: [
+                  _FooterDest(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'Home',
+                    selected: selectedIndex == 0,
+                    onTap: onHomeTap,
+                  ),
+                  _FooterDest(
+                    icon: Icons.fitness_center_outlined,
+                    activeIcon: Icons.fitness_center_rounded,
+                    label: 'My Box',
+                    selected: selectedIndex == 1,
+                    onTap: onMyBoxTap,
+                  ),
+                  _FooterDest(
+                    icon: Icons.menu_book_outlined,
+                    activeIcon: Icons.menu_book_rounded,
+                    label: 'Logbook',
+                    selected: selectedIndex == 2,
+                    onTap: onLogbookTap,
+                  ),
+                  _FooterDest(
+                    icon: Icons.person_outline_rounded,
+                    activeIcon: Icons.person_rounded,
+                    label: 'Profile',
+                    selected: selectedIndex == 3,
+                    onTap: onProfileTap,
+                  ),
+                ],
+              ),
             ),
-            child: NavigationBar(
-              selectedIndex: selectedIndex,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              onDestinationSelected: (index) {
-                switch (index) {
-                  case 0:
-                    onHomeTap();
-                    break;
-                  case 1:
-                    onMyBoxTap();
-                    break;
-                  case 2:
-                    onLogbookTap();
-                    break;
-                  case 3:
-                    onProfileTap();
-                    break;
-                }
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home_rounded),
-                  label: 'Home',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterDest extends StatelessWidget {
+  const _FooterDest({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? appText : appSubtleText;
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(appRadiusMd),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected ? appPrimarySoft : Colors.transparent,
+                    borderRadius: BorderRadius.circular(appRadiusPill),
+                    border: Border.all(
+                      color: selected
+                          ? appPrimaryHairline
+                          : Colors.transparent,
+                    ),
+                  ),
+                  child: Icon(
+                    selected ? activeIcon : icon,
+                    color: selected ? appPrimary : color,
+                    size: 22,
+                  ),
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.fitness_center_outlined),
-                  selectedIcon: Icon(Icons.fitness_center_rounded),
-                  label: 'MyBox',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.menu_book_outlined),
-                  selectedIcon: Icon(Icons.menu_book_rounded),
-                  label: 'Logbook',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 10.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    letterSpacing: 0.2,
+                  ),
                 ),
               ],
             ),

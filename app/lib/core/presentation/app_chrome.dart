@@ -1,24 +1,84 @@
 import 'package:flutter/material.dart';
 
-const appPageBackground = Color(0xFFF5F9FF);
-const appPageBackgroundSoft = Color(0xFFEAF2FF);
-const appPageBackgroundEnd = Color(0xFFF9FBFF);
-const appSurface = Colors.white;
-const appSurfaceAlt = Color(0xFFF8FBFF);
-const appBorder = Color(0xFFD8E4F2);
-const appText = Color(0xFF0F172A);
-const appMutedText = Color(0xFF475569);
-const appSubtleText = Color(0xFF64748B);
-const appPrimary = Color(0xFF2563EB);
-const appDanger = Color(0xFFD64545);
+// ============================================================================
+// BoxOS design tokens — dark-first, premium, restrained.
+//
+// Names are preserved from the previous (light) palette so every screen picks
+// up the new look without an import sweep. Treat these as the single source of
+// truth: never inline hex colors or magic radii in feature code.
+// ============================================================================
 
-// Corner-radius scale. Use these instead of raw BorderRadius.circular(...)
-// literals so card, field, badge, and pill rounding stays in lockstep.
-const double appRadiusSm = 16;
-const double appRadiusMd = 18;
-const double appRadiusLg = 24;
-const double appRadiusXl = 28;
+// --- Surfaces ---------------------------------------------------------------
+// A narrow near-black ramp gives cards a real sense of elevation without
+// resorting to drop shadows the eye perceives as gray bands on dark UIs.
+const appPageBackground = Color(0xFF07080B);
+const appPageBackgroundSoft = Color(0xFF0B0D12);
+const appPageBackgroundEnd = Color(0xFF07080B);
+const appSurface = Color(0xFF101218);
+const appSurfaceAlt = Color(0xFF161922);
+const appSurfaceElevated = Color(0xFF1B1F2A);
+
+// --- Borders ----------------------------------------------------------------
+const appBorder = Color(0xFF1F2330);
+const appBorderStrong = Color(0xFF2A2F3D);
+
+// --- Text -------------------------------------------------------------------
+const appText = Color(0xFFF4F5F7);
+const appMutedText = Color(0xFFAEB4BD);
+const appSubtleText = Color(0xFF767C86);
+const appInverseText = Color(0xFF07080B); // for use on light accents
+
+// --- Brand & semantic accents ----------------------------------------------
+// One restrained accent color. Electric indigo reads premium on near-black,
+// works as a button background with white text, and stays out of the way when
+// used sparingly for focus, links, and highlights.
+const appPrimary = Color(0xFF5B6FFF);
+const appPrimarySoft = Color(0x335B6FFF); // ~20% — chips, hover backgrounds
+const appPrimaryHairline = Color(0x665B6FFF); // ~40% — borders, dividers
+
+const appDanger = Color(0xFFFF5C6E);
+const appDangerSoft = Color(0x33FF5C6E);
+const appSuccess = Color(0xFF3DDC97);
+const appWarning = Color(0xFFFFB454);
+const appInfo = Color(0xFF5BC0FF);
+
+// --- Radii ------------------------------------------------------------------
+// Tightened scale; the previous range (16–28) read pillowy. These match Linear
+// and Stripe dashboard surfaces — confident, precise, never childish.
+const double appRadiusSm = 10; // inputs, chips, small pills
+const double appRadiusMd = 14; // small cards, popovers
+const double appRadiusLg = 18; // standard cards
+const double appRadiusXl = 22; // hero cards, sheets
 const double appRadiusPill = 999;
+
+// --- Spacing ---------------------------------------------------------------
+// Centralized so every screen breathes the same way. Use these for vertical
+// rhythm between sections, list rows, and inside cards.
+const double appSpaceXs = 4;
+const double appSpaceSm = 8;
+const double appSpaceMd = 12;
+const double appSpaceLg = 16;
+const double appSpaceXl = 20;
+const double appSpace2xl = 24;
+const double appSpace3xl = 32;
+
+// --- Shadows ---------------------------------------------------------------
+// On dark, "shadow" is really an even-darker pool underneath cards. Keep the
+// alpha generous; subtle on-light shadows disappear here.
+const _shadowPanel = BoxShadow(
+  color: Color(0x80000000),
+  blurRadius: 24,
+  offset: Offset(0, 14),
+);
+const _shadowHero = BoxShadow(
+  color: Color(0x99000000),
+  blurRadius: 36,
+  offset: Offset(0, 22),
+);
+
+// ============================================================================
+// Reusable decorations
+// ============================================================================
 
 BoxDecoration appPageDecoration() => const BoxDecoration(
   gradient: LinearGradient(
@@ -28,28 +88,41 @@ BoxDecoration appPageDecoration() => const BoxDecoration(
   ),
 );
 
-BoxDecoration appPanelDecoration({double radius = appRadiusXl}) =>
+BoxDecoration appPanelDecoration({double radius = appRadiusLg}) =>
     BoxDecoration(
       color: appSurface,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: appBorder),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x120F172A),
-          blurRadius: 24,
-          offset: Offset(0, 12),
-        ),
-      ],
+      boxShadow: const [_shadowPanel],
     );
 
 BoxDecoration appHeroDecoration({double radius = appRadiusXl}) => BoxDecoration(
-  color: appSurface,
   borderRadius: BorderRadius.circular(radius),
-  border: Border.all(color: appBorder),
-  boxShadow: const [
-    BoxShadow(color: Color(0x120F172A), blurRadius: 28, offset: Offset(0, 14)),
-  ],
+  border: Border.all(color: appBorderStrong),
+  gradient: const LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [appSurfaceElevated, appSurface],
+  ),
+  boxShadow: const [_shadowHero],
 );
+
+/// Subtle card decoration for inline content (rows nested inside larger
+/// cards). No shadow — just a quiet surface with a hairline border.
+BoxDecoration appInsetDecoration({double radius = appRadiusMd}) =>
+    BoxDecoration(
+      color: appSurfaceAlt,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: appBorder),
+    );
+
+// ============================================================================
+// Legacy shared widgets
+//
+// Kept for backwards compatibility with feature screens that already consume
+// them. New code should prefer the components in
+// `core/presentation/components/`.
+// ============================================================================
 
 /// Compact stat tile (label + value) used in snapshot/dashboard grids. Pass an
 /// optional [icon] for a trailing accent glyph and [onTap] to make the tile
@@ -74,12 +147,12 @@ class AppStatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final decoration = BoxDecoration(
-      color: accentColor.withValues(alpha: 0.1),
+      color: appSurfaceAlt,
       borderRadius: BorderRadius.circular(appRadiusLg),
-      border: Border.all(color: accentColor.withValues(alpha: 0.22)),
+      border: Border.all(color: appBorder),
     );
     final child = Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(appSpaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -91,16 +164,16 @@ class AppStatTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: accentColor,
-                    letterSpacing: 1.1,
+                    color: appSubtleText,
+                    letterSpacing: 1.4,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              if (icon != null) Icon(icon, size: 18, color: accentColor),
+              if (icon != null) Icon(icon, size: 16, color: accentColor),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: appSpaceSm),
           Text(
             value,
             maxLines: 1,
@@ -108,6 +181,7 @@ class AppStatTile extends StatelessWidget {
             style: theme.textTheme.titleLarge?.copyWith(
               color: appText,
               fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
             ),
           ),
         ],
@@ -128,15 +202,14 @@ class AppStatTile extends StatelessWidget {
   }
 }
 
-/// Rounded square icon badge with an accent-tinted gradient, used across
-/// feature cards, list tiles, and section headers. Consolidates what used to
-/// be a dozen identical private `_AccentBadge` copies.
+/// Rounded square icon badge with an accent-tinted surface, used across
+/// feature cards, list tiles, and section headers.
 class AppAccentBadge extends StatelessWidget {
   const AppAccentBadge({
     super.key,
     required this.icon,
     this.color = appPrimary,
-    this.size = 50,
+    this.size = 44,
   });
 
   final IconData icon;
@@ -150,17 +223,10 @@ class AppAccentBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(appRadiusMd),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.28),
-            color.withValues(alpha: 0.12),
-          ],
-        ),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
+        color: Color.alphaBlend(color.withValues(alpha: 0.18), appSurfaceAlt),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
       ),
-      child: Icon(icon, color: color),
+      child: Icon(icon, color: color, size: size * 0.48),
     );
   }
 }
