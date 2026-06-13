@@ -1,4 +1,5 @@
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ class AuthenticatedScaffold extends StatelessWidget {
     required this.onHeaderProfileTap,
     required this.onNotificationsTap,
     required this.onRoleSelected,
+    this.profileImageUrl = '',
   });
 
   final int selectedIndex;
@@ -28,6 +30,7 @@ class AuthenticatedScaffold extends StatelessWidget {
   final String roleLabel;
   final List<UserRole> availableRoles;
   final int unreadNotifications;
+  final String profileImageUrl;
   final Widget body;
   final VoidCallback onHomeTap;
   final VoidCallback onMyBoxTap;
@@ -49,6 +52,7 @@ class AuthenticatedScaffold extends StatelessWidget {
           roleLabel: roleLabel,
           availableRoles: availableRoles,
           unreadNotifications: unreadNotifications,
+          profileImageUrl: profileImageUrl,
           onProfileTap: onHeaderProfileTap,
           onNotificationsTap: onNotificationsTap,
           onRoleSelected: onRoleSelected,
@@ -86,6 +90,7 @@ class _ShellHeader extends StatelessWidget {
     required this.roleLabel,
     required this.availableRoles,
     required this.unreadNotifications,
+    required this.profileImageUrl,
     required this.onProfileTap,
     required this.onNotificationsTap,
     required this.onRoleSelected,
@@ -95,6 +100,7 @@ class _ShellHeader extends StatelessWidget {
   final String roleLabel;
   final List<UserRole> availableRoles;
   final int unreadNotifications;
+  final String profileImageUrl;
   final VoidCallback onProfileTap;
   final VoidCallback onNotificationsTap;
   final ValueChanged<UserRole> onRoleSelected;
@@ -193,8 +199,10 @@ class _ShellHeader extends StatelessWidget {
                     onTap: onNotificationsTap,
                   ),
                   const SizedBox(width: 6),
-                  _AvatarButton(
+                  AppAvatar(
                     displayName: displayName,
+                    imageUrl: profileImageUrl,
+                    size: 40,
                     onTap: onProfileTap,
                   ),
                 ],
@@ -274,53 +282,6 @@ class _HeaderIconButton extends StatelessWidget {
             )
           : button,
     );
-  }
-}
-
-class _AvatarButton extends StatelessWidget {
-  const _AvatarButton({required this.displayName, required this.onTap});
-
-  final String displayName;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: appPrimarySoft,
-          borderRadius: BorderRadius.circular(appRadiusPill),
-          border: Border.all(color: appPrimaryHairline),
-        ),
-        child: Text(
-          _initials(displayName),
-          style: const TextStyle(
-            color: appText,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _initials(String value) {
-    final normalized = value.trim();
-    if (normalized.isEmpty) {
-      return 'U';
-    }
-    final parts = normalized.split(RegExp(r'\s+'));
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
   }
 }
 

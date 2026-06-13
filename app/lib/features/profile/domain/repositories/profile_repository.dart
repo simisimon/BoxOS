@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/domain/models/user_profile.dart';
 import 'package:app/features/profile/domain/models/notification_preferences.dart';
@@ -11,6 +13,14 @@ abstract class ProfileRepository {
     required String displayName,
     required String nickname,
   });
+
+  Future<UserProfile> uploadProfileAvatar({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  });
+
+  Future<UserProfile> deleteProfileAvatar();
 
   Future<NotificationPreferences> fetchNotificationPreferences();
 

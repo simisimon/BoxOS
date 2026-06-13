@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/logbook/data/repositories/api_benchmark_repository.dart';
 import 'package:app/features/logbook/data/repositories/api_exercise_repository.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
@@ -173,6 +175,10 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
               const SizedBox(height: 12),
               _buildPerformanceBoard(),
               const SizedBox(height: 20),
+              const _SectionTitle(title: 'Benchmark history'),
+              const SizedBox(height: 12),
+              _buildBenchmarkHistory(),
+              const SizedBox(height: 20),
             ],
             _LogbookActions(onStart: _startWorkout, onCreate: _createWorkout),
             const SizedBox(height: 20),
@@ -221,6 +227,48 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
         }
         return _SnapshotGrid(
           entries: snapshot.data ?? const <WorkoutLogEntry>[],
+        );
+      },
+    );
+  }
+
+  Widget _buildBenchmarkHistory() {
+    return FutureBuilder<List<WorkoutLogEntry>>(
+      future: _entriesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const AppLoadingState(height: 160);
+        }
+        if (snapshot.hasError) {
+          return _StateCard(
+            icon: Icons.error_outline,
+            title: 'Failed to load progress',
+            message: errorMessageFrom(
+              snapshot.error!,
+              fallback: 'Failed to load progress',
+            ),
+            accentColor: appPrimary,
+          );
+        }
+        final entries = snapshot.data ?? const <WorkoutLogEntry>[];
+        // Need at least two attempts of the same workout to show progression.
+        final groups = _BenchmarkGroup.from(entries);
+        if (groups.isEmpty) {
+          return const _StateCard(
+            icon: Icons.show_chart_rounded,
+            title: 'Log it twice to see progress',
+            message:
+                'Once you’ve logged the same workout more than once, the trend, your best, and since-last-time delta show up here.',
+            accentColor: appPrimary,
+          );
+        }
+        return Column(
+          children: [
+            for (var i = 0; i < groups.length; i++) ...[
+              _BenchmarkCard(group: groups[i]),
+              if (i != groups.length - 1) const SizedBox(height: 12),
+            ],
+          ],
         );
       },
     );
@@ -403,14 +451,74 @@ class _SnapshotGrid extends StatelessWidget {
   }
 }
 
-class _HistoryCard extends StatelessWidget {
+class _HistoryCard extends ConsumerStatefulWidget {
   const _HistoryCard({required this.entry});
 
   final WorkoutLogEntry entry;
 
   @override
+  ConsumerState<_HistoryCard> createState() => _HistoryCardState();
+}
+
+class _HistoryCardState extends ConsumerState<_HistoryCard> {
+  late WorkoutLogEntry _entry;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _entry = widget.entry;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HistoryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Refresh from the parent's snapshot only if the id changed (a different
+    // entry took this slot); otherwise our local optimistic state is the
+    // source of truth.
+    if (oldWidget.entry.id != widget.entry.id) {
+      _entry = widget.entry;
+    }
+  }
+
+  Future<void> _toggleReaction(String reaction) async {
+    if (_busy) return;
+    final repository = ref.read(logbookRepositoryProvider);
+    final isClearing = _entry.myReaction == reaction;
+    setState(() => _busy = true);
+    try {
+      final summary = isClearing
+          ? await repository.clearReaction(entryId: _entry.id)
+          : await repository.setReaction(
+              entryId: _entry.id,
+              reaction: reaction,
+            );
+      if (!mounted) return;
+      setState(() {
+        _entry = _entry.copyWithReactions(
+          reactionCount: summary.reactionCount,
+          reactions: summary.reactions,
+          myReaction: summary.myReaction,
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Couldn’t update reaction'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final entry = _entry;
     final dateLabel = MaterialLocalizations.of(
       context,
     ).formatFullDate(entry.scheduledDate);
@@ -428,82 +536,195 @@ class _HistoryCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppAccentBadge(
-            icon: entry.isPr
-                ? Icons.emoji_events_outlined
-                : Icons.fitness_center_outlined,
-            color: entry.isPr ? appPrimary : appPrimary,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.workoutTitle,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: appText,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppAccentBadge(
+                icon: entry.isPr
+                    ? Icons.emoji_events_outlined
+                    : Icons.fitness_center_outlined,
+                color: entry.isPr ? appPrimary : appPrimary,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _HeroPill(label: entry.scoreLabel, color: appPrimary),
-                    if (entry.isPr)
-                      const _HeroPill(label: 'PR', color: appPrimary)
-                    else if (entry.prRank != null)
-                      _HeroPill(
-                        label: 'Rank #${entry.prRank}',
-                        color: appPrimary,
+                    Text(
+                      entry.workoutTitle,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: appText,
+                        fontWeight: FontWeight.w800,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _HeroPill(label: entry.scoreLabel, color: appPrimary),
+                        if (entry.isPr)
+                          const _HeroPill(label: 'PR', color: appPrimary)
+                        else if (entry.prRank != null)
+                          _HeroPill(
+                            label: 'Rank #${entry.prRank}',
+                            color: appPrimary,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      dateLabel,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: appSubtleText,
+                      ),
+                    ),
+                    if (entry.classTitle != null &&
+                        entry.classTitle!.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Class: ${entry.classTitle!}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: appMutedText,
+                        ),
+                      ),
+                    ],
+                    if (entry.notesText.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: appSurfaceAlt,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: appBorder),
+                        ),
+                        child: Text(
+                          entry.notesText,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: appText,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  dateLabel,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: appSubtleText,
-                  ),
-                ),
-                if (entry.classTitle != null &&
-                    entry.classTitle!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Class: ${entry.classTitle!}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: appMutedText,
-                    ),
-                  ),
-                ],
-                if (entry.notesText.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: appSurfaceAlt,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: appBorder),
-                    ),
-                    child: Text(
-                      entry.notesText,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: appText,
-                        height: 1.45,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ReactionRow(
+            entry: entry,
+            busy: _busy,
+            onToggle: _toggleReaction,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Three-button reaction strip. Each button highlights when it's the viewer's
+/// active reaction. Tapping the active button clears it; tapping a different
+/// one swaps in place (the backend upsert handles the swap server-side).
+class _ReactionRow extends StatelessWidget {
+  const _ReactionRow({
+    required this.entry,
+    required this.busy,
+    required this.onToggle,
+  });
+
+  final WorkoutLogEntry entry;
+  final bool busy;
+  final Future<void> Function(String reaction) onToggle;
+
+  static const _kinds = <(String, IconData)>[
+    ('fire', Icons.local_fire_department_rounded),
+    ('clap', Icons.front_hand_rounded),
+    ('strong', Icons.fitness_center_rounded),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final kind in _kinds) ...[
+          _ReactionChip(
+            label: '${entry.reactions[kind.$1] ?? 0}',
+            icon: kind.$2,
+            active: entry.myReaction == kind.$1,
+            disabled: busy,
+            onTap: () => onToggle(kind.$1),
+          ),
+          const SizedBox(width: 8),
+        ],
+        const Spacer(),
+        if (entry.reactionCount > 0)
+          Text(
+            '${entry.reactionCount}',
+            style: const TextStyle(
+              color: appSubtleText,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ReactionChip extends StatelessWidget {
+  const _ReactionChip({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool active;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? appPrimary : appSubtleText;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(appRadiusPill),
+        onTap: disabled ? null : onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? appPrimarySoft : appSurfaceAlt,
+            borderRadius: BorderRadius.circular(appRadiusPill),
+            border: Border.all(
+              color: active ? appPrimaryHairline : appBorder,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1770,5 +1991,283 @@ class _BenchmarkTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Groups workout-log entries by `(workoutTitle, scoreType)` so the same WOD
+/// retested across weeks forms a single trend. A group needs at least two
+/// attempts; otherwise there's nothing to compare and no shape to draw.
+class _BenchmarkGroup {
+  const _BenchmarkGroup({
+    required this.title,
+    required this.scoreType,
+    required this.attempts,
+    required this.bestAttempt,
+    required this.lastAttempt,
+    required this.previousAttempt,
+  });
+
+  final String title;
+  final String scoreType;
+  final List<WorkoutLogEntry> attempts; // oldest -> newest
+  final WorkoutLogEntry bestAttempt;
+  final WorkoutLogEntry lastAttempt;
+  final WorkoutLogEntry? previousAttempt;
+
+  /// True if a lower score is better for this group (time-based WODs).
+  bool get lowerIsBetter => scoreType.toLowerCase() == 'time';
+
+  /// Signed delta between the most recent attempt and the one before. Positive
+  /// always means *improvement* — so for time WODs the sign is flipped.
+  double? get improvementDelta {
+    if (previousAttempt == null) return null;
+    final diff = lastAttempt.scoreValue - previousAttempt!.scoreValue;
+    return lowerIsBetter ? -diff : diff;
+  }
+
+  static List<_BenchmarkGroup> from(List<WorkoutLogEntry> entries) {
+    final byKey = <String, List<WorkoutLogEntry>>{};
+    for (final entry in entries) {
+      final key = '${entry.workoutTitle}|${entry.scoreType}';
+      byKey.putIfAbsent(key, () => []).add(entry);
+    }
+    final groups = <_BenchmarkGroup>[];
+    for (final attempts in byKey.values) {
+      if (attempts.length < 2) continue;
+      attempts.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+      final scoreType = attempts.first.scoreType.toLowerCase();
+      final lowerIsBetter = scoreType == 'time';
+      final best = attempts.reduce(
+        (acc, e) => lowerIsBetter
+            ? (e.scoreValue < acc.scoreValue ? e : acc)
+            : (e.scoreValue > acc.scoreValue ? e : acc),
+      );
+      groups.add(
+        _BenchmarkGroup(
+          title: attempts.first.workoutTitle,
+          scoreType: attempts.first.scoreType,
+          attempts: List.unmodifiable(attempts),
+          bestAttempt: best,
+          lastAttempt: attempts.last,
+          previousAttempt: attempts[attempts.length - 2],
+        ),
+      );
+    }
+    // Surface the benchmarks with the most recent activity first.
+    groups.sort(
+      (a, b) => b.lastAttempt.scheduledDate.compareTo(a.lastAttempt.scheduledDate),
+    );
+    return groups;
+  }
+}
+
+class _BenchmarkCard extends StatelessWidget {
+  const _BenchmarkCard({required this.group});
+
+  final _BenchmarkGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final delta = group.improvementDelta;
+    final deltaTone = delta == null
+        ? AppMetricTone.neutral
+        : (delta > 0 ? AppMetricTone.positive : AppMetricTone.negative);
+    return AppCard(
+      padding: const EdgeInsets.all(appSpaceLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: appText,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${group.attempts.length} attempts · ${group.scoreType.toUpperCase()}',
+                      style: const TextStyle(
+                        color: appSubtleText,
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppPill(
+                label: 'PR ${group.bestAttempt.scoreLabel}',
+                icon: Icons.emoji_events_outlined,
+                intent: AppPillIntent.primary,
+                dense: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: appSpaceMd),
+          SizedBox(
+            height: 56,
+            child: CustomPaint(
+              painter: _SparklinePainter(
+                values: group.attempts.map((e) => e.scoreValue).toList(),
+                lowerIsBetter: group.lowerIsBetter,
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+          const SizedBox(height: appSpaceMd),
+          Row(
+            children: [
+              Expanded(
+                child: AppMetric(
+                  label: 'Latest',
+                  value: group.lastAttempt.scoreLabel,
+                  valueSize: 18,
+                ),
+              ),
+              if (group.previousAttempt != null)
+                Expanded(
+                  child: AppMetric(
+                    label: 'Previous',
+                    value: group.previousAttempt!.scoreLabel,
+                    valueSize: 18,
+                  ),
+                ),
+              Expanded(
+                child: AppMetric(
+                  label: 'Best',
+                  value: group.bestAttempt.scoreLabel,
+                  valueSize: 18,
+                  delta: delta == null
+                      ? null
+                      : AppMetricDelta(
+                          _formatDelta(delta, group.scoreType),
+                          tone: deltaTone,
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatDelta(double improvement, String scoreType) {
+    final abs = improvement.abs();
+    final sign = improvement >= 0 ? '+' : '−';
+    switch (scoreType.toLowerCase()) {
+      case 'time':
+        // Improvement is already expressed as seconds shaved off when positive.
+        final mins = abs ~/ 60;
+        final secs = (abs % 60).round();
+        if (mins > 0) {
+          return '$sign${mins}m ${secs.toString().padLeft(2, '0')}s';
+        }
+        return '$sign${abs.toStringAsFixed(0)}s';
+      case 'load':
+        return '$sign${abs.toStringAsFixed(abs >= 10 ? 0 : 1)}';
+      case 'reps':
+        return '$sign${abs.toStringAsFixed(0)}';
+      default:
+        return '$sign${abs.toStringAsFixed(1)}';
+    }
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter({required this.values, required this.lowerIsBetter});
+
+  final List<double> values;
+  final bool lowerIsBetter;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+
+    final minValue = values.reduce(math.min);
+    final maxValue = values.reduce(math.max);
+    final span = (maxValue - minValue).abs();
+    final safeSpan = span < 0.0001 ? 1.0 : span;
+
+    double normalize(double value) {
+      // Always draw "better" toward the top of the box.
+      final ratio = (value - minValue) / safeSpan;
+      return lowerIsBetter ? 1 - ratio : ratio;
+    }
+
+    final padding = 4.0;
+    final w = size.width - padding * 2;
+    final h = size.height - padding * 2;
+    final step = w / (values.length - 1);
+
+    final points = <Offset>[];
+    for (var i = 0; i < values.length; i++) {
+      final x = padding + step * i;
+      final y = padding + (1 - normalize(values[i])) * h;
+      points.add(Offset(x, y));
+    }
+
+    // Base track — quiet horizontal hairline so even a flat trend reads.
+    final baseLine = Paint()
+      ..color = appBorder
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(padding, size.height - padding),
+      Offset(size.width - padding, size.height - padding),
+      baseLine,
+    );
+
+    // Filled gradient under the line for a hint of volume without noise.
+    final fillPath = Path()..moveTo(points.first.dx, size.height - padding);
+    for (final p in points) {
+      fillPath.lineTo(p.dx, p.dy);
+    }
+    fillPath.lineTo(points.last.dx, size.height - padding);
+    fillPath.close();
+    final fill = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          appPrimary.withValues(alpha: 0.22),
+          appPrimary.withValues(alpha: 0.0),
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(fillPath, fill);
+
+    // Main stroke.
+    final strokePath = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 1; i < points.length; i++) {
+      strokePath.lineTo(points[i].dx, points[i].dy);
+    }
+    final stroke = Paint()
+      ..color = appPrimary
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(strokePath, stroke);
+
+    // Highlight the most recent point.
+    final last = points.last;
+    canvas.drawCircle(last, 4, Paint()..color = appPrimary);
+    canvas.drawCircle(last, 2, Paint()..color = appText);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter old) =>
+      old.values.length != values.length || old.lowerIsBetter != lowerIsBetter;
 }
 

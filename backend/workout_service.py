@@ -21,7 +21,78 @@ def workout_log_payload(row: sqlite3.Row) -> dict[str, Any]:
         "updated_at": row["updated_at"],
         "is_pr": bool(row["is_pr"]) if "is_pr" in row.keys() else False,
         "pr_rank": row["pr_rank"] if "pr_rank" in row.keys() else None,
+        "reaction_count": 0,
+        "my_reaction": None,
+        "reactions": {},
     }
+
+
+# The supported reaction kinds. Keep the list intentionally short — the social
+# loop is meant to be lightweight encouragement, not a full emoji palette.
+SUPPORTED_REACTIONS = {"fire", "clap", "strong"}
+
+
+def list_reaction_summary(
+    connection: sqlite3.Connection,
+    *,
+    workout_log_ids: list[int],
+    viewer_user_id: int,
+) -> dict[int, dict[str, Any]]:
+    """Returns reaction aggregates keyed by workout_log_id.
+
+    Single round-trip even for long histories: one query for totals + per-kind
+    counts, a second for the viewer's own reaction. Empty input short-circuits
+    so callers don't need to guard.
+    """
+    if not workout_log_ids:
+        return {}
+    placeholders = ",".join(["?"] * len(workout_log_ids))
+    aggregate_rows = connection.execute(
+        f"""
+        select workout_log_id, reaction, count(*) as count
+        from workout_log_reactions
+        where workout_log_id in ({placeholders})
+        group by workout_log_id, reaction
+        """,
+        tuple(workout_log_ids),
+    ).fetchall()
+    my_rows = connection.execute(
+        f"""
+        select workout_log_id, reaction
+        from workout_log_reactions
+        where workout_log_id in ({placeholders}) and user_id = ?
+        """,
+        tuple(workout_log_ids) + (viewer_user_id,),
+    ).fetchall()
+    summary: dict[int, dict[str, Any]] = {
+        log_id: {"reaction_count": 0, "reactions": {}, "my_reaction": None}
+        for log_id in workout_log_ids
+    }
+    for row in aggregate_rows:
+        bucket = summary[row["workout_log_id"]]
+        bucket["reactions"][row["reaction"]] = row["count"]
+        bucket["reaction_count"] += row["count"]
+    for row in my_rows:
+        summary[row["workout_log_id"]]["my_reaction"] = row["reaction"]
+    return summary
+
+
+def attach_reaction_summary(
+    payloads: list[dict[str, Any]],
+    summary: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Mutates and returns the payload list with reaction aggregates filled in.
+
+    Returns the same list for chaining. Payloads missing from the summary keep
+    the zero defaults the payload helper already set.
+    """
+    for payload in payloads:
+        entry = summary.get(payload["id"])
+        if entry is not None:
+            payload["reaction_count"] = entry["reaction_count"]
+            payload["reactions"] = entry["reactions"]
+            payload["my_reaction"] = entry["my_reaction"]
+    return payloads
 
 
 def get_workout_log_for_user(connection: sqlite3.Connection, workout_id: int, user_id: int) -> dict[str, Any] | None:

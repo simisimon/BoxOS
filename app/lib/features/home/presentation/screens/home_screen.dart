@@ -14,6 +14,8 @@ import 'package:app/features/admin_analytics/application/admin_analytics_control
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
+import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
+import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -47,6 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late Future<List<Announcement>> _announcementsFuture;
   late Future<List<ScheduleClass>> _scheduleFuture;
   late Future<List<WorkoutLogEntry>> _entriesFuture;
+  late Future<List<DailyWorkout>> _workoutsFuture;
 
   @override
   void initState() {
@@ -54,6 +57,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _announcementsFuture = _loadAnnouncements();
     _scheduleFuture = _loadSchedule();
     _entriesFuture = _loadEntries();
+    _workoutsFuture = _loadWorkouts();
   }
 
   Future<List<Announcement>> _loadAnnouncements() {
@@ -66,6 +70,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<List<WorkoutLogEntry>> _loadEntries() {
     return ref.read(logbookRepositoryProvider).fetchEntries();
+  }
+
+  Future<List<DailyWorkout>> _loadWorkouts() {
+    return ref.read(programmingRepositoryProvider).fetchWorkouts();
   }
 
   Future<void> _refreshAnnouncements() async {
@@ -295,6 +303,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         children: [
           if (hasActiveGym) ...[
+            _TodayHero(
+              workoutsFuture: _workoutsFuture,
+              scheduleFuture: _scheduleFuture,
+              onOpenWorkout: () => context.go('/programming'),
+              onOpenBooking: () => context.go('/my-box'),
+            ),
+            const SizedBox(height: appSpace2xl),
             const _SectionHeading(
               'This Week',
               eyebrow: 'Performance',
@@ -425,6 +440,347 @@ class _SectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppSectionHeader(title: title, eyebrow: eyebrow);
+  }
+}
+
+/// Athlete's daily focal point: today's WOD title, your next class, and a
+/// clear "you've logged" / "you haven't logged" indicator. Pulls from the
+/// existing programming and schedule streams so no new endpoints were needed.
+class _TodayHero extends StatelessWidget {
+  const _TodayHero({
+    required this.workoutsFuture,
+    required this.scheduleFuture,
+    required this.onOpenWorkout,
+    required this.onOpenBooking,
+  });
+
+  final Future<List<DailyWorkout>> workoutsFuture;
+  final Future<List<ScheduleClass>> scheduleFuture;
+  final VoidCallback onOpenWorkout;
+  final VoidCallback onOpenBooking;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<DailyWorkout>>(
+      future: workoutsFuture,
+      builder: (context, workoutSnap) {
+        return FutureBuilder<List<ScheduleClass>>(
+          future: scheduleFuture,
+          builder: (context, scheduleSnap) {
+            if (workoutSnap.connectionState == ConnectionState.waiting ||
+                scheduleSnap.connectionState == ConnectionState.waiting) {
+              return const AppLoadingState(height: 180);
+            }
+            final today = _todayWorkout(workoutSnap.data);
+            final nextBooking = _nextBooking(scheduleSnap.data);
+            return _TodayHeroBody(
+              today: today,
+              nextBooking: nextBooking,
+              onOpenWorkout: onOpenWorkout,
+              onOpenBooking: onOpenBooking,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  static DailyWorkout? _todayWorkout(List<DailyWorkout>? workouts) {
+    if (workouts == null || workouts.isEmpty) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    for (final workout in workouts) {
+      final local = workout.scheduledDate.toLocal();
+      final day = DateTime(local.year, local.month, local.day);
+      if (day == today) return workout;
+    }
+    return null;
+  }
+
+  static ScheduleClass? _nextBooking(List<ScheduleClass>? items) {
+    if (items == null || items.isEmpty) return null;
+    final now = DateTime.now();
+    final upcoming =
+        items.where((c) => c.isBooked && c.startTime.isAfter(now)).toList()
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    return upcoming.isEmpty ? null : upcoming.first;
+  }
+}
+
+class _TodayHeroBody extends StatelessWidget {
+  const _TodayHeroBody({
+    required this.today,
+    required this.nextBooking,
+    required this.onOpenWorkout,
+    required this.onOpenBooking,
+  });
+
+  final DailyWorkout? today;
+  final ScheduleClass? nextBooking;
+  final VoidCallback onOpenWorkout;
+  final VoidCallback onOpenBooking;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateLabel = _todayLabel();
+    final logged = today?.myWorkoutLog != null;
+    return AppCard.elevated(
+      padding: const EdgeInsets.all(appSpaceXl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: appPrimarySoft,
+                  borderRadius: BorderRadius.circular(appRadiusPill),
+                  border: Border.all(color: appPrimaryHairline),
+                ),
+                child: const Text(
+                  'TODAY',
+                  style: TextStyle(
+                    color: appPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                dateLabel,
+                style: const TextStyle(
+                  color: appSubtleText,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const Spacer(),
+              if (today != null)
+                AppPill(
+                  label: logged ? 'Logged' : 'Open',
+                  icon: logged
+                      ? Icons.check_circle_rounded
+                      : Icons.bolt_rounded,
+                  intent: logged
+                      ? AppPillIntent.success
+                      : AppPillIntent.primary,
+                  dense: true,
+                ),
+            ],
+          ),
+          const SizedBox(height: appSpaceMd),
+          Text(
+            today?.title ?? 'No WOD posted yet',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: appText,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+              letterSpacing: -0.5,
+            ),
+          ),
+          if (today != null && today!.metconText.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              today!.metconText.trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: appMutedText,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ] else if (today == null) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Your coach hasn’t posted today’s training yet. Check back soon.',
+              style: TextStyle(
+                color: appMutedText,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+          const SizedBox(height: appSpaceLg),
+          _NextBookingStrip(
+            booking: nextBooking,
+            onTap: onOpenBooking,
+          ),
+          const SizedBox(height: appSpaceLg),
+          Row(
+            children: [
+              Expanded(
+                child: AppPrimaryButton(
+                  label: today == null
+                      ? 'See programming'
+                      : (logged ? 'View workout' : 'Open workout'),
+                  icon: today == null
+                      ? Icons.calendar_today_outlined
+                      : Icons.local_fire_department_outlined,
+                  onPressed: onOpenWorkout,
+                  size: AppButtonSize.md,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _todayLabel() {
+    final now = DateTime.now();
+    const weekdays = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final weekday = weekdays[now.weekday - 1];
+    final month = months[now.month - 1];
+    return '$weekday · $month ${now.day}'.toUpperCase();
+  }
+}
+
+class _NextBookingStrip extends StatelessWidget {
+  const _NextBookingStrip({required this.booking, required this.onTap});
+
+  final ScheduleClass? booking;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (booking == null) {
+      return AppCard.inset(
+        onTap: onTap,
+        padding: const EdgeInsets.all(appSpaceMd),
+        child: Row(
+          children: const [
+            Icon(
+              Icons.event_outlined,
+              color: appSubtleText,
+              size: 18,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No class booked. Tap to reserve your slot.',
+                style: TextStyle(
+                  color: appSubtleText,
+                  fontSize: 12.5,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: appSubtleText, size: 18),
+          ],
+        ),
+      );
+    }
+    final localizations = MaterialLocalizations.of(context);
+    final startLabel = localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(booking!.startTime.toLocal()),
+      alwaysUse24HourFormat: true,
+    );
+    final dayLabel = _bookingDayLabel(booking!.startTime.toLocal());
+    return AppCard.inset(
+      onTap: onTap,
+      padding: const EdgeInsets.all(appSpaceMd),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: appPrimarySoft,
+              borderRadius: BorderRadius.circular(appRadiusSm),
+              border: Border.all(color: appPrimaryHairline),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: appPrimary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: appSpaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  booking!.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: appText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$dayLabel · $startLabel',
+                  style: const TextStyle(
+                    color: appSubtleText,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: appSubtleText,
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _bookingDayLabel(DateTime local) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final diff = day.difference(today).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Tomorrow';
+    const weekdays = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ];
+    if (diff > 1 && diff <= 6) return weekdays[local.weekday - 1];
+    return '${local.day}/${local.month}';
   }
 }
 

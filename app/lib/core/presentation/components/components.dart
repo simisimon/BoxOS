@@ -3,6 +3,7 @@
 //
 // Keep this list flat — never re-export feature-specific widgets here, only
 // the cross-cutting primitives that power every screen.
+export 'app_avatar.dart';
 export 'app_buttons.dart';
 export 'app_card.dart';
 export 'app_metric.dart';

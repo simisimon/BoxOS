@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/application/auth_state.dart';
@@ -190,6 +191,20 @@ class FakeProfileRepository implements ProfileRepository {
     required String displayName,
     required String nickname,
   }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> uploadProfileAvatar({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> deleteProfileAvatar() {
     throw UnimplementedError();
   }
 

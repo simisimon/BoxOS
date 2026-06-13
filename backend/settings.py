@@ -27,6 +27,9 @@ ANNOUNCEMENT_UPLOADS_DIR = Path(
 GYM_LOGOS_DIR = Path(
     os.getenv("BOXOS_GYM_LOGOS_DIR", str(UPLOADS_ROOT / "gym_logos"))
 )
+AVATARS_DIR = Path(
+    os.getenv("BOXOS_AVATARS_DIR", str(UPLOADS_ROOT / "avatars"))
+)
 EXERCISES_SEED_PATH = BACKEND_ROOT / "data" / "exercises.json"
 BENCHMARKS_SEED_PATH = BACKEND_ROOT / "data" / "benchmark_workouts.json"
 HOST = os.getenv("BOXOS_HOST", "127.0.0.1")
@@ -48,6 +51,14 @@ ALLOWED_ANNOUNCEMENT_IMAGE_CONTENT_TYPES = {
 }
 MAX_GYM_LOGO_BYTES = 2 * 1024 * 1024  # 2MB for gym logos
 ALLOWED_GYM_LOGO_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+# Avatars are small by definition; cap stricter than announcement images so a
+# stray full-resolution camera dump can't sit in the uploads directory.
+MAX_AVATAR_BYTES = 2 * 1024 * 1024  # 2MB
+ALLOWED_AVATAR_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",

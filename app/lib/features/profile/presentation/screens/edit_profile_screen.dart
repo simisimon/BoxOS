@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
@@ -7,6 +10,7 @@ import 'package:app/features/profile/domain/models/user_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -19,8 +23,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _displayNameController = TextEditingController();
   final _nicknameController = TextEditingController();
+  final _imagePicker = ImagePicker();
   bool _initialized = false;
   bool _isSubmitting = false;
+  bool _isAvatarBusy = false;
+  // Optimistic preview while an upload is in flight so the avatar updates
+  // instantly even before the server response lands.
+  Uint8List? _pendingAvatarBytes;
+  String? _currentAvatarUrl;
 
   @override
   void dispose() {
@@ -94,7 +104,101 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
     _displayNameController.text = profile.displayName;
     _nicknameController.text = profile.nickname;
+    _currentAvatarUrl = profile.profileImageUrl;
     _initialized = true;
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_isAvatarBusy) {
+      return;
+    }
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1024,
+      maxHeight: 1024,
+    );
+    if (picked == null) {
+      return;
+    }
+    final bytes = await picked.readAsBytes();
+    final contentType = switch (picked.mimeType) {
+      final type? when type.trim().isNotEmpty => type,
+      _ when picked.name.toLowerCase().endsWith('.png') => 'image/png',
+      _ when picked.name.toLowerCase().endsWith('.webp') => 'image/webp',
+      _ => 'image/jpeg',
+    };
+    setState(() {
+      _isAvatarBusy = true;
+      _pendingAvatarBytes = bytes;
+    });
+    try {
+      final updated = await ref
+          .read(profileRepositoryProvider)
+          .uploadProfileAvatar(
+            bytes: bytes,
+            filename: picked.name,
+            contentType: contentType,
+          );
+      ref.invalidate(currentProfileProvider);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _currentAvatarUrl = updated.profileImageUrl;
+        _pendingAvatarBytes = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _pendingAvatarBytes = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to update profile photo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isAvatarBusy = false);
+      }
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    if (_isAvatarBusy) {
+      return;
+    }
+    setState(() => _isAvatarBusy = true);
+    try {
+      final updated =
+          await ref.read(profileRepositoryProvider).deleteProfileAvatar();
+      ref.invalidate(currentProfileProvider);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _currentAvatarUrl = updated.profileImageUrl;
+        _pendingAvatarBytes = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to remove profile photo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isAvatarBusy = false);
+      }
+    }
   }
 
   @override
@@ -149,6 +253,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         title: 'Refine your identity',
                         subtitle:
                             'Keep the public parts of your BoxOS profile clean, recognizable, and easy to trust.',
+                      ),
+                      const SizedBox(height: 12),
+                      _AvatarCard(
+                        displayName: profile.displayName,
+                        currentUrl: _currentAvatarUrl ?? profile.profileImageUrl,
+                        pendingBytes: _pendingAvatarBytes,
+                        busy: _isAvatarBusy,
+                        onPick: _pickAvatar,
+                        onRemove:
+                            (_currentAvatarUrl ?? profile.profileImageUrl)
+                                    .trim()
+                                    .isEmpty
+                                ? null
+                                : _removeAvatar,
                       ),
                       const SizedBox(height: 12),
                       _FieldCard(
@@ -550,6 +668,129 @@ class _GlowOrb extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Profile photo editor: live preview, gallery picker, and remove. Optimistic
+/// preview swaps to the freshly picked bytes immediately so the avatar updates
+/// without waiting for the upload round-trip.
+class _AvatarCard extends StatelessWidget {
+  const _AvatarCard({
+    required this.displayName,
+    required this.currentUrl,
+    required this.pendingBytes,
+    required this.busy,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  final String displayName;
+  final String currentUrl;
+  final Uint8List? pendingBytes;
+  final bool busy;
+  final Future<void> Function() onPick;
+  final Future<void> Function()? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(appSpaceLg),
+      child: Row(
+        children: [
+          _AvatarPreview(
+            displayName: displayName,
+            currentUrl: currentUrl,
+            pendingBytes: pendingBytes,
+          ),
+          const SizedBox(width: appSpaceLg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Profile photo',
+                  style: TextStyle(
+                    color: appText,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'JPEG, PNG or WEBP up to 2 MB.',
+                  style: TextStyle(
+                    color: appSubtleText,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: appSpaceMd),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    AppPrimaryButton(
+                      label: currentUrl.trim().isEmpty
+                          ? 'Add photo'
+                          : 'Replace',
+                      icon: Icons.photo_library_outlined,
+                      onPressed: busy ? null : onPick,
+                      size: AppButtonSize.md,
+                      expand: false,
+                      busy: busy,
+                    ),
+                    if (onRemove != null)
+                      AppGhostButton(
+                        label: 'Remove',
+                        icon: Icons.delete_outline_rounded,
+                        onPressed: busy ? null : onRemove,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarPreview extends StatelessWidget {
+  const _AvatarPreview({
+    required this.displayName,
+    required this.currentUrl,
+    required this.pendingBytes,
+  });
+
+  final String displayName;
+  final String currentUrl;
+  final Uint8List? pendingBytes;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 76.0;
+    // Pending bytes win so the picker selection shows instantly; once the
+    // upload completes the parent clears pendingBytes and the server-resolved
+    // image takes over.
+    if (pendingBytes != null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: appPrimaryHairline),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.memory(pendingBytes!, fit: BoxFit.cover),
+      );
+    }
+    return AppAvatar(
+      displayName: displayName,
+      imageUrl: currentUrl.isEmpty ? null : currentUrl,
+      size: size,
     );
   }
 }

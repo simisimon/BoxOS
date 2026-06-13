@@ -26,6 +26,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       roleLabel: profile?.role.label ?? 'Athlete',
       availableRoles: profile?.availableRoles ?? const [UserRole.athlete],
       unreadNotifications: unreadNotifications,
+      profileImageUrl: profile?.profileImageUrl ?? '',
       body: navigationShell,
       onHomeTap: () => navigationShell.goBranch(0),
       onMyBoxTap: () => navigationShell.goBranch(1),

@@ -230,6 +230,16 @@ class GymLogoUploadRequest(BaseModel):
     data_base64: str
 
 
+class AvatarUploadRequest(BaseModel):
+    filename: str
+    content_type: str
+    data_base64: str
+
+
+class ReactionRequest(BaseModel):
+    reaction: str
+
+
 class PersonalWorkoutRequest(BaseModel):
     title: str
     type: str
@@ -523,7 +533,7 @@ def get_profile(session: dict[str, Any] = Depends(require_session)) -> dict[str,
     try:
         user = connection.execute(
             """
-            select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id
+            select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id, profile_image_url
             from users
             where id = ? and deleted_at is null
             """,
@@ -555,7 +565,7 @@ def update_profile(
                 (display_name, nickname, security.isoformat(security.now_utc()), session["user_id"]),
             )
         user = connection.execute(
-            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id from users where id = ?",
+            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id, profile_image_url from users where id = ?",
             (session["user_id"],),
         ).fetchone()
         if user is None:
@@ -563,6 +573,98 @@ def update_profile(
         return membership_service.profile_payload(user)
     finally:
         connection.close()
+
+
+@app.post("/profile/avatar", status_code=HTTPStatus.CREATED.value)
+def upload_avatar(
+    body: AvatarUploadRequest,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    """Upload a new profile photo and persist its URL on the user.
+
+    Mirrors the announcement/gym-logo upload contract: base64 body so this
+    works the same way from web + mobile clients without juggling multipart.
+    The previous on-disk file (if any) is removed best-effort so an athlete
+    cycling through avatars doesn't leave orphans in the uploads directory.
+    """
+    validation.require_upload_filename(body.filename)
+    content_type = validation.require_avatar_content_type(body.content_type)
+    raw_bytes = validation.require_base64_bytes(
+        body.data_base64,
+        label="Avatar data",
+        max_bytes=settings.MAX_AVATAR_BYTES,
+    )
+    extension = settings.ALLOWED_AVATAR_CONTENT_TYPES[content_type]
+    stored_name = f"avatar_{secrets.token_urlsafe(12)}{extension}"
+    file_path = settings.AVATARS_DIR / stored_name
+    file_path.write_bytes(raw_bytes)
+    new_url = f"/uploads/avatars/{stored_name}"
+    connection = db.get_connection()
+    try:
+        with connection:
+            previous = connection.execute(
+                "select profile_image_url from users where id = ? and deleted_at is null",
+                (session["user_id"],),
+            ).fetchone()
+            connection.execute(
+                "update users set profile_image_url = ?, updated_at = ? where id = ? and deleted_at is null",
+                (new_url, security.isoformat(security.now_utc()), session["user_id"]),
+            )
+        if previous is not None:
+            _remove_previous_avatar(previous["profile_image_url"])
+        user = connection.execute(
+            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id, profile_image_url from users where id = ?",
+            (session["user_id"],),
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Profile not found.")
+        return membership_service.profile_payload(user)
+    finally:
+        connection.close()
+
+
+@app.delete("/profile/avatar")
+def delete_avatar(session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            previous = connection.execute(
+                "select profile_image_url from users where id = ? and deleted_at is null",
+                (session["user_id"],),
+            ).fetchone()
+            connection.execute(
+                "update users set profile_image_url = '', updated_at = ? where id = ? and deleted_at is null",
+                (security.isoformat(security.now_utc()), session["user_id"]),
+            )
+        if previous is not None:
+            _remove_previous_avatar(previous["profile_image_url"])
+        user = connection.execute(
+            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id, profile_image_url from users where id = ?",
+            (session["user_id"],),
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Profile not found.")
+        return membership_service.profile_payload(user)
+    finally:
+        connection.close()
+
+
+def _remove_previous_avatar(stored_url: str | None) -> None:
+    """Best-effort cleanup of a previous avatar file. Silently no-ops on a
+    missing file so a race or manual cleanup never breaks the upload itself."""
+    if not stored_url:
+        return
+    name = Path(str(stored_url)).name
+    if not name:
+        return
+    candidate = (settings.AVATARS_DIR / name).resolve()
+    avatars_root = settings.AVATARS_DIR.resolve()
+    if avatars_root not in candidate.parents:
+        return
+    try:
+        candidate.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 @app.patch("/profile/active-role")
@@ -593,7 +695,7 @@ def update_active_role(
                     (role, security.isoformat(security.now_utc()), session["user_id"]),
                 )
         user = connection.execute(
-            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id from users where id = ?",
+            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id, profile_image_url from users where id = ?",
             (session["user_id"],),
         ).fetchone()
         if user is None:
@@ -624,7 +726,7 @@ def update_active_gym(
             )
             membership_service.sync_user_context(connection, session["user_id"])
         user = connection.execute(
-            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id from users where id = ?",
+            "select id, email, role, roles_json, display_name, nickname, account_type, active_gym_id, profile_image_url from users where id = ?",
             (session["user_id"],),
         ).fetchone()
         if user is None:
@@ -2361,7 +2463,87 @@ def list_workout_logs(session: dict[str, Any] = Depends(require_active_gym_membe
             """,
             (session["user_id"], session["active_gym_id"]),
         ).fetchall()
-        return {"entries": [programming_service.workout_log_payload(row) for row in rows]}
+        entries = [programming_service.workout_log_payload(row) for row in rows]
+        summary = workout_service.list_reaction_summary(
+            connection,
+            workout_log_ids=[row["id"] for row in entries],
+            viewer_user_id=session["user_id"],
+        )
+        workout_service.attach_reaction_summary(entries, summary)
+        return {"entries": entries}
+    finally:
+        connection.close()
+
+
+@app.post("/logbook/entries/{entry_id}/reactions", status_code=HTTPStatus.CREATED.value)
+def set_workout_log_reaction(
+    entry_id: int,
+    body: ReactionRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    reaction = (body.reaction or "").strip().lower()
+    if reaction not in workout_service.SUPPORTED_REACTIONS:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            detail="Unsupported reaction.",
+        )
+    connection = db.get_connection()
+    try:
+        entry = connection.execute(
+            "select id, gym_id from workout_logs where id = ?",
+            (entry_id,),
+        ).fetchone()
+        if entry is None or entry["gym_id"] != session["active_gym_id"]:
+            # Same-gym scope: scoped lookup keeps members from reacting to logs
+            # in gyms they don't belong to.
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Log not found.")
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            # Upsert: a single user's reaction is replaced rather than stacked
+            # so the kind always reflects their latest choice.
+            connection.execute(
+                """
+                insert into workout_log_reactions (workout_log_id, user_id, gym_id, reaction, created_at)
+                values (?, ?, ?, ?, ?)
+                on conflict (workout_log_id, user_id) do update set
+                  reaction = excluded.reaction
+                """,
+                (entry_id, session["user_id"], session["active_gym_id"], reaction, timestamp),
+            )
+        summary = workout_service.list_reaction_summary(
+            connection,
+            workout_log_ids=[entry_id],
+            viewer_user_id=session["user_id"],
+        )
+        return {"summary": summary.get(entry_id, {"reaction_count": 0, "reactions": {}, "my_reaction": reaction})}
+    finally:
+        connection.close()
+
+
+@app.delete("/logbook/entries/{entry_id}/reactions")
+def clear_workout_log_reaction(
+    entry_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        entry = connection.execute(
+            "select id, gym_id from workout_logs where id = ?",
+            (entry_id,),
+        ).fetchone()
+        if entry is None or entry["gym_id"] != session["active_gym_id"]:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Log not found.")
+        with connection:
+            connection.execute(
+                "delete from workout_log_reactions where workout_log_id = ? and user_id = ?",
+                (entry_id, session["user_id"]),
+            )
+        summary = workout_service.list_reaction_summary(
+            connection,
+            workout_log_ids=[entry_id],
+            viewer_user_id=session["user_id"],
+        )
+        return {"summary": summary.get(entry_id, {"reaction_count": 0, "reactions": {}, "my_reaction": None})}
     finally:
         connection.close()
 

@@ -52,6 +52,28 @@ class ApiLogbookRepository implements LogbookRepository {
     return _fromJson(response.data?['entry'] as Map<String, dynamic>?);
   }
 
+  @override
+  Future<WorkoutLogReactionSummary> setReaction({
+    required int entryId,
+    required String reaction,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/logbook/entries/$entryId/reactions',
+      data: {'reaction': reaction},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _summaryFromJson(response.data?['summary'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<WorkoutLogReactionSummary> clearReaction({required int entryId}) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/logbook/entries/$entryId/reactions',
+      options: Options(headers: await _authHeaders()),
+    );
+    return _summaryFromJson(response.data?['summary'] as Map<String, dynamic>?);
+  }
+
   Future<Map<String, String>> _authHeaders() async {
     final tokens = await _tokenStorage.readTokens();
     if (tokens == null) {
@@ -64,6 +86,7 @@ class ApiLogbookRepository implements LogbookRepository {
     if (data == null) {
       throw Exception('Missing workout log data.');
     }
+    final summary = _summaryFromJson(data);
     return WorkoutLogEntry(
       id: data['id'] as int? ?? 0,
       dailyWorkoutId: data['daily_workout_id'] as int? ?? 0,
@@ -81,6 +104,23 @@ class ApiLogbookRepository implements LogbookRepository {
       updatedAt: DateTime.parse(data['updated_at'] as String? ?? ''),
       isPr: data['is_pr'] as bool? ?? false,
       prRank: data['pr_rank'] as int?,
+      reactionCount: summary.reactionCount,
+      reactions: summary.reactions,
+      myReaction: summary.myReaction,
+    );
+  }
+
+  WorkoutLogReactionSummary _summaryFromJson(Map<String, dynamic>? data) {
+    final rawReactions =
+        (data?['reactions'] as Map<String, dynamic>?) ?? const {};
+    final reactions = <String, int>{
+      for (final entry in rawReactions.entries)
+        entry.key: (entry.value as num?)?.toInt() ?? 0,
+    };
+    return WorkoutLogReactionSummary(
+      reactionCount: (data?['reaction_count'] as num?)?.toInt() ?? 0,
+      reactions: reactions,
+      myReaction: data?['my_reaction'] as String?,
     );
   }
 }

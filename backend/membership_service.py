@@ -153,6 +153,7 @@ def profile_payload(row: sqlite3.Row) -> dict[str, Any]:
     active_membership = get_active_membership(connection, row["id"]) if "id" in row.keys() else None
     memberships = list_user_memberships(connection, row["id"]) if "id" in row.keys() else []
     connection.close()
+    keys = row.keys()
     return {
         "email": row["email"],
         "role": row["role"],
@@ -160,6 +161,7 @@ def profile_payload(row: sqlite3.Row) -> dict[str, Any]:
         "display_name": row["display_name"],
         "nickname": row["nickname"],
         "account_type": row["account_type"],
+        "profile_image_url": row["profile_image_url"] if "profile_image_url" in keys else "",
         "active_gym": active_gym_payload(active_membership),
         "memberships": [membership_payload(membership) for membership in memberships],
     }

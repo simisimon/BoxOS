@@ -15,6 +15,7 @@ class UserProfile {
     required this.notificationPreferences,
     required this.activeGym,
     required this.memberships,
+    this.profileImageUrl = '',
   });
 
   final String email;
@@ -26,4 +27,8 @@ class UserProfile {
   final NotificationPreferences notificationPreferences;
   final GymSummary? activeGym;
   final List<GymMembership> memberships;
+  /// Server-relative path to the user's avatar (e.g. `/uploads/avatars/xyz.jpg`)
+  /// or empty when none has been set. Use the resolved URL helper on the
+  /// network layer when rendering rather than concatenating manually.
+  final String profileImageUrl;
 }

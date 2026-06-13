@@ -217,6 +217,20 @@ class RecordingProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<UserProfile> uploadProfileAvatar({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  }) async {
+    return profile;
+  }
+
+  @override
+  Future<UserProfile> deleteProfileAvatar() async {
+    return profile;
+  }
+
+  @override
   Future<NotificationPreferences> fetchNotificationPreferences() async {
     return profile.notificationPreferences;
   }

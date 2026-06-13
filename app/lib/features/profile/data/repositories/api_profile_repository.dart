@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
@@ -44,6 +47,33 @@ class ApiProfileRepository implements ProfileRepository {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/profile',
       data: {'display_name': displayName, 'nickname': nickname},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _profileFromJson(response.data);
+  }
+
+  @override
+  Future<UserProfile> uploadProfileAvatar({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/profile/avatar',
+      data: {
+        'filename': filename,
+        'content_type': contentType,
+        'data_base64': base64Encode(bytes),
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return _profileFromJson(response.data);
+  }
+
+  @override
+  Future<UserProfile> deleteProfileAvatar() async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/profile/avatar',
       options: Options(headers: await _authHeaders()),
     );
     return _profileFromJson(response.data);
@@ -165,6 +195,7 @@ class ApiProfileRepository implements ProfileRepository {
       availableRoles: _rolesFromJson(data['available_roles']),
       displayName: data['display_name'] as String? ?? '',
       nickname: data['nickname'] as String? ?? '',
+      profileImageUrl: data['profile_image_url'] as String? ?? '',
       notificationPreferences: const NotificationPreferences(
         bookingConfirmations: true,
         waitlistPromotions: true,

@@ -1,4 +1,5 @@
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/components/components.dart';
 
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
@@ -46,6 +47,7 @@ class ProfileScreen extends ConsumerWidget {
               email: profile?.email,
               roleLabel: profile?.role.label ?? 'Athlete',
               gymName: profile?.activeGym?.name,
+              profileImageUrl: profile?.profileImageUrl ?? '',
             ),
             const SizedBox(height: 16),
             _ActionSection(
@@ -220,6 +222,7 @@ class _ProfileHero extends StatelessWidget {
     required this.email,
     required this.roleLabel,
     required this.gymName,
+    required this.profileImageUrl,
   });
 
   final String displayName;
@@ -227,6 +230,7 @@ class _ProfileHero extends StatelessWidget {
   final String? email;
   final String roleLabel;
   final String? gymName;
+  final String profileImageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -267,15 +271,28 @@ class _ProfileHero extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HeroPill(label: roleLabel, color: accentColor),
-                  _HeroPill(
-                    label: gymName ?? 'No gym selected',
-                    color: appPrimary,
-                    outlined: true,
+                  AppAvatar(
+                    displayName: displayName,
+                    imageUrl: profileImageUrl.isEmpty ? null : profileImageUrl,
+                    size: 64,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _HeroPill(label: roleLabel, color: accentColor),
+                        _HeroPill(
+                          label: gymName ?? 'No gym selected',
+                          color: appPrimary,
+                          outlined: true,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
