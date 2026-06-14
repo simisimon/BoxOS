@@ -2,6 +2,7 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
+import 'package:app/features/calendar/presentation/screens/csv_file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -241,6 +242,23 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
     _onChanged(_controller.text);
   }
 
+  Future<void> _uploadFile() async {
+    try {
+      final content = await pickCsvFileContent();
+      if (content == null || !mounted) {
+        return;
+      }
+      _controller.text = content;
+      _onChanged(content);
+    } catch (error) {
+      if (mounted) {
+        _showSnackBar(
+          errorMessageFrom(error, fallback: 'Could not read the file.'),
+        );
+      }
+    }
+  }
+
   Future<void> _import() async {
     final outcome = _outcome;
     if (outcome == null || !outcome.canImport || _importing) {
@@ -321,11 +339,12 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Paste rows from a spreadsheet (Google Sheets / Excel) or a .csv '
-              'file. Comma- and tab-separated are both accepted. Required '
-              'columns: date, start_time, title, duration_minutes, capacity. '
-              'Optional: class_type, trainer_email, wod_description, repeat, '
-              'occurrences.',
+              'Upload a .csv file or paste rows from a spreadsheet '
+              '(Google Sheets / Excel). Comma- and tab-separated are both '
+              'accepted. Required columns: date, start_time, title, '
+              'duration_minutes, capacity. Optional: class_type, trainer_email, '
+              'wod_description, repeat, occurrences. The file is checked against '
+              'this schema before anything is imported.',
               style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
             ),
             const SizedBox(height: 12),
@@ -350,6 +369,12 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
               child: Wrap(
                 spacing: 8,
                 children: [
+                  if (canUploadCsv)
+                    FilledButton.tonalIcon(
+                      onPressed: _uploadFile,
+                      icon: const Icon(Icons.upload_file_rounded, size: 18),
+                      label: const Text('Upload CSV file'),
+                    ),
                   TextButton.icon(
                     onPressed: _insertTemplate,
                     icon: const Icon(Icons.playlist_add_rounded, size: 18),

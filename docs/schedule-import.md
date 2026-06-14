@@ -11,12 +11,15 @@ A ready-to-use example lives next to this doc: [`sample-classes.csv`](./sample-c
 1. Open **Schedule** (the calendar) as an owner or trainer.
 2. Click the **import icon** (⬆️) in the calendar header, next to *Today* and the
    month arrows.
-3. **Paste** your rows into the text box. You can paste either:
-   - the contents of a `.csv` file, or
-   - a range copied straight from Google Sheets / Excel (tab-separated — also
-     accepted).
-   Each row is parsed and previewed live with a green check (ready) or a red
-   error (with the reason and line number).
+3. Provide your rows in one of two ways:
+   - **Upload CSV file** — pick a `.csv` file (web). Its contents are loaded into
+     the box and checked against the schema below, or
+   - **Paste** — paste the contents of a `.csv` file, or a range copied straight
+     from Google Sheets / Excel (tab-separated is also accepted).
+
+   Either way, each row is parsed and previewed live with a green check (ready)
+   or a red error (with the reason and line number). A file whose header is
+   missing required columns is rejected before anything is imported.
 4. The import is **atomic** — if any row has an error, nothing is created. Fix the
    text and the preview updates instantly.
 5. When every row is valid, click **Import N classes**. The calendar refreshes
