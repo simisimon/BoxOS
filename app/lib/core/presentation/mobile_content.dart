@@ -1,7 +1,11 @@
+import 'package:app/core/presentation/responsive/breakpoints.dart';
 import 'package:flutter/material.dart';
 
-const double mobileContentMaxWidth = 480;
-
+/// Wraps page content in a centered column whose maximum width adapts to the
+/// current window size class (see [AppBreakpoint] / [BreakpointContext]).
+///
+/// On phones it fills the screen; on larger windows it caps the width so the
+/// content stays readable instead of stretching across the full viewport.
 class MobileContent extends StatelessWidget {
   const MobileContent({
     super.key,
@@ -19,7 +23,7 @@ class MobileContent extends StatelessWidget {
     return Align(
       alignment: alignment,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
+        constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
         child: Padding(padding: padding, child: child),
       ),
     );

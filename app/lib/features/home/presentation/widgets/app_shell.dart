@@ -1,6 +1,7 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/core/presentation/mobile_content.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
+import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 
@@ -9,39 +10,42 @@ const boxOsLogoAsset = 'assets/images/boxOS_logo.png';
 class AuthenticatedScaffold extends StatelessWidget {
   const AuthenticatedScaffold({
     super.key,
-    required this.selectedIndex,
+    required this.selectedBranchIndex,
+    required this.destinations,
     required this.displayName,
     required this.roleLabel,
     required this.availableRoles,
     required this.unreadNotifications,
     required this.body,
-    required this.onHomeTap,
-    required this.onMyBoxTap,
-    required this.onLogbookTap,
-    required this.onProfileTap,
+    required this.onSelectBranch,
     required this.onHeaderProfileTap,
     required this.onNotificationsTap,
     required this.onRoleSelected,
     this.profileImageUrl = '',
   });
 
-  final int selectedIndex;
+  /// The currently active shell branch (matches `navigationShell.currentIndex`).
+  final int selectedBranchIndex;
+
+  /// Role-specific nav destinations, in display order.
+  final List<ShellDestination> destinations;
+
   final String displayName;
   final String roleLabel;
   final List<UserRole> availableRoles;
   final int unreadNotifications;
   final String profileImageUrl;
   final Widget body;
-  final VoidCallback onHomeTap;
-  final VoidCallback onMyBoxTap;
-  final VoidCallback onLogbookTap;
-  final VoidCallback onProfileTap;
+
+  /// Called with the branch index of the tapped destination.
+  final ValueChanged<int> onSelectBranch;
   final VoidCallback onHeaderProfileTap;
   final VoidCallback onNotificationsTap;
   final ValueChanged<UserRole> onRoleSelected;
 
   @override
   Widget build(BuildContext context) {
+    final useRail = context.usesNavigationRail;
     return Scaffold(
       backgroundColor: appPageBackground,
       extendBodyBehindAppBar: false,
@@ -56,30 +60,51 @@ class AuthenticatedScaffold extends StatelessWidget {
           onProfileTap: onHeaderProfileTap,
           onNotificationsTap: onNotificationsTap,
           onRoleSelected: onRoleSelected,
+          // Span the full bar next to the rail; clamp to the content column
+          // when the bottom navigation is in use.
+          maxWidth: useRail ? double.infinity : context.contentMaxWidth,
         ),
       ),
       body: DecoratedBox(
         decoration: appPageDecoration(),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final horizontalPadding =
-                constraints.maxWidth > mobileContentMaxWidth
-                    ? (constraints.maxWidth - mobileContentMaxWidth) / 2
-                    : 0.0;
-            return Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: body,
-            );
-          },
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (useRail)
+                _ShellRail(
+                  selectedBranchIndex: selectedBranchIndex,
+                  destinations: destinations,
+                  onSelectBranch: onSelectBranch,
+                ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxWidth = context.contentMaxWidth;
+                    final horizontalPadding = constraints.maxWidth > maxWidth
+                        ? (constraints.maxWidth - maxWidth) / 2
+                        : 0.0;
+                    return Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: horizontalPadding),
+                      child: body,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: _ShellFooter(
-        selectedIndex: selectedIndex,
-        onHomeTap: onHomeTap,
-        onMyBoxTap: onMyBoxTap,
-        onLogbookTap: onLogbookTap,
-        onProfileTap: onProfileTap,
-      ),
+      bottomNavigationBar: useRail
+          ? null
+          : _ShellFooter(
+              selectedBranchIndex: selectedBranchIndex,
+              destinations: destinations,
+              onSelectBranch: onSelectBranch,
+            ),
     );
   }
 }
@@ -94,6 +119,7 @@ class _ShellHeader extends StatelessWidget {
     required this.onProfileTap,
     required this.onNotificationsTap,
     required this.onRoleSelected,
+    required this.maxWidth,
   });
 
   final String displayName;
@@ -104,13 +130,14 @@ class _ShellHeader extends StatelessWidget {
   final VoidCallback onProfileTap;
   final VoidCallback onNotificationsTap;
   final ValueChanged<UserRole> onRoleSelected;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: DecoratedBox(
           decoration: const BoxDecoration(
             color: appPageBackground,
@@ -285,20 +312,72 @@ class _HeaderIconButton extends StatelessWidget {
   }
 }
 
-class _ShellFooter extends StatelessWidget {
-  const _ShellFooter({
-    required this.selectedIndex,
-    required this.onHomeTap,
-    required this.onMyBoxTap,
-    required this.onLogbookTap,
-    required this.onProfileTap,
+/// The wide-window counterpart to [_ShellFooter]: a side navigation rail shown
+/// from the `expanded` breakpoint upwards (tablets in landscape, desktop).
+class _ShellRail extends StatelessWidget {
+  const _ShellRail({
+    required this.selectedBranchIndex,
+    required this.destinations,
+    required this.onSelectBranch,
   });
 
-  final int selectedIndex;
-  final VoidCallback onHomeTap;
-  final VoidCallback onMyBoxTap;
-  final VoidCallback onLogbookTap;
-  final VoidCallback onProfileTap;
+  final int selectedBranchIndex;
+  final List<ShellDestination> destinations;
+  final ValueChanged<int> onSelectBranch;
+
+  @override
+  Widget build(BuildContext context) {
+    // Map the active branch onto its position in this role's destination list;
+    // fall back to the first tab when the active branch has no matching tab
+    // (e.g. an athlete deep-linked into the programming branch).
+    final selectedIndex = destinations.indexWhere(
+      (d) => d.branchIndex == selectedBranchIndex,
+    );
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: appPageBackground,
+        border: Border(right: BorderSide(color: appBorder)),
+      ),
+      child: NavigationRail(
+        backgroundColor: Colors.transparent,
+        selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+        onDestinationSelected: (index) =>
+            onSelectBranch(destinations[index].branchIndex),
+        labelType: NavigationRailLabelType.all,
+        indicatorColor: appPrimarySoft,
+        selectedIconTheme: const IconThemeData(color: appText),
+        unselectedIconTheme: const IconThemeData(color: appSubtleText),
+        selectedLabelTextStyle: const TextStyle(
+          color: appText,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelTextStyle: const TextStyle(
+          color: appSubtleText,
+          fontWeight: FontWeight.w600,
+        ),
+        destinations: [
+          for (final dest in destinations)
+            NavigationRailDestination(
+              icon: Icon(dest.icon),
+              selectedIcon: Icon(dest.activeIcon),
+              label: Text(dest.label),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShellFooter extends StatelessWidget {
+  const _ShellFooter({
+    required this.selectedBranchIndex,
+    required this.destinations,
+    required this.onSelectBranch,
+  });
+
+  final int selectedBranchIndex;
+  final List<ShellDestination> destinations;
+  final ValueChanged<int> onSelectBranch;
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +385,7 @@ class _ShellFooter extends StatelessWidget {
       alignment: Alignment.bottomCenter,
       heightFactor: 1,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
+        constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
         child: DecoratedBox(
           decoration: const BoxDecoration(
             color: appPageBackground,
@@ -319,34 +398,14 @@ class _ShellFooter extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
               child: Row(
                 children: [
-                  _FooterDest(
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home_rounded,
-                    label: 'Home',
-                    selected: selectedIndex == 0,
-                    onTap: onHomeTap,
-                  ),
-                  _FooterDest(
-                    icon: Icons.fitness_center_outlined,
-                    activeIcon: Icons.fitness_center_rounded,
-                    label: 'My Box',
-                    selected: selectedIndex == 1,
-                    onTap: onMyBoxTap,
-                  ),
-                  _FooterDest(
-                    icon: Icons.menu_book_outlined,
-                    activeIcon: Icons.menu_book_rounded,
-                    label: 'Logbook',
-                    selected: selectedIndex == 2,
-                    onTap: onLogbookTap,
-                  ),
-                  _FooterDest(
-                    icon: Icons.person_outline_rounded,
-                    activeIcon: Icons.person_rounded,
-                    label: 'Profile',
-                    selected: selectedIndex == 3,
-                    onTap: onProfileTap,
-                  ),
+                  for (final dest in destinations)
+                    _FooterDest(
+                      icon: dest.icon,
+                      activeIcon: dest.activeIcon,
+                      label: dest.label,
+                      selected: dest.branchIndex == selectedBranchIndex,
+                      onTap: () => onSelectBranch(dest.branchIndex),
+                    ),
                 ],
               ),
             ),

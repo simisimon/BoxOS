@@ -1,5 +1,7 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
+import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'dart:ui';
 
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
@@ -26,6 +28,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
       title: 'Read the floor fast',
       eyebrow: 'Analytics',
       onBack: () => context.go('/profile'),
+      maxWidth: context.dashboardMaxWidth,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           appSpaceLg,
@@ -115,7 +118,12 @@ class _OverviewContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-        _Panel(
+        ResponsiveMasonry(
+          minColumnWidth: 380,
+          maxColumns: 2,
+          spacing: 16,
+          children: [
+            _Panel(
           eyebrow: 'Window control',
           title: 'Choose the review horizon',
           child: Wrap(
@@ -131,8 +139,7 @@ class _OverviewContent extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _Panel(
+            _Panel(
           eyebrow: 'Membership health',
           title: 'Who is joining and what mix is forming',
           child: Column(
@@ -206,8 +213,7 @@ class _OverviewContent extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _Panel(
+            _Panel(
           eyebrow: 'Last ${overview.windowDays} days',
           title: 'Attendance health',
           child: Wrap(
@@ -248,8 +254,7 @@ class _OverviewContent extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _Panel(
+            _Panel(
           eyebrow: 'Next 7 days',
           title: 'Forward pressure',
           child: Column(
@@ -304,8 +309,7 @@ class _OverviewContent extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _Panel(
+            _Panel(
           eyebrow: 'Pressure list',
           title: 'Classes that need attention',
           child: overview.pressureClasses.isEmpty
@@ -330,8 +334,7 @@ class _OverviewContent extends StatelessWidget {
                   ],
                 ),
         ),
-        const SizedBox(height: 16),
-        _Panel(
+            _Panel(
           eyebrow: 'Retention risk',
           title: 'Low-attendance and no-show drilldown',
           child: overview.problemClasses.isEmpty
@@ -356,8 +359,7 @@ class _OverviewContent extends StatelessWidget {
                   ],
                 ),
         ),
-        const SizedBox(height: 16),
-        _Panel(
+            _Panel(
           eyebrow: 'Daily view',
           title: 'Attendance timeline',
           child: Column(
@@ -369,6 +371,8 @@ class _OverviewContent extends StatelessWidget {
               ],
             ],
           ),
+            ),
+          ],
         ),
       ],
     );

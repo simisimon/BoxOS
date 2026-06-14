@@ -18,6 +18,7 @@ import 'package:app/features/calendar/presentation/screens/calendar_screen.dart'
 import 'package:app/features/home/presentation/screens/authenticated_shell_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
+import 'package:app/features/members/presentation/screens/members_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
@@ -126,6 +127,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/members',
+                name: 'members',
+                builder: (context, state) => const MembersScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/programming',
+                name: 'programming',
+                builder: (context, state) => const ProgrammingScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/profile',
                 name: 'profile',
                 builder: (context, state) => const ProfileScreen(),
@@ -215,11 +234,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/gym-requests',
         name: 'gym-requests',
         builder: (context, state) => const JoinRequestsScreen(),
-      ),
-      GoRoute(
-        path: '/programming',
-        name: 'programming',
-        builder: (context, state) => const ProgrammingScreen(),
       ),
     ],
   );

@@ -1,5 +1,5 @@
 import 'package:app/core/presentation/app_chrome.dart';
-import 'package:app/core/presentation/mobile_content.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,13 +7,12 @@ import 'package:go_router/go_router.dart';
 ///
 /// Why this exists: GoRouter destinations that live *outside* the
 /// `StatefulShellRoute` (settings, analytics, join-requests, schedule
-/// management, etc.) never receive the width clamp the main shell applies
-/// to its body. On tablet- and desktop-sized viewports they sprawl across
-/// the full canvas while the rest of the app stays at `mobileContentMaxWidth`.
+/// management, etc.) should share the same header/body width behaviour as the
+/// main shell, so a deep-link from the home screen feels like the same product
+/// as the tabs.
 ///
-/// [AppMobileScaffold] applies the same clamp to both the header and the
-/// body, so a deep-link from the home screen feels like the same product as
-/// the tabs.
+/// The width adapts to the window size class via [BreakpointContext]: it fills
+/// the screen on phones and caps for readability on larger windows.
 class AppMobileScaffold extends StatelessWidget {
   const AppMobileScaffold({
     super.key,
@@ -26,6 +25,7 @@ class AppMobileScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.bottomNavigationBar,
     this.resizeToAvoidBottomInset,
+    this.maxWidth,
   });
 
   final String? title;
@@ -38,9 +38,15 @@ class AppMobileScaffold extends StatelessWidget {
   final Widget? bottomNavigationBar;
   final bool? resizeToAvoidBottomInset;
 
+  /// Overrides the content/header width cap. Defaults to the responsive
+  /// [BreakpointContext.contentMaxWidth]; admin/dashboard screens pass the
+  /// roomier [BreakpointContext.dashboardMaxWidth] for multi-column layouts.
+  final double? maxWidth;
+
   @override
   Widget build(BuildContext context) {
     final hasHeader = title != null;
+    final effectiveMaxWidth = maxWidth ?? context.contentMaxWidth;
     return Scaffold(
       backgroundColor: appPageBackground,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
@@ -58,6 +64,7 @@ class AppMobileScaffold extends StatelessWidget {
                 actions: actions,
                 showBackButton: showBackButton,
                 onBack: onBack,
+                maxWidth: effectiveMaxWidth,
               ),
             )
           : null,
@@ -69,8 +76,8 @@ class AppMobileScaffold extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final horizontalPadding =
-                  constraints.maxWidth > mobileContentMaxWidth
-                      ? (constraints.maxWidth - mobileContentMaxWidth) / 2
+                  constraints.maxWidth > effectiveMaxWidth
+                      ? (constraints.maxWidth - effectiveMaxWidth) / 2
                       : 0.0;
               return Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -91,6 +98,7 @@ class _ClampedHeader extends StatelessWidget {
     required this.actions,
     required this.showBackButton,
     required this.onBack,
+    required this.maxWidth,
   });
 
   final String title;
@@ -98,13 +106,14 @@ class _ClampedHeader extends StatelessWidget {
   final List<Widget>? actions;
   final bool showBackButton;
   final VoidCallback? onBack;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: mobileContentMaxWidth),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: DecoratedBox(
           decoration: const BoxDecoration(
             color: appPageBackground,

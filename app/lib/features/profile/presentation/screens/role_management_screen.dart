@@ -1,7 +1,8 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/core/presentation/mobile_content.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
+import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
@@ -131,6 +132,7 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
     return AppMobileScaffold(
       title: 'Gym Members',
       eyebrow: 'Roles',
+      maxWidth: context.dashboardMaxWidth,
       body: profileAsync.when(
         loading: () => const AppLoadingState(),
         error: (error, _) => Padding(
@@ -179,15 +181,26 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
               ),
             );
           }
-          return MobileContent(
-            padding: EdgeInsets.zero,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(appSpaceLg),
-              itemBuilder: (context, index) {
-                final user = users[index];
-                final isSaving = _savingUserId == user.id;
-                final draftRoles = _rolesFor(user);
-                return Card(
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(appSpaceLg),
+            child: ResponsiveMasonry(
+              minColumnWidth: 340,
+              maxColumns: 3,
+              spacing: 12,
+              children: [
+                for (final user in users) _userCard(context, user),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _userCard(BuildContext context, RoleManagedUser user) {
+    final isSaving = _savingUserId == user.id;
+    final draftRoles = _rolesFor(user);
+    return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -253,13 +266,5 @@ class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
                     ),
                   ),
                 );
-              },
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemCount: users.length,
-            ),
-          );
-        },
-      ),
-    );
   }
 }

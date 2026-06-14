@@ -1,4 +1,5 @@
 import 'package:app/features/home/presentation/widgets/app_shell.dart';
+import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -20,19 +21,26 @@ class AuthenticatedShellScreen extends ConsumerWidget {
         ? notificationInboxAsync.value!.unreadCount
         : 0;
 
+    final destinations = destinationsForView(
+      accountType: profile?.accountType,
+      role: profile?.role,
+    );
+
     return AuthenticatedScaffold(
-      selectedIndex: navigationShell.currentIndex,
+      selectedBranchIndex: navigationShell.currentIndex,
+      destinations: destinations,
       displayName: profile?.displayName ?? '',
       roleLabel: profile?.role.label ?? 'Athlete',
       availableRoles: profile?.availableRoles ?? const [UserRole.athlete],
       unreadNotifications: unreadNotifications,
       profileImageUrl: profile?.profileImageUrl ?? '',
       body: navigationShell,
-      onHomeTap: () => navigationShell.goBranch(0),
-      onMyBoxTap: () => navigationShell.goBranch(1),
-      onLogbookTap: () => navigationShell.goBranch(2),
-      onProfileTap: () => navigationShell.goBranch(3),
-      onHeaderProfileTap: () => navigationShell.goBranch(3),
+      onSelectBranch: (branchIndex) =>
+          navigationShell.goBranch(
+            branchIndex,
+            initialLocation: branchIndex == navigationShell.currentIndex,
+          ),
+      onHeaderProfileTap: () => navigationShell.goBranch(kProfileBranch),
       onNotificationsTap: () => context.push('/notifications'),
       onRoleSelected: (role) => _switchRole(context, ref, role),
     );

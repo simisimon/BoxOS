@@ -405,6 +405,13 @@ class RecordingGymRepository implements GymRepository {
   }
 
   @override
+  Future<String> uploadGymLogo({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+  }) async => 'https://example.com/uploaded-logo.png';
+
+  @override
   Future<List<GymJoinRequest>> fetchJoinRequests() async {
     fetchJoinRequestsCalls += 1;
     return requests;

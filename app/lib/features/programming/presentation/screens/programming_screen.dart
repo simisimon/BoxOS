@@ -1,7 +1,8 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/core/presentation/mobile_content.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
+import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -58,9 +59,11 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
     final roleLabel = profileRole?.label ?? 'Athlete';
     final gymName = activeGym?.name;
 
+    // Rendered as a shell branch (Programming tab for owners, deep-link target
+    // for athletes). The shell already supplies the top header, so this screen
+    // stays header-less to avoid a stacked second header; the FAB is retained.
     return AppMobileScaffold(
-      title: 'Programming',
-      eyebrow: 'Workouts',
+      maxWidth: context.dashboardMaxWidth,
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               backgroundColor: appPrimary,
@@ -70,11 +73,9 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
               label: const Text('New WOD'),
             )
           : null,
-      body: MobileContent(
-        padding: EdgeInsets.zero,
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
               children: [
                 _ProgrammingHero(
@@ -131,9 +132,12 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                         );
                       }
 
-                      return Column(
+                      return ResponsiveMasonry(
+                        minColumnWidth: 420,
+                        maxColumns: 2,
+                        spacing: 14,
                         children: [
-                          for (final workout in workouts) ...[
+                          for (final workout in workouts)
                             _WorkoutCard(
                               workout: workout,
                               canSubmitWhiteboard: profile?.activeGym != null,
@@ -162,8 +166,6 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
                                 }
                               },
                             ),
-                            const SizedBox(height: 14),
-                          ],
                         ],
                       );
                     },
@@ -171,7 +173,6 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
               ],
             ),
           ),
-        ),
       );
   }
 }

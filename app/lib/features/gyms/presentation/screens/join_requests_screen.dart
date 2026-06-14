@@ -1,6 +1,8 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
+import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/gyms/domain/models/gym_join_request.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -62,6 +64,7 @@ class _JoinRequestsScreenState extends ConsumerState<JoinRequestsScreen> {
     return AppMobileScaffold(
       title: 'Join Requests',
       eyebrow: 'Membership',
+      maxWidth: context.dashboardMaxWidth,
       body: profileAsync.when(
         loading: () => const AppLoadingState(),
         error: (error, _) => Padding(
@@ -114,21 +117,22 @@ class _JoinRequestsScreenState extends ConsumerState<JoinRequestsScreen> {
                   ),
                 );
               }
-              return ListView.separated(
+              return SingleChildScrollView(
                 padding: const EdgeInsets.all(appSpaceLg),
-                itemCount: requests.length,
-                separatorBuilder: (_, _) =>
-                    const SizedBox(height: appSpaceMd),
-                itemBuilder: (context, index) {
-                  final request = requests[index];
-                  final isPending = _pendingRequestId == request.id;
-                  return _RequestCard(
-                    request: request,
-                    isPending: isPending,
-                    onApprove: () => _review(request, true),
-                    onReject: () => _review(request, false),
-                  );
-                },
+                child: ResponsiveMasonry(
+                  minColumnWidth: 320,
+                  maxColumns: 3,
+                  spacing: appSpaceMd,
+                  children: [
+                    for (final request in requests)
+                      _RequestCard(
+                        request: request,
+                        isPending: _pendingRequestId == request.id,
+                        onApprove: () => _review(request, true),
+                        onReject: () => _review(request, false),
+                      ),
+                  ],
+                ),
               );
             },
           );

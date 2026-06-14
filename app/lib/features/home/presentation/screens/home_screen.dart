@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
@@ -2536,10 +2535,9 @@ class _AnnouncementComposerDialogState
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final dialogWidth = (screenWidth - 32).clamp(
-      100.0,
-      mobileContentMaxWidth.toDouble(),
-    );
+    // Dialogs keep their own readable max width independent of the responsive
+    // page content width (see core/presentation/responsive/breakpoints.dart).
+    final dialogWidth = (screenWidth - 32).clamp(100.0, 480.0);
 
     return AlertDialog(
       backgroundColor: appSurface,
@@ -2901,7 +2899,9 @@ class _DashboardStat extends StatelessWidget {
   }
 }
 
-// Owner Quick Access Grid
+// Owner Quick Access Grid. Members, Schedule and Programming are now
+// first-class tabs, so this surface only carries actions that don't have a
+// dedicated tab (deep analytics, audit log).
 class _OwnerQuickAccessGrid extends StatelessWidget {
   const _OwnerQuickAccessGrid();
 
@@ -2909,24 +2909,6 @@ class _OwnerQuickAccessGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _ActionTile(
-          action: const _HomeAction(
-            icon: Icons.group_outlined,
-            title: 'Review Join Requests',
-            route: '/gym-requests',
-            accentColor: appPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _ActionTile(
-          action: const _HomeAction(
-            icon: Icons.edit_calendar_outlined,
-            title: 'Operate the Box',
-            route: '/my-box',
-            accentColor: appPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
         _ActionTile(
           action: const _HomeAction(
             icon: Icons.analytics_outlined,

@@ -137,6 +137,7 @@ class BoxOsApp extends ConsumerWidget {
         textTheme: textTheme,
         scaffoldBackgroundColor: appPageBackground,
         canvasColor: appPageBackground,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
         splashFactory: InkSparkle.splashFactory,
         appBarTheme: const AppBarTheme(
           backgroundColor: appPageBackground,
