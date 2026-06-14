@@ -148,6 +148,22 @@ class UpdateScheduleClassRequest(ScheduleClassRequest):
     id: int
 
 
+class ScheduleClassImportRow(BaseModel):
+    start_time: str
+    title: str
+    class_type: str | None = None
+    duration_minutes: int | None = None
+    capacity: int | None = None
+    trainer_email: str | None = None
+    wod_description: str | None = None
+    recurrence_frequency: str | None = None
+    occurrence_count: int | None = None
+
+
+class ScheduleClassImportRequest(BaseModel):
+    rows: list[ScheduleClassImportRow]
+
+
 class ClassIdRequest(BaseModel):
     class_id: int
 
@@ -1624,6 +1640,178 @@ def create_schedule_class(
                     },
                 )
         return {"class": payloads[0], "classes": payloads, "created_count": len(payloads)}
+    finally:
+        connection.close()
+
+
+def _resolve_import_trainer(
+    connection: Any,
+    session: dict[str, Any],
+    trainer_email: str | None,
+) -> int | None:
+    """Resolve a CSV ``trainer_email`` to an active trainer's user id, or None."""
+    email = str(trainer_email or "").strip().lower()
+    if not email:
+        return None
+    row = connection.execute(
+        """
+        select users.id
+        from gym_memberships
+        join users on users.id = gym_memberships.user_id
+        where gym_memberships.gym_id = ?
+          and gym_memberships.status = 'active'
+          and gym_memberships.active_role = 'trainer'
+          and users.deleted_at is null
+          and lower(users.email) = ?
+        """,
+        (session["active_gym_id"], email),
+    ).fetchone()
+    if row is None:
+        raise validation.ApiError(
+            HTTPStatus.BAD_REQUEST,
+            f"Trainer '{trainer_email}' is not an active trainer in this gym.",
+        )
+    return int(row["id"])
+
+
+@app.post("/schedule/classes/import")
+def import_schedule_classes(
+    body: ScheduleClassImportRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> Any:
+    if not body.rows:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value, detail="No rows to import."
+        )
+    if len(body.rows) > 500:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            detail="Too many rows to import (max 500).",
+        )
+    connection = db.get_connection()
+    try:
+        gym_row = connection.execute(
+            "select timezone from gyms where id = ?",
+            (session["active_gym_id"],),
+        ).fetchone()
+        if gym_row is None:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND.value, detail="Active gym not found."
+            )
+        gym_timezone = gym_row["timezone"]
+
+        # Phase 1 — validate every row read-only. The import is atomic: if any
+        # row is invalid nothing is created and all errors are reported at once.
+        resolved: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        for index, row in enumerate(body.rows):
+            try:
+                title = validation.require_schedule_title(row.title)
+                class_type = validation.require_class_type(row.class_type or "WOD")
+                start_time = validation.require_future_datetime(
+                    row.start_time, label="Start time"
+                )
+                duration_minutes = validation.require_schedule_duration_minutes(
+                    {"duration_minutes": row.duration_minutes}
+                )
+                capacity = validation.require_capacity(row.capacity)
+                wod_description = validation.require_wod_description(row.wod_description)
+                recurrence_frequency = validation.require_recurrence_frequency(
+                    row.recurrence_frequency
+                )
+                occurrence_count = validation.require_occurrence_count(
+                    row.occurrence_count, recurrence_frequency=recurrence_frequency
+                )
+                trainer_user_id = _resolve_import_trainer(
+                    connection, session, row.trainer_email
+                )
+                start_times = schedule_service.build_recurrence_start_times(
+                    start_time,
+                    recurrence_frequency=recurrence_frequency,
+                    occurrence_count=occurrence_count,
+                    gym_timezone=gym_timezone,
+                )
+                if recurrence_frequency != "none":
+                    for generated_start_time in start_times:
+                        if generated_start_time <= security.now_utc():
+                            raise validation.ApiError(
+                                HTTPStatus.BAD_REQUEST,
+                                "Recurring classes must all be scheduled in the future.",
+                            )
+                resolved.append(
+                    {
+                        "title": title,
+                        "class_type": class_type,
+                        "duration_minutes": duration_minutes,
+                        "capacity": capacity,
+                        "trainer_user_id": trainer_user_id,
+                        "wod_description": wod_description,
+                        "start_times": start_times,
+                    }
+                )
+            except validation.ApiError as error:
+                errors.append({"row": index + 1, "message": error.message})
+
+        if errors:
+            return JSONResponse(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY.value,
+                content={"errors": errors, "created_count": 0},
+            )
+
+        # Phase 2 — insert everything in a single transaction.
+        timestamp = security.isoformat(security.now_utc())
+        created_count = 0
+        with connection:
+            for item in resolved:
+                for generated_start_time in item["start_times"]:
+                    generated_end_time = generated_start_time + timedelta(
+                        minutes=item["duration_minutes"]
+                    )
+                    cursor = connection.execute(
+                        """
+                        insert into class_schedules (
+                          gym_id, title, class_type, start_time, end_time, duration_minutes, capacity, assigned_trainer_user_id, wod_description,
+                          created_by_user_id, updated_by_user_id, created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        returning id
+                        """,
+                        (
+                            session["active_gym_id"],
+                            item["title"],
+                            item["class_type"],
+                            security.isoformat(generated_start_time),
+                            security.isoformat(generated_end_time),
+                            item["duration_minutes"],
+                            item["capacity"],
+                            item["trainer_user_id"],
+                            item["wod_description"],
+                            session["user_id"],
+                            session["user_id"],
+                            timestamp,
+                            timestamp,
+                        ),
+                    )
+                    schedule_id = int(cursor.fetchone()["id"])
+                    audit.write_audit_log(
+                        connection,
+                        gym_id=session["active_gym_id"],
+                        actor_user_id=session["user_id"],
+                        action="schedule_class_created",
+                        entity_type="schedule_class",
+                        entity_id=schedule_id,
+                        details={
+                            "title": item["title"],
+                            "class_type": item["class_type"],
+                            "start_time": security.isoformat(generated_start_time),
+                            "duration_minutes": item["duration_minutes"],
+                            "capacity": item["capacity"],
+                            "trainer_user_id": item["trainer_user_id"],
+                            "source": "import",
+                        },
+                    )
+                    created_count += 1
+        return {"created_count": created_count, "row_count": len(resolved)}
     finally:
         connection.close()
 

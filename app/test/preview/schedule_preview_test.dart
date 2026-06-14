@@ -11,6 +11,7 @@ import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
+import 'package:app/features/calendar/presentation/screens/import_classes_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
@@ -84,6 +85,8 @@ List<ScheduleClass> _sampleClasses() => [
       _cls(6, 10, 18, 'Evening WOD'),
       _cls(7, 12, 17, 'Gymnastics'),
       _cls(8, 16, 6, 'Morning WOD'),
+      _cls(12, 16, 12, 'Open Gym'),
+      _cls(13, 16, 18, 'Evening WOD'),
       _cls(9, 18, 19, 'Endurance'),
       _cls(10, 22, 10, 'Partner WOD'),
       _cls(11, 24, 18, 'Evening WOD'),
@@ -97,6 +100,12 @@ class _FakeScheduleRepository implements ScheduleRepository {
 
   @override
   Future<List<ScheduleTrainer>> fetchTrainers() async => const [_trainer];
+
+  @override
+  Future<ScheduleImportResult> importClasses(
+    List<Map<String, dynamic>> rows,
+  ) async =>
+      ScheduleImportResult(createdCount: rows.length, errors: const []);
 
   @override
   Future<ScheduleClass> createClass({
@@ -197,8 +206,8 @@ void main() {
       matchesGoldenFile('goldens/schedule_month.png'),
     );
 
-    // 2) Tap a day with classes -> side panel opens next to the calendar.
-    await tester.tap(find.text('10').first);
+    // 2) Tap a future day with classes -> side panel opens next to the calendar.
+    await tester.tap(find.text('16'));
     await tester.pumpAndSettle();
     await expectLater(
       find.byType(MyBoxScreen),
@@ -211,6 +220,99 @@ void main() {
     await expectLater(
       find.byType(MyBoxScreen),
       matchesGoldenFile('goldens/schedule_add_form.png'),
+    );
+
+    // 4) Tap a past day -> no "Add Class", a note explains why instead.
+    await tester.tap(find.text('10').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Add Class'), findsNothing);
+    await expectLater(
+      find.byType(MyBoxScreen),
+      matchesGoldenFile('goldens/schedule_past_day.png'),
+    );
+  });
+
+  testWidgets('Import button opens the import dialog', (tester) async {
+    await _loadRealFont();
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1120, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentProfileProvider.overrideWith((ref) async => _profile),
+          scheduleRepositoryProvider.overrideWithValue(_FakeScheduleRepository()),
+          scheduleListProvider.overrideWith((ref) async => _sampleClasses()),
+        ],
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            useMaterial3: true,
+            fontFamily: 'Roboto',
+          ),
+          home: const Scaffold(body: SafeArea(child: MyBoxScreen())),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ImportClassesDialog), findsNothing);
+    await tester.tap(find.byIcon(Icons.upload_file_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(ImportClassesDialog), findsOneWidget);
+
+    // Paste valid rows and import — the dialog should close on success.
+    await tester.enterText(
+      find.byType(TextField),
+      'date,start_time,title,duration_minutes,capacity\n'
+      '2099-06-20,18:00,Alpha,60,12\n'
+      '2099-06-21,07:00,Bravo,45,10',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Import 2 classes'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ImportClassesDialog), findsNothing);
+  });
+
+  testWidgets('Import dialog preview', (tester) async {
+    await _loadRealFont();
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(620, 780);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const pasted =
+        'date,start_time,title,duration_minutes,capacity,trainer_email,repeat,occurrences\n'
+        '2099-06-20,18:00,Evening WOD,60,12,coach@box.app,weekly,4\n'
+        '2099-06-21,07:00,Morning WOD,45,10,,,\n'
+        '2099-06-22,19:00,Bad Row,sixty,10,,,';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            useMaterial3: true,
+            fontFamily: 'Roboto',
+          ),
+          home: const Scaffold(
+            backgroundColor: Color(0xFF0E0E12),
+            body: Center(
+              child: ImportClassesDialog(debugInitialText: pasted),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(ImportClassesDialog),
+      matchesGoldenFile('goldens/schedule_import_dialog.png'),
     );
   });
 }

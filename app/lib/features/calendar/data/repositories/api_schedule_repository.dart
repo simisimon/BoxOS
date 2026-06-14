@@ -42,6 +42,36 @@ class ApiScheduleRepository implements ScheduleRepository {
   }
 
   @override
+  Future<ScheduleImportResult> importClasses(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/schedule/classes/import',
+      data: {'rows': rows},
+      options: Options(
+        headers: await _authHeaders(),
+        // 422 carries the per-row validation errors — read it instead of
+        // throwing so the dialog can surface them.
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+    final data = response.data ?? const <String, dynamic>{};
+    final errors = ((data['errors'] as List<dynamic>?) ?? const [])
+        .map((item) {
+          final map = item as Map<String, dynamic>;
+          return ScheduleImportError(
+            row: map['row'] as int? ?? 0,
+            message: map['message'] as String? ?? 'Invalid row',
+          );
+        })
+        .toList();
+    return ScheduleImportResult(
+      createdCount: data['created_count'] as int? ?? 0,
+      errors: errors,
+    );
+  }
+
+  @override
   Future<List<ScheduleTrainer>> fetchTrainers() async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/schedule/trainers',

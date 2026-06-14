@@ -30,6 +30,82 @@ class ScheduleApiTests(FastApiTestCase):
         self.assertEqual(len(payload["classes"]), 3)
         self.assertEqual(payload["classes"][0]["title"], "Lunch WOD")
 
+    def test_import_creates_multiple_classes(self) -> None:
+        admin_headers, _ = self.create_gym_as_admin("Import Box")
+
+        response = self.client.post(
+            "/schedule/classes/import",
+            headers=admin_headers,
+            json={
+                "rows": [
+                    {
+                        "start_time": security.isoformat(
+                            security.now_utc() + timedelta(days=1)
+                        ),
+                        "title": "Morning WOD",
+                        "duration_minutes": 60,
+                        "capacity": 12,
+                    },
+                    {
+                        "start_time": security.isoformat(
+                            security.now_utc() + timedelta(days=2)
+                        ),
+                        "title": "Evening WOD",
+                        "class_type": "Open Gym",
+                        "duration_minutes": 45,
+                        "capacity": 10,
+                        "recurrence_frequency": "weekly",
+                        "occurrence_count": 2,
+                    },
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        # 1 single + 2 weekly occurrences.
+        self.assertEqual(payload["created_count"], 3)
+
+        listed = self.client.get("/schedule/classes", headers=admin_headers)
+        titles = sorted(item["title"] for item in listed.json()["classes"])
+        self.assertEqual(titles, ["Evening WOD", "Evening WOD", "Morning WOD"])
+
+    def test_import_is_atomic_when_a_row_is_invalid(self) -> None:
+        admin_headers, _ = self.create_gym_as_admin("Atomic Import Box")
+
+        response = self.client.post(
+            "/schedule/classes/import",
+            headers=admin_headers,
+            json={
+                "rows": [
+                    {
+                        "start_time": security.isoformat(
+                            security.now_utc() + timedelta(days=1)
+                        ),
+                        "title": "Valid WOD",
+                        "duration_minutes": 60,
+                        "capacity": 12,
+                    },
+                    {
+                        # Past start time -> invalid.
+                        "start_time": security.isoformat(
+                            security.now_utc() - timedelta(days=1)
+                        ),
+                        "title": "Past WOD",
+                        "duration_minutes": 60,
+                        "capacity": 12,
+                    },
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        payload = response.json()
+        self.assertEqual(payload["created_count"], 0)
+        self.assertEqual(payload["errors"][0]["row"], 2)
+
+        # Nothing was created (atomic).
+        listed = self.client.get("/schedule/classes", headers=admin_headers)
+        self.assertEqual(listed.json()["classes"], [])
+
     def test_cannot_join_waitlist_while_class_has_open_capacity(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Open Spot Box")
         self.add_active_membership(settings.DEMO_EMAIL, gym_id)

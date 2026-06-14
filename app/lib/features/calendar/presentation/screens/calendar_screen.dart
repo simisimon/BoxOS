@@ -4,6 +4,7 @@ import 'package:app/features/calendar/data/repositories/api_schedule_repository.
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
+import 'package:app/features/calendar/presentation/screens/import_classes_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
@@ -69,6 +70,13 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
 
   void _closeDay() {
     setState(() => _selectedDay = null);
+  }
+
+  Future<void> _openImport() async {
+    await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => const ImportClassesDialog(),
+    );
   }
 
   Future<void> _deleteClass(ScheduleClass item, bool canManage) async {
@@ -258,6 +266,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       onNextMonth: _goToNextMonth,
       onToday: _goToToday,
       onRefresh: _refresh,
+      onImport: canManage ? _openImport : null,
       onSelectDay: _selectDay,
     );
 
@@ -378,6 +387,7 @@ class _MonthCalendar extends StatelessWidget {
     required this.onNextMonth,
     required this.onToday,
     required this.onRefresh,
+    required this.onImport,
     required this.onSelectDay,
   });
 
@@ -391,6 +401,9 @@ class _MonthCalendar extends StatelessWidget {
   final VoidCallback onNextMonth;
   final VoidCallback onToday;
   final Future<void> Function() onRefresh;
+
+  /// Opens the CSV import flow. Null hides the button (non-managers).
+  final VoidCallback? onImport;
   final ValueChanged<DateTime> onSelectDay;
 
   static const _weekdayLabels = [
@@ -445,6 +458,14 @@ class _MonthCalendar extends StatelessWidget {
               ),
               _CalendarHeaderButton(label: 'Today', onTap: onToday),
               const SizedBox(width: 8),
+              if (onImport != null) ...[
+                _CalendarIconButton(
+                  icon: Icons.upload_file_rounded,
+                  tooltip: 'Import classes',
+                  onTap: onImport!,
+                ),
+                const SizedBox(width: 6),
+              ],
               _CalendarIconButton(
                 icon: Icons.refresh_rounded,
                 tooltip: 'Refresh',
@@ -757,6 +778,10 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
   bool _showForm = false;
   ScheduleClass? _editing;
 
+  /// Classes can only be created from today onward.
+  bool get _isPastDay =>
+      _dateOnly(widget.date).isBefore(_dateOnly(DateTime.now()));
+
   void _openAdd() {
     setState(() {
       _editing = null;
@@ -851,13 +876,42 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                 : ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      if (widget.canManage) ...[
+                      if (widget.canManage && !_isPastDay) ...[
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
                             onPressed: _openAdd,
                             icon: const Icon(Icons.add),
                             label: const Text('Add Class'),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ] else if (widget.canManage && _isPastDay) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: appSurfaceAlt,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: appBorder),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.history_rounded,
+                                size: 18,
+                                color: appSubtleText,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'This day is in the past — new classes can '
+                                  'only be added from today onward.',
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(color: appSubtleText),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -1449,6 +1503,16 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _isSaving) {
+      return;
+    }
+    // Guard against creating/moving a class onto a past day, regardless of how
+    // the form was reached.
+    if (_baseDate.isBefore(_dateOnly(DateTime.now()))) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Classes can only be scheduled from today onward.'),
+        ),
+      );
       return;
     }
     final capacity = int.parse(_capacityController.text.trim());
