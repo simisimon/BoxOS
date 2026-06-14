@@ -34,6 +34,9 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       availableRoles: profile?.availableRoles ?? const [UserRole.athlete],
       unreadNotifications: unreadNotifications,
       profileImageUrl: profile?.profileImageUrl ?? '',
+      // The schedule calendar spans the full width instead of the clamped
+      // content column.
+      fullBleedBody: navigationShell.currentIndex == kMyBoxBranch,
       body: navigationShell,
       onSelectBranch: (branchIndex) =>
           navigationShell.goBranch(

@@ -14,6 +14,13 @@ final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
   return ApiScheduleRepository(dio: dio, tokenStorage: tokenStorage);
 });
 
+/// Shared schedule list so the month grid and the day-detail sheet read the
+/// same data and stay in sync — mutating actions just `ref.invalidate` this and
+/// every watcher (grid + open sheet) refreshes.
+final scheduleListProvider = FutureProvider.autoDispose<List<ScheduleClass>>(
+  (ref) => ref.watch(scheduleRepositoryProvider).fetchSchedule(),
+);
+
 class ApiScheduleRepository implements ScheduleRepository {
   ApiScheduleRepository({required Dio dio, required TokenStorage tokenStorage})
     : _dio = dio,

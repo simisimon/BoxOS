@@ -17,24 +17,19 @@ class MyBoxScreen extends ConsumerStatefulWidget {
 }
 
 class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
-  late Future<List<ScheduleClass>> _scheduleFuture;
-  DateTime _selectedWorkoutDate = _dateOnly(DateTime.now());
-  _CreateClassMode? _createClassMode;
+  /// First day of the month currently shown in the grid.
+  late DateTime _visibleMonth;
 
   @override
   void initState() {
     super.initState();
-    _scheduleFuture = _loadSchedule();
-  }
-
-  Future<List<ScheduleClass>> _loadSchedule() {
-    return ref.read(scheduleRepositoryProvider).fetchSchedule();
+    final now = DateTime.now();
+    _visibleMonth = DateTime(now.year, now.month);
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _scheduleFuture = _loadSchedule();
-    });
+    ref.invalidate(scheduleListProvider);
+    await ref.read(scheduleListProvider.future);
   }
 
   void _showSnackBar(String message) {
@@ -46,20 +41,34 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _openEditor({
-    ScheduleClass? existing,
-    required bool canManage,
-  }) async {
-    if (!canManage) {
-      return;
-    }
-    final updated = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => _ScheduleClassDialog(existing: existing),
-    );
-    if (updated == true) {
-      await _refresh();
-    }
+  void _goToPreviousMonth() {
+    setState(() {
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
+    });
+  }
+
+  void _goToNextMonth() {
+    setState(() {
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
+    });
+  }
+
+  void _goToToday() {
+    final now = DateTime.now();
+    setState(() {
+      _visibleMonth = DateTime(now.year, now.month);
+    });
+  }
+
+  /// The day whose side panel is open, or null when the calendar is full-width.
+  DateTime? _selectedDay;
+
+  void _selectDay(DateTime day) {
+    setState(() => _selectedDay = _dateOnly(day));
+  }
+
+  void _closeDay() {
+    setState(() => _selectedDay = null);
   }
 
   Future<void> _deleteClass(ScheduleClass item, bool canManage) async {
@@ -188,6 +197,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     final canManage =
         profile?.activeGym != null &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
+    final scheduleAsync = ref.watch(scheduleListProvider);
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -201,125 +211,88 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
           ],
         ),
       ),
-      child: RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
-            if (profile?.activeGym == null)
-              const _CalendarStateCard(
-                icon: Icons.store_mall_directory_outlined,
-                title: 'No active gym selected',
-                message:
-                    'Join or switch to a gym to use the schedule, bookings, waitlist, and attendance tools.',
-                accentColor: appPrimary,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: profile?.activeGym == null
+            ? const Center(
+                child: _CalendarStateCard(
+                  icon: Icons.store_mall_directory_outlined,
+                  title: 'No active gym selected',
+                  message:
+                      'Join or switch to a gym to use the schedule, bookings, waitlist, and attendance tools.',
+                  accentColor: appPrimary,
+                ),
               )
-            else
-              FutureBuilder<List<ScheduleClass>>(
-                future: _scheduleFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (snapshot.hasError) {
-                    return _CalendarStateCard(
-                      icon: Icons.error_outline,
-                      title: 'Failed to load schedule',
-                      message: errorMessageFrom(
-                        snapshot.error!,
-                        fallback: 'Failed to load schedule',
-                      ),
-                      accentColor: appPrimary,
-                    );
-                  }
-                  final items = snapshot.data ?? const <ScheduleClass>[];
-                  final selectedItems =
-                      items
-                          .where(
-                            (item) => _isSameDay(
-                              item.startTime,
-                              _selectedWorkoutDate,
-                            ),
-                          )
-                          .toList()
-                        ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                  final selectedDateLabel = MaterialLocalizations.of(
-                    context,
-                  ).formatFullDate(_selectedWorkoutDate);
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _WorkoutCalendarCard(
-                        selectedDate: _selectedWorkoutDate,
-                        items: items,
-                        canManage: canManage,
-                        createClassMode: _createClassMode,
-                        onSelectCreateMode: (mode) {
-                          setState(() {
-                            _createClassMode = _createClassMode == mode
-                                ? null
-                                : mode;
-                          });
-                        },
-                        onCreateSuccess: () async {
-                          setState(() {
-                            _createClassMode = null;
-                          });
-                          await _refresh();
-                        },
-                        onDateChanged: (nextDate) {
-                          setState(() {
-                            _selectedWorkoutDate = _dateOnly(nextDate);
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _CalendarSectionHeader(
-                        title: 'Classes on $selectedDateLabel',
-                      ),
-                      const SizedBox(height: 12),
-                      if (selectedItems.isEmpty)
-                        _CalendarStateCard(
-                          icon: canManage
-                              ? Icons.edit_calendar_outlined
-                              : Icons.event_busy_outlined,
-                          title: 'No classes scheduled',
-                          message: canManage
-                              ? 'Nothing is scheduled on $selectedDateLabel yet. Add a class to open the day.'
-                              : 'No classes are scheduled on this date.',
-                          accentColor: canManage ? appPrimary : appPrimary,
-                        )
-                      else
-                        for (final item in selectedItems) ...[
-                          _ScheduleClassCard(
-                            item: item,
-                            canManage: canManage,
-                            onToggleBooking: () => _toggleBooking(item),
-                            onToggleWaitlist: () => _toggleWaitlist(item),
-                            onUpdateAttendance: (booking, status) =>
-                                _updateAttendance(
-                                  item: item,
-                                  booking: booking,
-                                  attendanceStatus: status,
-                                ),
-                            onEdit: () => _openEditor(
-                              existing: item,
-                              canManage: canManage,
-                            ),
-                            onDelete: () => _deleteClass(item, canManage),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                    ],
-                  );
-                },
+            : scheduleAsync.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: _CalendarStateCard(
+                    icon: Icons.error_outline,
+                    title: 'Failed to load schedule',
+                    message: errorMessageFrom(
+                      error,
+                      fallback: 'Failed to load schedule',
+                    ),
+                    accentColor: appPrimary,
+                  ),
+                ),
+                data: (items) => _buildScheduleBody(context, items, canManage),
               ),
-          ],
-        ),
       ),
+    );
+  }
+
+  Widget _buildScheduleBody(
+    BuildContext context,
+    List<ScheduleClass> items,
+    bool canManage,
+  ) {
+    final calendar = _MonthCalendar(
+      month: _visibleMonth,
+      items: items,
+      today: _dateOnly(DateTime.now()),
+      selectedDay: _selectedDay,
+      canManage: canManage,
+      onPrevMonth: _goToPreviousMonth,
+      onNextMonth: _goToNextMonth,
+      onToday: _goToToday,
+      onRefresh: _refresh,
+      onSelectDay: _selectDay,
+    );
+
+    if (_selectedDay == null) {
+      return calendar;
+    }
+
+    final panel = _DayPanel(
+      key: ValueKey(_selectedDay),
+      date: _selectedDay!,
+      canManage: canManage,
+      onClose: _closeDay,
+      onToggleBooking: _toggleBooking,
+      onToggleWaitlist: _toggleWaitlist,
+      onUpdateAttendance: (item, booking, status) => _updateAttendance(
+        item: item,
+        booking: booking,
+        attendanceStatus: status,
+      ),
+      onDelete: (item) => _deleteClass(item, canManage),
+    );
+
+    // Wide windows show the day panel inline on the left, next to the calendar;
+    // narrow windows swap the calendar out for the full-width panel.
+    final isWide = MediaQuery.sizeOf(context).width >= 640;
+    if (!isWide) {
+      return panel;
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: 360, child: panel),
+        const SizedBox(width: 12),
+        Expanded(child: calendar),
+      ],
     );
   }
 
@@ -332,23 +305,6 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       default:
         return 'Booked';
     }
-  }
-}
-
-class _CalendarSectionHeader extends StatelessWidget {
-  const _CalendarSectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        color: appText,
-        fontWeight: FontWeight.w800,
-      ),
-    );
   }
 }
 
@@ -408,581 +364,534 @@ class _CalendarStateCard extends StatelessWidget {
   }
 }
 
-enum _CreateClassMode { fresh, existing }
-
-class _WorkoutCalendarCard extends StatelessWidget {
-  const _WorkoutCalendarCard({
-    required this.selectedDate,
+/// Month grid calendar: a header with month navigation + Today, a weekday row,
+/// and a 6×7 grid of day cells that surface each day's classes as colored bars.
+/// Tapping a day opens the day-detail sheet (see [_DayScheduleSheet]).
+class _MonthCalendar extends StatelessWidget {
+  const _MonthCalendar({
+    required this.month,
     required this.items,
+    required this.today,
+    required this.selectedDay,
     required this.canManage,
-    required this.createClassMode,
-    required this.onSelectCreateMode,
-    required this.onCreateSuccess,
-    required this.onDateChanged,
+    required this.onPrevMonth,
+    required this.onNextMonth,
+    required this.onToday,
+    required this.onRefresh,
+    required this.onSelectDay,
   });
 
-  final DateTime selectedDate;
+  /// First day of the displayed month.
+  final DateTime month;
   final List<ScheduleClass> items;
+  final DateTime today;
+  final DateTime? selectedDay;
   final bool canManage;
-  final _CreateClassMode? createClassMode;
-  final ValueChanged<_CreateClassMode> onSelectCreateMode;
-  final Future<void> Function() onCreateSuccess;
-  final ValueChanged<DateTime> onDateChanged;
+  final VoidCallback onPrevMonth;
+  final VoidCallback onNextMonth;
+  final VoidCallback onToday;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<DateTime> onSelectDay;
+
+  static const _weekdayLabels = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final monthLabel = MaterialLocalizations.of(context).formatMonthYear(month);
+    final firstOfMonth = DateTime(month.year, month.month, 1);
+    // Grid starts on the Monday on or before the 1st of the month.
+    final gridStart =
+        firstOfMonth.subtract(Duration(days: firstOfMonth.weekday - 1));
+
+    // Bucket classes by their local calendar day for quick per-cell lookup.
+    final eventsByDay = <DateTime, List<ScheduleClass>>{};
+    for (final item in items) {
+      final day = _dateOnly(item.startTime);
+      (eventsByDay[day] ??= <ScheduleClass>[]).add(item);
+    }
+    for (final dayItems in eventsByDay.values) {
+      dayItems.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: appSurface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: appBorder),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Workout Calendar',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: appText,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Select a date to check whether the gym has a workout scheduled.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
-          ),
-          const SizedBox(height: 12),
-          Theme(
-            data: theme.copyWith(
-              colorScheme: theme.colorScheme.copyWith(
-                primary: appPrimary,
-                onPrimary: Colors.white,
-                surface: appSurface,
-                onSurface: appText,
-              ),
-              textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(foregroundColor: appPrimary),
-              ),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: CalendarDatePicker(
-                initialDate: selectedDate,
-                firstDate: DateTime.now().subtract(const Duration(days: 30)),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-                currentDate: DateTime.now(),
-                onDateChanged: onDateChanged,
-              ),
-            ),
-          ),
-          if (canManage) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => onSelectCreateMode(_CreateClassMode.fresh),
-                    icon: Icon(
-                      createClassMode == _CreateClassMode.fresh
-                          ? Icons.close
-                          : Icons.add,
-                    ),
-                    label: Text(
-                      createClassMode == _CreateClassMode.fresh
-                          ? 'Close New Class'
-                          : 'Add New Class',
-                    ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  monthLabel,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: appText,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: items.isEmpty
-                        ? null
-                        : () => onSelectCreateMode(_CreateClassMode.existing),
-                    icon: Icon(
-                      createClassMode == _CreateClassMode.existing
-                          ? Icons.close
-                          : Icons.history,
-                    ),
-                    label: Text(
-                      createClassMode == _CreateClassMode.existing
-                          ? 'Close Existing'
-                          : 'Add Existing Class',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (createClassMode != null) ...[
-              const SizedBox(height: 12),
-              _InlineCreateClassForm(
-                selectedDate: selectedDate,
-                previousClasses: items,
-                initialMode: createClassMode!,
-                onSaved: onCreateSuccess,
+              ),
+              _CalendarHeaderButton(label: 'Today', onTap: onToday),
+              const SizedBox(width: 8),
+              _CalendarIconButton(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Refresh',
+                onTap: () => onRefresh(),
+              ),
+              const SizedBox(width: 6),
+              _CalendarIconButton(
+                icon: Icons.chevron_left_rounded,
+                tooltip: 'Previous month',
+                onTap: onPrevMonth,
+              ),
+              const SizedBox(width: 6),
+              _CalendarIconButton(
+                icon: Icons.chevron_right_rounded,
+                tooltip: 'Next month',
+                onTap: onNextMonth,
               ),
             ],
-          ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final label in _weekdayLabels)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      label.toUpperCase(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: appSubtleText,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // The grid fills the remaining height — each week splits the space
+          // evenly so the calendar stretches across the whole screen.
+          Expanded(
+            child: Column(
+              children: [
+                for (var week = 0; week < 6; week++)
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var dow = 0; dow < 7; dow++)
+                          Builder(
+                            builder: (context) {
+                              final day = _dateOnly(
+                                gridStart.add(Duration(days: week * 7 + dow)),
+                              );
+                              return Expanded(
+                                child: _MonthDayCell(
+                                  day: day,
+                                  inMonth: day.month == month.month,
+                                  isToday: _isSameDay(day, today),
+                                  isSelected: selectedDay != null &&
+                                      _isSameDay(day, selectedDay!),
+                                  events: eventsByDay[day] ??
+                                      const <ScheduleClass>[],
+                                  onTap: onSelectDay,
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _InlineCreateClassForm extends ConsumerStatefulWidget {
-  const _InlineCreateClassForm({
-    required this.selectedDate,
-    required this.previousClasses,
-    required this.initialMode,
-    required this.onSaved,
+class _MonthDayCell extends StatelessWidget {
+  const _MonthDayCell({
+    required this.day,
+    required this.inMonth,
+    required this.isToday,
+    required this.isSelected,
+    required this.events,
+    required this.onTap,
   });
 
-  final DateTime selectedDate;
-  final List<ScheduleClass> previousClasses;
-  final _CreateClassMode initialMode;
-  final Future<void> Function() onSaved;
+  final DateTime day;
+  final bool inMonth;
+  final bool isToday;
+  final bool isSelected;
+  final List<ScheduleClass> events;
+  final ValueChanged<DateTime> onTap;
+
+  static const _maxBars = 2;
 
   @override
-  ConsumerState<_InlineCreateClassForm> createState() =>
-      _InlineCreateClassFormState();
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shown = events.take(_maxBars).toList();
+    final extra = events.length - shown.length;
+
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => onTap(day),
+          child: Container(
+            clipBehavior: Clip.hardEdge,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? appPrimarySoft
+                  : (inMonth ? appSurfaceAlt : Colors.transparent),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected || isToday ? appPrimary : appBorder,
+                width: isSelected || isToday ? 1.4 : 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: isToday
+                        ? const BoxDecoration(
+                            color: appPrimary,
+                            shape: BoxShape.circle,
+                          )
+                        : null,
+                    child: Text(
+                      '${day.day}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: isToday
+                            ? Colors.white
+                            : (inMonth ? appText : appSubtleText),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final event in shown)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 3,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: appPrimary,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            softWrap: false,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              height: 1.2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if (extra > 0)
+                        Text(
+                          '+$extra more',
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          softWrap: false,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: appSubtleText,
+                            fontSize: 8,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _InlineCreateClassFormState
-    extends ConsumerState<_InlineCreateClassForm> {
-  static const _durationOptions = [30, 45, 60, 75, 90];
-  static const _minuteOptions = [0, 15, 30, 45];
-  static const _recurrenceOptions = {
-    'none': 'Does not repeat',
-    'daily': 'Daily',
-    'weekly': 'Weekly',
-    'monthly': 'Monthly (every 4 weeks)',
-  };
-  static const _recurrenceOccurrenceCaps = {
-    'daily': 365,
-    'weekly': 53,
-    'monthly': 14,
-  };
+class _CalendarIconButton extends StatelessWidget {
+  const _CalendarIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _titleController;
-  late final TextEditingController _capacityController;
-  late final TextEditingController _occurrenceCountController;
-  late final TextEditingController _wodDescriptionController;
-  late Future<List<ScheduleTrainer>> _trainersFuture;
-  int? _selectedPreviousClassId;
-  int? _selectedTrainerId;
-  late _CreateClassMode _mode;
-  late String _selectedRecurrenceFrequency;
-  late int _selectedHour;
-  late int _selectedMinute;
-  late int _selectedDuration;
-  bool _isSaving = false;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
 
   @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    final defaultStart = DateTime(
-      widget.selectedDate.year,
-      widget.selectedDate.month,
-      widget.selectedDate.day,
-      now.hour + 1,
-      _nearestMinuteStep(now.minute),
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: appSurfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: appBorder),
+            ),
+            child: Icon(icon, color: appText, size: 22),
+          ),
+        ),
+      ),
     );
-    _selectedHour = defaultStart.hour;
-    _selectedMinute = defaultStart.minute;
-    _selectedDuration = 60;
-    _mode = widget.initialMode;
-    _selectedRecurrenceFrequency = 'none';
-    _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
-    _titleController = TextEditingController(text: 'WOD');
-    _capacityController = TextEditingController(text: '12');
-    _occurrenceCountController = TextEditingController(text: '4');
-    _wodDescriptionController = TextEditingController();
   }
+}
 
-  static int _nearestMinuteStep(int minute) {
-    if (minute < 8) return 0;
-    if (minute < 23) return 15;
-    if (minute < 38) return 30;
-    return 45;
+class _CalendarHeaderButton extends StatelessWidget {
+  const _CalendarHeaderButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: appSurfaceAlt,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: appBorder),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: appText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
   }
+}
 
-  int? _occurrenceCapFor(String recurrenceFrequency) {
-    return _recurrenceOccurrenceCaps[recurrenceFrequency];
-  }
+/// Bottom sheet listing a single day's classes, with an "Add Class" entry for
+/// managers. Watches [scheduleListProvider] so bookings/creates/deletes update
+/// it live (the parent invalidates the provider after each mutation).
+/// Side panel shown to the left of the calendar when a day is selected. Lists
+/// that day's classes and hosts the inline add/edit form. Watches
+/// [scheduleListProvider] so it stays in sync with the calendar.
+class _DayPanel extends ConsumerStatefulWidget {
+  const _DayPanel({
+    super.key,
+    required this.date,
+    required this.canManage,
+    required this.onClose,
+    required this.onToggleBooking,
+    required this.onToggleWaitlist,
+    required this.onUpdateAttendance,
+    required this.onDelete,
+  });
 
-  String? _occurrenceValidationMessage(String recurrenceFrequency, int parsed) {
-    final cap = _occurrenceCapFor(recurrenceFrequency);
-    if (cap == null || parsed <= cap) {
-      return null;
-    }
-    return 'Enter $cap or fewer occurrences for $recurrenceFrequency repeats';
-  }
+  final DateTime date;
+  final bool canManage;
+  final VoidCallback onClose;
+  final void Function(ScheduleClass item) onToggleBooking;
+  final void Function(ScheduleClass item) onToggleWaitlist;
+  final Future<void> Function(
+    ScheduleClass item,
+    ScheduleBooking booking,
+    String attendanceStatus,
+  ) onUpdateAttendance;
+  final void Function(ScheduleClass item) onDelete;
 
-  static int _normalizeDuration(int value) {
-    if (_durationOptions.contains(value)) {
-      return value;
-    }
-    for (final option in _durationOptions) {
-      if (value <= option) {
-        return option;
-      }
-    }
-    return _durationOptions.last;
-  }
+  @override
+  ConsumerState<_DayPanel> createState() => _DayPanelState();
+}
 
-  List<ScheduleClass> get _previousClassOptions {
-    final seen = <String>{};
-    final sorted = [...widget.previousClasses]
-      ..sort((a, b) => b.startTime.compareTo(a.startTime));
-    final unique = <ScheduleClass>[];
-    for (final item in sorted) {
-      final definitionKey =
-          '${item.title.trim().toLowerCase()}|${item.wodDescription.trim().toLowerCase()}';
-      if (seen.add(definitionKey)) {
-        unique.add(item);
-      }
-    }
-    return unique;
-  }
+class _DayPanelState extends ConsumerState<_DayPanel> {
+  bool _showForm = false;
+  ScheduleClass? _editing;
 
-  void _applyPreviousClass(ScheduleClass item) {
-    _titleController.text = item.title;
-    _capacityController.text = item.capacity.toString();
-    _wodDescriptionController.text = item.wodDescription;
+  void _openAdd() {
     setState(() {
-      _selectedPreviousClassId = item.id;
-      _selectedTrainerId = item.assignedTrainer?.id;
-      _selectedHour = item.startTime.hour;
-      _selectedMinute = _nearestMinuteStep(item.startTime.minute);
-      _selectedDuration = _normalizeDuration(item.durationMinutes);
+      _editing = null;
+      _showForm = true;
+    });
+  }
+
+  void _openEdit(ScheduleClass item) {
+    setState(() {
+      _editing = item;
+      _showForm = true;
+    });
+  }
+
+  void _closeForm() {
+    setState(() {
+      _editing = null;
+      _showForm = false;
     });
   }
 
   @override
-  void didUpdateWidget(covariant _InlineCreateClassForm oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialMode != widget.initialMode) {
-      _mode = widget.initialMode;
-      if (_mode == _CreateClassMode.fresh) {
-        _selectedPreviousClassId = null;
-      }
-    }
-    if (!_isSameDay(oldWidget.selectedDate, widget.selectedDate)) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _capacityController.dispose();
-    _occurrenceCountController.dispose();
-    _wodDescriptionController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false) || _isSaving) {
-      return;
-    }
-    setState(() => _isSaving = true);
-    final startTime = DateTime(
-      widget.selectedDate.year,
-      widget.selectedDate.month,
-      widget.selectedDate.day,
-      _selectedHour,
-      _selectedMinute,
-    );
-    try {
-      await ref
-          .read(scheduleRepositoryProvider)
-          .createClass(
-            title: _titleController.text.trim(),
-            classType: 'WOD',
-            startTime: startTime,
-            durationMinutes: _selectedDuration,
-            capacity: int.parse(_capacityController.text.trim()),
-            trainerUserId: _selectedTrainerId ?? 0,
-            wodDescription: _wodDescriptionController.text.trim(),
-            recurrenceFrequency: _selectedRecurrenceFrequency,
-            occurrenceCount: _selectedRecurrenceFrequency == 'none'
-                ? 1
-                : int.parse(_occurrenceCountController.text.trim()),
-          );
-      if (!mounted) {
-        return;
-      }
-      await widget.onSaved();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Class created.')));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to save class'),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final localizations = MaterialLocalizations.of(context);
-    final previewStart = DateTime(
-      widget.selectedDate.year,
-      widget.selectedDate.month,
-      widget.selectedDate.day,
-      _selectedHour,
-      _selectedMinute,
+    final theme = Theme.of(context);
+    final dateLabel =
+        MaterialLocalizations.of(context).formatFullDate(widget.date);
+    final scheduleAsync = ref.watch(scheduleListProvider);
+    final dayItems = scheduleAsync.maybeWhen(
+      data: (items) =>
+          items.where((item) => _isSameDay(item.startTime, widget.date)).toList()
+            ..sort((a, b) => a.startTime.compareTo(b.startTime)),
+      orElse: () => const <ScheduleClass>[],
     );
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+        color: appSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: appBorder),
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('New Class', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              '${localizations.formatFullDate(previewStart)} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(previewStart))}',
-            ),
-            if (_mode == _CreateClassMode.existing &&
-                _previousClassOptions.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                key: ValueKey('existing-class-$_selectedPreviousClassId'),
-                initialValue: _selectedPreviousClassId,
-                decoration: const InputDecoration(
-                  labelText: 'Select Existing Class',
-                ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('Choose a class'),
-                  ),
-                  for (final item in _previousClassOptions)
-                    DropdownMenuItem<int?>(
-                      value: item.id,
-                      child: Text(
-                        '${item.title} • ${item.durationMinutes} min • ${item.capacity} spots',
-                      ),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value == null) {
-                    setState(() {
-                      _selectedPreviousClassId = null;
-                    });
-                    return;
-                  }
-                  final selected = widget.previousClasses.firstWhere(
-                    (item) => item.id == value,
-                  );
-                  _applyPreviousClass(selected);
-                },
-              ),
-            ],
-            const SizedBox(height: 12),
-            FutureBuilder<List<ScheduleTrainer>>(
-              future: _trainersFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: LinearProgressIndicator(),
-                  );
-                }
-                final trainers = snapshot.data ?? const <ScheduleTrainer>[];
-                return DropdownButtonFormField<int>(
-                  initialValue: _selectedTrainerId,
-                  decoration: const InputDecoration(labelText: 'Trainer'),
-                  items: [
-                    for (final trainer in trainers)
-                      DropdownMenuItem<int>(
-                        value: trainer.id,
-                        child: Text(trainer.label),
-                      ),
-                  ],
-                  validator: (value) =>
-                      value == null ? 'Select a trainer' : null,
-                  onChanged: (value) {
-                    setState(() => _selectedTrainerId = value);
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Title'),
-              validator: (value) {
-                if ((value ?? '').trim().isEmpty) {
-                  return 'Enter a title';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+            child: Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<int>(
-                    key: ValueKey('hour-$_selectedHour'),
-                    initialValue: _selectedHour,
-                    decoration: const InputDecoration(labelText: 'Hour'),
-                    items: [
-                      for (var hour = 0; hour < 24; hour++)
-                        DropdownMenuItem(
-                          value: hour,
-                          child: Text(hour.toString().padLeft(2, '0')),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SCHEDULE',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: appPrimary,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.4,
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        dateLabel,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: appText,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedHour = value);
-                      }
-                    },
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    key: ValueKey('minute-$_selectedMinute'),
-                    initialValue: _selectedMinute,
-                    decoration: const InputDecoration(labelText: 'Minute'),
-                    items: [
-                      for (final minute in _minuteOptions)
-                        DropdownMenuItem(
-                          value: minute,
-                          child: Text(minute.toString().padLeft(2, '0')),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedMinute = value);
-                      }
-                    },
-                  ),
+                IconButton(
+                  onPressed: _showForm ? _closeForm : widget.onClose,
+                  icon: const Icon(Icons.close_rounded, color: appText),
+                  tooltip: _showForm ? 'Back' : 'Close',
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              key: ValueKey('duration-$_selectedDuration'),
-              initialValue: _selectedDuration,
-              decoration: const InputDecoration(
-                labelText: 'Duration (minutes)',
-              ),
-              items: [
-                for (final duration in _durationOptions)
-                  DropdownMenuItem(
-                    value: duration,
-                    child: Text('$duration min'),
+          ),
+          const Divider(height: 1, color: appBorder),
+          Expanded(
+            child: _showForm
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: _ClassForm(
+                      date: widget.date,
+                      existing: _editing,
+                      onSaved: _closeForm,
+                      onCancel: _closeForm,
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (widget.canManage) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _openAdd,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add Class'),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      if (dayItems.isEmpty)
+                        _CalendarStateCard(
+                          icon: widget.canManage
+                              ? Icons.edit_calendar_outlined
+                              : Icons.event_busy_outlined,
+                          title: 'No classes scheduled',
+                          message: widget.canManage
+                              ? 'Nothing is scheduled on this day yet. Use "Add Class" to open the day.'
+                              : 'No classes are scheduled on this date.',
+                          accentColor: appPrimary,
+                        )
+                      else
+                        for (final item in dayItems) ...[
+                          _ScheduleClassCard(
+                            item: item,
+                            canManage: widget.canManage,
+                            onToggleBooking: () => widget.onToggleBooking(item),
+                            onToggleWaitlist: () =>
+                                widget.onToggleWaitlist(item),
+                            onUpdateAttendance: (booking, status) =>
+                                widget.onUpdateAttendance(item, booking, status),
+                            onEdit: () => _openEdit(item),
+                            onDelete: () => widget.onDelete(item),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                    ],
                   ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _selectedDuration = value);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _capacityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Capacity'),
-              validator: (value) {
-                final parsed = int.tryParse((value ?? '').trim());
-                if (parsed == null || parsed <= 0) {
-                  return 'Enter a valid capacity';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _wodDescriptionController,
-              decoration: const InputDecoration(labelText: 'WOD Description'),
-              minLines: 3,
-              maxLines: 5,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedRecurrenceFrequency,
-              decoration: const InputDecoration(labelText: 'Repeat'),
-              items: [
-                for (final entry in _recurrenceOptions.entries)
-                  DropdownMenuItem<String>(
-                    value: entry.key,
-                    child: Text(entry.value),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _selectedRecurrenceFrequency = value);
-                }
-              },
-            ),
-            if (_selectedRecurrenceFrequency != 'none') ...[
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _occurrenceCountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Occurrences'),
-                validator: (value) {
-                  final parsed = int.tryParse((value ?? '').trim());
-                  if (parsed == null || parsed <= 0) {
-                    return 'Enter a valid occurrence count';
-                  }
-                  final capError = _occurrenceValidationMessage(
-                    _selectedRecurrenceFrequency,
-                    parsed,
-                  );
-                  if (capError != null) {
-                    return capError;
-                  }
-                  return null;
-                },
-              ),
-            ],
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _isSaving ? null : _submit,
-              child: _isSaving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Save Class'),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1436,96 +1345,76 @@ class _AttendanceRow extends StatelessWidget {
   }
 }
 
-class _ScheduleClassDialog extends ConsumerStatefulWidget {
-  const _ScheduleClassDialog({this.existing});
+/// Inline create/edit form rendered inside the day side panel. On save it
+/// writes through the repository, invalidates [scheduleListProvider] (so the
+/// panel list and the calendar refresh), then calls [onSaved].
+class _ClassForm extends ConsumerStatefulWidget {
+  const _ClassForm({
+    required this.date,
+    this.existing,
+    required this.onSaved,
+    required this.onCancel,
+  });
 
+  /// The day this class belongs to (from the tapped calendar cell).
+  final DateTime date;
   final ScheduleClass? existing;
+  final VoidCallback onSaved;
+  final VoidCallback onCancel;
 
   @override
-  ConsumerState<_ScheduleClassDialog> createState() =>
-      _ScheduleClassDialogState();
+  ConsumerState<_ClassForm> createState() => _ClassFormState();
 }
 
-class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
+class _ClassFormState extends ConsumerState<_ClassForm> {
   static const _durationOptions = [30, 45, 60, 75, 90];
   static const _minuteOptions = [0, 15, 30, 45];
+  static const _recurrenceOptions = {
+    'none': 'Does not repeat',
+    'daily': 'Daily',
+    'weekly': 'Weekly',
+    'monthly': 'Monthly (every 4 weeks)',
+  };
+  static const _recurrenceOccurrenceCaps = {
+    'daily': 365,
+    'weekly': 53,
+    'monthly': 14,
+  };
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _capacityController;
   late final TextEditingController _wodDescriptionController;
+  late final TextEditingController _occurrenceCountController;
   late Future<List<ScheduleTrainer>> _trainersFuture;
-  late DateTime _startTime;
+  late int _selectedHour;
+  late int _selectedMinute;
   int? _selectedTrainerId;
   late int _selectedDuration;
+  String _recurrenceFrequency = 'none';
   bool _isSaving = false;
+
+  bool get _isCreating => widget.existing == null;
+
+  DateTime get _baseDate => _dateOnly(widget.existing?.startTime ?? widget.date);
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    final defaultStart = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      now.hour + 1,
-      _nearestMinuteStep(now.minute),
-    );
-    _startTime = _normalizeStartTime(
-      widget.existing?.startTime ?? defaultStart,
-    );
-    _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
+    final base = widget.existing?.startTime;
+    _selectedHour = base?.hour ?? ((now.hour + 1) % 24);
+    _selectedMinute = _nearestMinuteStep(base?.minute ?? now.minute);
+    _selectedDuration = _normalizeDuration(widget.existing?.durationMinutes ?? 60);
     _selectedTrainerId = widget.existing?.assignedTrainer?.id;
-    _titleController = TextEditingController(
-      text: widget.existing?.title ?? 'WOD',
-    );
-    _capacityController = TextEditingController(
-      text: '${widget.existing?.capacity ?? 12}',
-    );
-    _wodDescriptionController = TextEditingController(
-      text: widget.existing?.wodDescription ?? '',
-    );
-    _selectedDuration = _normalizeDuration(
-      widget.existing?.durationMinutes ?? 60,
-    );
-  }
-
-  static DateTime _normalizeStartTime(DateTime value) {
-    return DateTime(
-      value.year,
-      value.month,
-      value.day,
-      value.hour,
-      _nearestMinuteStep(value.minute),
-    );
-  }
-
-  static int _nearestMinuteStep(int minute) {
-    if (minute < 8) {
-      return 0;
-    }
-    if (minute < 23) {
-      return 15;
-    }
-    if (minute < 38) {
-      return 30;
-    }
-    if (minute < 53) {
-      return 45;
-    }
-    return 45;
-  }
-
-  static int _normalizeDuration(int value) {
-    if (_durationOptions.contains(value)) {
-      return value;
-    }
-    for (final option in _durationOptions) {
-      if (value <= option) {
-        return option;
-      }
-    }
-    return _durationOptions.last;
+    _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
+    _titleController =
+        TextEditingController(text: widget.existing?.title ?? 'WOD');
+    _capacityController =
+        TextEditingController(text: '${widget.existing?.capacity ?? 12}');
+    _wodDescriptionController =
+        TextEditingController(text: widget.existing?.wodDescription ?? '');
+    _occurrenceCountController = TextEditingController(text: '4');
   }
 
   @override
@@ -1533,43 +1422,29 @@ class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
     _titleController.dispose();
     _capacityController.dispose();
     _wodDescriptionController.dispose();
+    _occurrenceCountController.dispose();
     super.dispose();
   }
 
-  void _updateStartDate(DateTime nextDate) {
-    setState(() {
-      _startTime = DateTime(
-        nextDate.year,
-        nextDate.month,
-        nextDate.day,
-        _startTime.hour,
-        _startTime.minute,
-      );
-    });
+  static int _nearestMinuteStep(int minute) {
+    if (minute < 8) return 0;
+    if (minute < 23) return 15;
+    if (minute < 38) return 30;
+    return 45;
   }
 
-  void _updateStartHour(int hour) {
-    setState(() {
-      _startTime = DateTime(
-        _startTime.year,
-        _startTime.month,
-        _startTime.day,
-        hour,
-        _startTime.minute,
-      );
-    });
+  static int _normalizeDuration(int value) {
+    if (_durationOptions.contains(value)) return value;
+    for (final option in _durationOptions) {
+      if (value <= option) return option;
+    }
+    return _durationOptions.last;
   }
 
-  void _updateStartMinute(int minute) {
-    setState(() {
-      _startTime = DateTime(
-        _startTime.year,
-        _startTime.month,
-        _startTime.day,
-        _startTime.hour,
-        minute,
-      );
-    });
+  String? _occurrenceValidationMessage(String recurrenceFrequency, int parsed) {
+    final cap = _recurrenceOccurrenceCaps[recurrenceFrequency];
+    if (cap == null || parsed <= cap) return null;
+    return 'Enter $cap or fewer occurrences for $recurrenceFrequency repeats';
   }
 
   Future<void> _submit() async {
@@ -1578,271 +1453,250 @@ class _ScheduleClassDialogState extends ConsumerState<_ScheduleClassDialog> {
     }
     final capacity = int.parse(_capacityController.text.trim());
     final wodDescription = _wodDescriptionController.text.trim();
+    final startTime = DateTime(
+      _baseDate.year,
+      _baseDate.month,
+      _baseDate.day,
+      _selectedHour,
+      _selectedMinute,
+    );
     setState(() => _isSaving = true);
     try {
       final repository = ref.read(scheduleRepositoryProvider);
-      if (widget.existing == null) {
+      if (_isCreating) {
         await repository.createClass(
           title: _titleController.text.trim(),
           classType: 'WOD',
-          startTime: _startTime,
+          startTime: startTime,
           durationMinutes: _selectedDuration,
           capacity: capacity,
           trainerUserId: _selectedTrainerId ?? 0,
           wodDescription: wodDescription,
+          recurrenceFrequency: _recurrenceFrequency,
+          occurrenceCount: _recurrenceFrequency == 'none'
+              ? 1
+              : int.parse(_occurrenceCountController.text.trim()),
         );
       } else {
         await repository.updateClass(
           id: widget.existing!.id,
           title: _titleController.text.trim(),
           classType: widget.existing!.classType,
-          startTime: _startTime,
+          startTime: startTime,
           durationMinutes: _selectedDuration,
           capacity: capacity,
           trainerUserId: _selectedTrainerId ?? 0,
           wodDescription: wodDescription,
         );
       }
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      ref.invalidate(scheduleListProvider);
+      if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to save class'),
-          ),
+          content: Text(_isCreating ? 'Class created.' : 'Class updated.'),
+        ),
+      );
+      widget.onSaved();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(errorMessageFrom(error, fallback: 'Failed to save class')),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final localizations = MaterialLocalizations.of(context);
-    final selectedDay = _dateOnly(_startTime);
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 760),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.existing == null ? 'Add Class' : 'Edit Class',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextFormField(
-                          controller: _titleController,
-                          decoration: const InputDecoration(labelText: 'Title'),
-                          validator: (value) {
-                            if ((value ?? '').trim().isEmpty) {
-                              return 'Enter a title';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        FutureBuilder<List<ScheduleTrainer>>(
-                          future: _trainersFuture,
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8),
-                                child: LinearProgressIndicator(),
-                              );
-                            }
-                            final trainers =
-                                snapshot.data ?? const <ScheduleTrainer>[];
-                            return DropdownButtonFormField<int>(
-                              initialValue: _selectedTrainerId,
-                              decoration: const InputDecoration(
-                                labelText: 'Trainer',
-                              ),
-                              items: [
-                                for (final trainer in trainers)
-                                  DropdownMenuItem<int>(
-                                    value: trainer.id,
-                                    child: Text(trainer.label),
-                                  ),
-                              ],
-                              validator: (value) =>
-                                  value == null ? 'Select a trainer' : null,
-                              onChanged: (value) {
-                                setState(() => _selectedTrainerId = value);
-                              },
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            'Start: ${localizations.formatFullDate(_startTime)} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(_startTime))}',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          height: 320,
-                          child: CalendarDatePicker(
-                            initialDate: selectedDay,
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(
-                              const Duration(days: 365),
-                            ),
-                            currentDate: DateTime.now(),
-                            onDateChanged: _updateStartDate,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<int>(
-                                initialValue: _startTime.hour,
-                                decoration: const InputDecoration(
-                                  labelText: 'Hour',
-                                ),
-                                items: [
-                                  for (var hour = 0; hour < 24; hour++)
-                                    DropdownMenuItem(
-                                      value: hour,
-                                      child: Text(
-                                        hour.toString().padLeft(2, '0'),
-                                      ),
-                                    ),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    _updateStartHour(value);
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<int>(
-                                initialValue: _startTime.minute,
-                                decoration: const InputDecoration(
-                                  labelText: 'Minute',
-                                ),
-                                items: [
-                                  for (final minute in _minuteOptions)
-                                    DropdownMenuItem(
-                                      value: minute,
-                                      child: Text(
-                                        minute.toString().padLeft(2, '0'),
-                                      ),
-                                    ),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    _updateStartMinute(value);
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<int>(
-                          initialValue: _selectedDuration,
-                          decoration: const InputDecoration(
-                            labelText: 'Duration (minutes)',
-                          ),
-                          items: [
-                            for (final duration in _durationOptions)
-                              DropdownMenuItem(
-                                value: duration,
-                                child: Text('$duration min'),
-                              ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _selectedDuration = value);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _capacityController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Capacity',
-                          ),
-                          validator: (value) {
-                            final parsed = int.tryParse((value ?? '').trim());
-                            if (parsed == null || parsed <= 0) {
-                              return 'Enter a valid capacity';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _wodDescriptionController,
-                          decoration: const InputDecoration(
-                            labelText: 'WOD Description',
-                          ),
-                          minLines: 3,
-                          maxLines: 5,
-                        ),
-                      ],
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _isCreating ? 'New class' : 'Edit class',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: appText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            localizations.formatFullDate(_baseDate),
+            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _titleController,
+            decoration: const InputDecoration(labelText: 'Title'),
+            validator: (value) =>
+                (value ?? '').trim().isEmpty ? 'Enter a title' : null,
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<ScheduleTrainer>>(
+            future: _trainersFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                );
+              }
+              final trainers = snapshot.data ?? const <ScheduleTrainer>[];
+              return DropdownButtonFormField<int>(
+                initialValue: _selectedTrainerId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Trainer'),
+                items: [
+                  for (final trainer in trainers)
+                    DropdownMenuItem<int>(
+                      value: trainer.id,
+                      child: Text(trainer.label),
                     ),
-                  ),
+                ],
+                validator: (value) => value == null ? 'Select a trainer' : null,
+                onChanged: (value) => setState(() => _selectedTrainerId = value),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _selectedHour,
+                  decoration: const InputDecoration(labelText: 'Hour'),
+                  items: [
+                    for (var hour = 0; hour < 24; hour++)
+                      DropdownMenuItem(
+                        value: hour,
+                        child: Text(hour.toString().padLeft(2, '0')),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _selectedHour = value);
+                  },
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _isSaving ? null : _submit,
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save'),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _selectedMinute,
+                  decoration: const InputDecoration(labelText: 'Minute'),
+                  items: [
+                    for (final minute in _minuteOptions)
+                      DropdownMenuItem(
+                        value: minute,
+                        child: Text(minute.toString().padLeft(2, '0')),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _selectedMinute = value);
+                  },
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            initialValue: _selectedDuration,
+            decoration: const InputDecoration(labelText: 'Duration (minutes)'),
+            items: [
+              for (final duration in _durationOptions)
+                DropdownMenuItem(value: duration, child: Text('$duration min')),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _selectedDuration = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _capacityController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Capacity'),
+            validator: (value) {
+              final parsed = int.tryParse((value ?? '').trim());
+              if (parsed == null || parsed <= 0) {
+                return 'Enter a valid capacity';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _wodDescriptionController,
+            decoration: const InputDecoration(labelText: 'WOD Description'),
+            minLines: 3,
+            maxLines: 5,
+          ),
+          if (_isCreating) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _recurrenceFrequency,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Repeat'),
+              items: [
+                for (final entry in _recurrenceOptions.entries)
+                  DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _recurrenceFrequency = value);
+                }
+              },
+            ),
+            if (_recurrenceFrequency != 'none') ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _occurrenceCountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Occurrences'),
+                validator: (value) {
+                  final parsed = int.tryParse((value ?? '').trim());
+                  if (parsed == null || parsed <= 0) {
+                    return 'Enter a valid occurrence count';
+                  }
+                  return _occurrenceValidationMessage(
+                    _recurrenceFrequency,
+                    parsed,
+                  );
+                },
+              ),
+            ],
+          ],
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isSaving ? null : widget.onCancel,
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _isSaving ? null : _submit,
+                  child: _isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(_isCreating ? 'Create' : 'Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

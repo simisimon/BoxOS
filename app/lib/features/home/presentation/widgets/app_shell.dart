@@ -22,6 +22,7 @@ class AuthenticatedScaffold extends StatelessWidget {
     required this.onNotificationsTap,
     required this.onRoleSelected,
     this.profileImageUrl = '',
+    this.fullBleedBody = false,
   });
 
   /// The currently active shell branch (matches `navigationShell.currentIndex`).
@@ -42,6 +43,11 @@ class AuthenticatedScaffold extends StatelessWidget {
   final VoidCallback onHeaderProfileTap;
   final VoidCallback onNotificationsTap;
   final ValueChanged<UserRole> onRoleSelected;
+
+  /// When true the body fills the full width next to the rail instead of being
+  /// clamped/centered to the readable content column — used by surfaces like
+  /// the schedule calendar that should span the whole screen.
+  final bool fullBleedBody;
 
   @override
   Widget build(BuildContext context) {
@@ -80,19 +86,23 @@ class AuthenticatedScaffold extends StatelessWidget {
                   onSelectBranch: onSelectBranch,
                 ),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final maxWidth = context.contentMaxWidth;
-                    final horizontalPadding = constraints.maxWidth > maxWidth
-                        ? (constraints.maxWidth - maxWidth) / 2
-                        : 0.0;
-                    return Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: horizontalPadding),
-                      child: body,
-                    );
-                  },
-                ),
+                child: fullBleedBody
+                    ? body
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final maxWidth = context.contentMaxWidth;
+                          final horizontalPadding =
+                              constraints.maxWidth > maxWidth
+                                  ? (constraints.maxWidth - maxWidth) / 2
+                                  : 0.0;
+                          return Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: horizontalPadding,
+                            ),
+                            child: body,
+                          );
+                        },
+                      ),
               ),
             ],
           ),
