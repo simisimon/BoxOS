@@ -13,7 +13,6 @@ import 'package:app/features/auth/presentation/screens/sign_up_screen.dart';
 import 'package:app/features/auth/presentation/screens/verify_email_screen.dart';
 import 'package:app/features/gyms/presentation/screens/create_gym_screen.dart';
 import 'package:app/features/gyms/presentation/screens/gym_directory_screen.dart';
-import 'package:app/features/gyms/presentation/screens/join_requests_screen.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
 import 'package:app/features/home/presentation/screens/authenticated_shell_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
@@ -23,7 +22,6 @@ import 'package:app/features/profile/presentation/screens/edit_profile_screen.da
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
-import 'package:app/features/profile/presentation/screens/role_management_screen.dart';
 import 'package:app/features/programming/presentation/screens/programming_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -168,10 +166,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'notification-settings',
         builder: (context, state) => const NotificationSettingsScreen(),
       ),
+      // Legacy alias. The Members surface now lives at /members (sidebar tab);
+      // any in-app links or bookmarks to /role-management land on the same
+      // page without a 404.
       GoRoute(
         path: '/role-management',
-        name: 'role-management',
-        builder: (context, state) => const RoleManagementScreen(),
+        redirect: (context, state) => '/members',
       ),
       GoRoute(
         path: '/admin-analytics',
@@ -230,10 +230,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'gyms',
         builder: (context, state) => const GymDirectoryScreen(),
       ),
+      // Legacy alias. Join requests now live at the top of /members.
       GoRoute(
         path: '/gym-requests',
-        name: 'gym-requests',
-        builder: (context, state) => const JoinRequestsScreen(),
+        redirect: (context, state) => '/members',
       ),
     ],
   );

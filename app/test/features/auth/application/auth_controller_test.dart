@@ -239,6 +239,9 @@ class FakeProfileRepository implements ProfileRepository {
   Future<RoleManagedUser> updateUserRole({
     required int userId,
     required List<UserRole> roles,
+    UserRole? activeRole,
+    MembershipStatus? status,
+    String? adminNote,
   }) {
     throw UnimplementedError();
   }

@@ -27,7 +27,6 @@ import 'package:app/features/gyms/domain/models/my_gym_join_request.dart';
 import 'package:app/features/gyms/domain/repositories/gym_repository.dart';
 import 'package:app/features/gyms/presentation/screens/create_gym_screen.dart';
 import 'package:app/features/gyms/presentation/screens/gym_directory_screen.dart';
-import 'package:app/features/gyms/presentation/screens/join_requests_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/app_notification.dart';
@@ -43,7 +42,6 @@ import 'package:app/features/profile/presentation/screens/edit_profile_screen.da
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
-import 'package:app/features/profile/presentation/screens/role_management_screen.dart';
 import 'package:go_router/go_router.dart';
 
 class RecordingAuthRepository implements AuthRepository {
@@ -290,9 +288,14 @@ class RecordingProfileRepository implements ProfileRepository {
   Future<RoleManagedUser> updateUserRole({
     required int userId,
     required List<UserRole> roles,
+    UserRole? activeRole,
+    MembershipStatus? status,
+    String? adminNote,
   }) async {
     final updated = managedUsers.firstWhere((user) => user.id == userId);
-    final nextRole = roles.contains(updated.role) ? updated.role : roles.first;
+    final nextRole =
+        activeRole ??
+        (roles.contains(updated.role) ? updated.role : roles.first);
     final next = RoleManagedUser(
       id: updated.id,
       membershipId: updated.membershipId,
@@ -302,6 +305,18 @@ class RecordingProfileRepository implements ProfileRepository {
       displayName: updated.displayName,
       nickname: updated.nickname,
       canEditRole: updated.canEditRole,
+      profileImageUrl: updated.profileImageUrl,
+      status: status ?? updated.status,
+      adminNote: adminNote ?? updated.adminNote,
+      joinedAt: updated.joinedAt,
+      totalBookings: updated.totalBookings,
+      attendedBookings: updated.attendedBookings,
+      noShowBookings: updated.noShowBookings,
+      bookingRate: updated.bookingRate,
+      lastBookingAt: updated.lastBookingAt,
+      newestPrTitle: updated.newestPrTitle,
+      newestPrScore: updated.newestPrScore,
+      newestPrAt: updated.newestPrAt,
     );
     managedUsers = [
       for (final user in managedUsers)
@@ -813,7 +828,8 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
       canManage: existing.canManage,
     );
     announcements = [
-      for (final item in announcements) if (item.id == id) updated else item,
+      for (final item in announcements)
+        if (item.id == id) updated else item,
     ];
     lastUpdatedAnnouncement = updated;
     return updated;
@@ -828,7 +844,9 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
   @override
   Future<Announcement> likeAnnouncement({required int announcementId}) async {
     lastLikedAnnouncementId = announcementId;
-    final updated = announcements.firstWhere((item) => item.id == announcementId);
+    final updated = announcements.firstWhere(
+      (item) => item.id == announcementId,
+    );
     final next = Announcement(
       id: updated.id,
       gymId: updated.gymId,
@@ -844,14 +862,19 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
       comments: updated.comments,
       canManage: updated.canManage,
     );
-    announcements = [for (final item in announcements) if (item.id == announcementId) next else item];
+    announcements = [
+      for (final item in announcements)
+        if (item.id == announcementId) next else item,
+    ];
     return next;
   }
 
   @override
   Future<Announcement> unlikeAnnouncement({required int announcementId}) async {
     lastUnlikedAnnouncementId = announcementId;
-    final updated = announcements.firstWhere((item) => item.id == announcementId);
+    final updated = announcements.firstWhere(
+      (item) => item.id == announcementId,
+    );
     final next = Announcement(
       id: updated.id,
       gymId: updated.gymId,
@@ -867,7 +890,10 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
       comments: updated.comments,
       canManage: updated.canManage,
     );
-    announcements = [for (final item in announcements) if (item.id == announcementId) next else item];
+    announcements = [
+      for (final item in announcements)
+        if (item.id == announcementId) next else item,
+    ];
     return next;
   }
 
@@ -876,7 +902,9 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
     required int announcementId,
     required String body,
   }) async {
-    final existing = announcements.firstWhere((item) => item.id == announcementId);
+    final existing = announcements.firstWhere(
+      (item) => item.id == announcementId,
+    );
     final comment = AnnouncementComment(
       id: existing.comments.length + 1,
       announcementId: announcementId,
@@ -901,7 +929,10 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
       comments: [...existing.comments, comment],
       canManage: existing.canManage,
     );
-    announcements = [for (final item in announcements) if (item.id == announcementId) updated else item];
+    announcements = [
+      for (final item in announcements)
+        if (item.id == announcementId) updated else item,
+    ];
     lastCreatedComment = comment;
     return comment;
   }
@@ -968,7 +999,10 @@ class RecordingAnnouncementRepository implements AnnouncementRepository {
             likeCount: announcement.likeCount,
             likedByMe: announcement.likedByMe,
             commentCount: announcement.commentCount - 1,
-            comments: [for (final comment in announcement.comments) if (comment.id != commentId) comment],
+            comments: [
+              for (final comment in announcement.comments)
+                if (comment.id != commentId) comment,
+            ],
             canManage: announcement.canManage,
           )
         else
@@ -1074,7 +1108,7 @@ Future<GoRouter> _pumpAuthenticatedRouter(
       ),
       GoRoute(
         path: '/role-management',
-        builder: (context, state) => const RoleManagementScreen(),
+        redirect: (context, state) => '/members',
       ),
       GoRoute(
         path: '/login',
@@ -1085,10 +1119,7 @@ Future<GoRouter> _pumpAuthenticatedRouter(
         path: '/gyms',
         builder: (context, state) => const GymDirectoryScreen(),
       ),
-      GoRoute(
-        path: '/gym-requests',
-        builder: (context, state) => const JoinRequestsScreen(),
-      ),
+      GoRoute(path: '/gym-requests', redirect: (context, state) => '/members'),
       GoRoute(
         path: '/create-gym',
         builder: (context, state) => const CreateGymScreen(),
@@ -1137,7 +1168,9 @@ Future<ProviderContainer> _pumpAppWithRepositories(
         (ref) => effectiveProfileRepository,
       ),
       gymRepositoryProvider.overrideWith((ref) => gymRepository),
-      announcementRepositoryProvider.overrideWith((ref) => announcementRepository),
+      announcementRepositoryProvider.overrideWith(
+        (ref) => announcementRepository,
+      ),
     ],
   );
 
@@ -1745,7 +1778,8 @@ void main() {
           id: 1,
           gymId: 1,
           title: 'Friday throwdown',
-          description: 'Comment with your scaling plan before the heat list drops.',
+          description:
+              'Comment with your scaling plan before the heat list drops.',
           imageUrl: null,
           authorName: 'Demo Coach',
           createdAt: DateTime.utc(2026, 5, 29, 7),
@@ -1775,7 +1809,10 @@ void main() {
 
     await tester.tap(find.text('Friday throwdown'));
     await _settleApp(tester);
-    await tester.enterText(find.byType(TextField).first, 'I will scale volume but keep the pace.');
+    await tester.enterText(
+      find.byType(TextField).first,
+      'I will scale volume but keep the pace.',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Post'));
     await _settleApp(tester);
 
@@ -2034,7 +2071,8 @@ void main() {
             id: 1,
             type: 'announcement_commented',
             title: 'New comment on your announcement',
-            body: 'Demo Athlete commented on "Friday throwdown": I will scale volume but keep the pace.',
+            body:
+                'Demo Athlete commented on "Friday throwdown": I will scale volume but keep the pace.',
             entityType: 'announcement',
             entityId: 7,
             readAt: null,

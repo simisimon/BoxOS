@@ -520,6 +520,9 @@ def ensure_added_columns(connection: ManagedConnection) -> None:
     connection.execute(
         "alter table users add column if not exists profile_image_url text not null default ''"
     )
+    connection.execute(
+        "alter table gym_memberships add column if not exists admin_note text not null default ''"
+    )
 
 
 def purge_deleted_users(connection: ManagedConnection) -> None:

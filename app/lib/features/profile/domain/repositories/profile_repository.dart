@@ -37,6 +37,9 @@ abstract class ProfileRepository {
   Future<RoleManagedUser> updateUserRole({
     required int userId,
     required List<UserRole> roles,
+    UserRole? activeRole,
+    MembershipStatus? status,
+    String? adminNote,
   });
 
   Future<UserProfile> updateActiveRole({required UserRole role});

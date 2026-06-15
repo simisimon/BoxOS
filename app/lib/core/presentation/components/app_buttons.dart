@@ -43,7 +43,7 @@ class AppPrimaryButton extends StatelessWidget {
           foregroundColor: Colors.white,
           disabledBackgroundColor: appSurfaceAlt,
           disabledForegroundColor: appSubtleText,
-          minimumSize: Size.fromHeight(height),
+          minimumSize: expand ? Size.fromHeight(height) : Size(0, height),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(appRadiusSm),
@@ -84,7 +84,7 @@ class AppSecondaryButton extends StatelessWidget {
           foregroundColor: appText,
           backgroundColor: appSurfaceAlt,
           side: const BorderSide(color: appBorderStrong),
-          minimumSize: Size.fromHeight(height),
+          minimumSize: expand ? Size.fromHeight(height) : Size(0, height),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(appRadiusSm),
@@ -154,7 +154,7 @@ class AppDangerButton extends StatelessWidget {
           foregroundColor: Colors.white,
           disabledBackgroundColor: appSurfaceAlt,
           disabledForegroundColor: appSubtleText,
-          minimumSize: Size.fromHeight(height),
+          minimumSize: expand ? Size.fromHeight(height) : Size(0, height),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(appRadiusSm),
@@ -206,11 +206,7 @@ class _ButtonContent extends StatelessWidget {
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 8),
-        Text(label),
-      ],
+      children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
     );
   }
 }

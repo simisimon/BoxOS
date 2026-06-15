@@ -6,6 +6,7 @@ import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/gyms/domain/models/gym_join_request.dart';
+import 'package:app/features/members/presentation/widgets/member_roster.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
@@ -13,9 +14,10 @@ import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Owner-facing "Members" tab: pending join requests and the active member
-/// roster with inline role management, in one place. Renders as a shell branch
-/// body (the shell supplies the top header), so there is no local app bar.
+/// Owner-facing "Members" tab: pending join requests on top, then the active
+/// member roster as a search-and-filter table with inline-expand editing.
+/// Renders as a shell branch body (the shell supplies the top header), so
+/// there is no local app bar.
 class MembersScreen extends ConsumerStatefulWidget {
   const MembersScreen({super.key});
 
@@ -31,8 +33,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   List<GymJoinRequest> _requests = const [];
   List<RoleManagedUser> _users = const [];
 
-  final Map<int, List<UserRole>> _draftRoles = {};
-  int? _savingUserId;
   int? _pendingRequestId;
 
   Future<void> _load() async {
@@ -47,26 +47,20 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         gymRepo.fetchJoinRequests(),
         profileRepo.fetchRoleManagedUsers(),
       ]);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _requests = results[0] as List<GymJoinRequest>;
         _users = results[1] as List<RoleManagedUser>;
         _loaded = true;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _errorText =
             errorMessageFrom(error, fallback: 'Failed to load members');
       });
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -78,9 +72,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       await ref
           .read(gymRepositoryProvider)
           .reviewJoinRequest(requestId: request.id, approve: approve);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       // Drop the handled request immediately; refresh the roster so an
       // approved athlete shows up as a member without a manual reload.
       setState(() {
@@ -100,18 +92,14 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         unawaited(_reloadRoster());
       }
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessageFrom(error, fallback: 'Review failed')),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _pendingRequestId = null);
-      }
+      if (mounted) setState(() => _pendingRequestId = null);
     }
   }
 
@@ -119,79 +107,50 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     try {
       final users =
           await ref.read(profileRepositoryProvider).fetchRoleManagedUsers();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _users = users);
     } catch (_) {
       // Non-fatal: the roster simply keeps its previous state.
     }
   }
 
-  List<UserRole> _rolesFor(RoleManagedUser user) =>
-      _draftRoles[user.id] ?? user.availableRoles;
-
-  void _toggleRole(RoleManagedUser user, UserRole role, bool enabled) {
-    if (!user.canEditRole) {
-      return;
-    }
-    final nextRoles = [..._rolesFor(user)];
-    if (enabled) {
-      if (!nextRoles.contains(role)) {
-        nextRoles.add(role);
-      }
-    } else {
-      nextRoles.remove(role);
-    }
-    if (nextRoles.isEmpty) {
-      return;
-    }
-    setState(() => _draftRoles[user.id] = nextRoles);
-  }
-
-  bool _hasRoleChanges(RoleManagedUser user) {
-    final draft = _draftRoles[user.id];
-    if (draft == null) {
-      return false;
-    }
-    final current = user.availableRoles.toSet();
-    return !(draft.length == current.length && current.containsAll(draft));
-  }
-
-  Future<void> _updateRoles(RoleManagedUser user) async {
-    final roles = _rolesFor(user);
-    setState(() => _savingUserId = user.id);
+  /// Persists a single-member draft. Returns when the PATCH resolves so the
+  /// roster widget can clear its in-flight spinner. Updates the local roster
+  /// in place; a removed member disappears from the list entirely.
+  Future<void> _saveDraft(MemberDraft draft) async {
     try {
-      final updated = await ref
-          .read(profileRepositoryProvider)
-          .updateUserRole(userId: user.id, roles: roles);
+      final updated = await ref.read(profileRepositoryProvider).updateUserRole(
+            userId: draft.user.id,
+            roles: draft.roles.toList(),
+            activeRole: draft.activeRole,
+            status: draft.status,
+            adminNote: draft.adminNote,
+          );
       ref.invalidate(currentProfileProvider);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
-        _users = [
-          for (final u in _users)
-            if (u.id == updated.id) updated else u,
-        ];
-        _draftRoles.remove(user.id);
+        final next = <RoleManagedUser>[];
+        for (final u in _users) {
+          if (u.id != updated.id) {
+            next.add(u);
+          } else if (updated.status != MembershipStatus.removed) {
+            next.add(updated);
+          }
+        }
+        _users = next;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Updated roles for ${updated.email}.')),
+        SnackBar(content: Text('Saved ${updated.email}.')),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errorMessageFrom(error, fallback: 'Failed to update role')),
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to update member'),
+          ),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() => _savingUserId = null);
-      }
     }
   }
 
@@ -202,7 +161,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     final hasAccess =
         profile?.role == UserRole.admin && profile?.activeGym != null;
 
-    // Kick off the first load once we know the user has access.
     if (hasAccess && !_loaded && !_loading && _errorText == null) {
       Future.microtask(_load);
     }
@@ -279,7 +237,15 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                   ),
           ),
           const SizedBox(height: appSpaceMd),
-          _buildRoster(),
+          if (_users.isEmpty)
+            AppEmptyState(
+              icon: Icons.group_outlined,
+              title: 'No active members',
+              subtitle: 'Approved members of your box show up here.',
+              compact: true,
+            )
+          else
+            MemberRoster(users: _users, onSave: _saveDraft),
         ],
       ),
     );
@@ -305,33 +271,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             isPending: _pendingRequestId == request.id,
             onApprove: () => _review(request, true),
             onReject: () => _review(request, false),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildRoster() {
-    if (_users.isEmpty) {
-      return AppEmptyState(
-        icon: Icons.group_outlined,
-        title: 'No active members',
-        subtitle: 'Approved members of your box show up here.',
-        compact: true,
-      );
-    }
-    return ResponsiveMasonry(
-      minColumnWidth: 340,
-      maxColumns: 3,
-      spacing: appSpaceMd,
-      children: [
-        for (final user in _users)
-          _MemberCard(
-            user: user,
-            draftRoles: _rolesFor(user),
-            isSaving: _savingUserId == user.id,
-            hasChanges: _hasRoleChanges(user),
-            onToggleRole: (role, enabled) => _toggleRole(user, role, enabled),
-            onSave: () => _updateRoles(user),
           ),
       ],
     );
@@ -427,113 +366,6 @@ class _RequestCard extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemberCard extends StatelessWidget {
-  const _MemberCard({
-    required this.user,
-    required this.draftRoles,
-    required this.isSaving,
-    required this.hasChanges,
-    required this.onToggleRole,
-    required this.onSave,
-  });
-
-  final RoleManagedUser user;
-  final List<UserRole> draftRoles;
-  final bool isSaving;
-  final bool hasChanges;
-  final void Function(UserRole role, bool enabled) onToggleRole;
-  final VoidCallback onSave;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final displayName =
-        user.displayName.isEmpty ? user.email : user.displayName;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              AppAvatar(displayName: displayName, size: 40),
-              const SizedBox(width: appSpaceMd),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: appText,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      user.nickname.isEmpty ? user.email : '@${user.nickname}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: appSubtleText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              AppPill(label: user.role.label, dense: true),
-            ],
-          ),
-          const SizedBox(height: appSpaceLg),
-          Text(
-            'ROLES',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: appSubtleText,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: appSpaceSm),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final role in const [UserRole.athlete, UserRole.trainer])
-                FilterChip(
-                  label: Text(role.label),
-                  selected: draftRoles.contains(role),
-                  onSelected: isSaving || !user.canEditRole
-                      ? null
-                      : (selected) => onToggleRole(role, selected),
-                ),
-            ],
-          ),
-          if (!user.canEditRole) ...[
-            const SizedBox(height: appSpaceSm),
-            Text(
-              'Owner memberships are managed elsewhere.',
-              style: theme.textTheme.bodySmall?.copyWith(color: appMutedText),
-            ),
-          ],
-          if (user.canEditRole) ...[
-            const SizedBox(height: appSpaceLg),
-            Align(
-              alignment: Alignment.centerRight,
-              child: AppPrimaryButton(
-                label: 'Save roles',
-                onPressed: isSaving || !hasChanges ? null : onSave,
-                size: AppButtonSize.md,
-                busy: isSaving,
-              ),
-            ),
-          ],
         ],
       ),
     );

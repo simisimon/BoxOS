@@ -96,7 +96,7 @@ class ProfileScreen extends ConsumerWidget {
                 eyebrow: 'Owner',
                 title: 'Operate the gym',
                 subtitle:
-                    'Member management and join-request review stay available as dedicated admin controls.',
+                    'Analytics here; member management and join-request review live in the Members tab.',
                 children: [
                   _SecondaryActionTile(
                     icon: Icons.insights_outlined,
@@ -105,22 +105,6 @@ class ProfileScreen extends ConsumerWidget {
                         'Read attendance, utilization, and pressure at a glance.',
                     enabled: !isLoading,
                     onTap: () => context.go('/admin-analytics'),
-                  ),
-                  const SizedBox(height: 12),
-                  _SecondaryActionTile(
-                    icon: Icons.group_outlined,
-                    title: 'Manage Gym Members',
-                    subtitle: 'Review member roles inside the active gym.',
-                    enabled: !isLoading,
-                    onTap: () => context.go('/role-management'),
-                  ),
-                  const SizedBox(height: 12),
-                  _SecondaryActionTile(
-                    icon: Icons.fact_check_outlined,
-                    title: 'Review Join Requests',
-                    subtitle: 'Approve or reject athletes waiting for access.',
-                    enabled: !isLoading,
-                    onTap: () => context.go('/gym-requests'),
                   ),
                 ],
               ),

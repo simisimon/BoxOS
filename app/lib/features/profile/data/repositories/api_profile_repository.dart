@@ -142,12 +142,18 @@ class ApiProfileRepository implements ProfileRepository {
   Future<RoleManagedUser> updateUserRole({
     required int userId,
     required List<UserRole> roles,
+    UserRole? activeRole,
+    MembershipStatus? status,
+    String? adminNote,
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/roles/users',
       data: {
         'user_id': userId,
         'roles': roles.map((role) => role.apiValue).toList(),
+        if (activeRole != null) 'active_role': activeRole.apiValue,
+        if (status != null) 'status': status.apiValue,
+        if (adminNote != null) 'admin_note': adminNote,
       },
       options: Options(headers: await _authHeaders()),
     );
@@ -262,6 +268,9 @@ class ApiProfileRepository implements ProfileRepository {
     if (data == null) {
       throw Exception('Missing managed user data.');
     }
+    final joinedAtRaw = data['joined_at'] as String?;
+    final lastBookingAtRaw = data['last_booking_at'] as String?;
+    final newestPrAtRaw = data['newest_pr_at'] as String?;
     return RoleManagedUser(
       id: data['id'] as int? ?? 0,
       membershipId: data['membership_id'] as int? ?? 0,
@@ -271,6 +280,24 @@ class ApiProfileRepository implements ProfileRepository {
       displayName: data['display_name'] as String? ?? '',
       nickname: data['nickname'] as String? ?? '',
       canEditRole: data['can_edit_role'] as bool? ?? false,
+      profileImageUrl: data['profile_image_url'] as String? ?? '',
+      status: MembershipStatus.fromApi(data['status'] as String?),
+      adminNote: data['admin_note'] as String? ?? '',
+      joinedAt: joinedAtRaw == null || joinedAtRaw.isEmpty
+          ? null
+          : DateTime.tryParse(joinedAtRaw),
+      totalBookings: (data['total_bookings'] as num?)?.toInt() ?? 0,
+      attendedBookings: (data['attended_bookings'] as num?)?.toInt() ?? 0,
+      noShowBookings: (data['no_show_bookings'] as num?)?.toInt() ?? 0,
+      bookingRate: (data['booking_rate'] as num?)?.toDouble() ?? 0,
+      lastBookingAt: lastBookingAtRaw == null || lastBookingAtRaw.isEmpty
+          ? null
+          : DateTime.tryParse(lastBookingAtRaw),
+      newestPrTitle: data['newest_pr_title'] as String? ?? '',
+      newestPrScore: data['newest_pr_score'] as String? ?? '',
+      newestPrAt: newestPrAtRaw == null || newestPrAtRaw.isEmpty
+          ? null
+          : DateTime.tryParse(newestPrAtRaw),
     );
   }
 

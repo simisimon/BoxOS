@@ -128,6 +128,7 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
         ]
         if not available_roles:
             available_roles = ["athlete"]
+    keys = row.keys()
     return {
         "id": row["user_id"],
         "membership_id": row["id"],
@@ -137,6 +138,15 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
         "display_name": row["display_name"],
         "nickname": row["nickname"],
         "can_edit_role": can_edit_role,
+        # Newer roster fields. Tolerated when the source row was assembled by a
+        # query that hasn't been updated yet (callers outside the roster pages)
+        # so we don't need to touch every read site at once.
+        "joined_at": row["joined_at"] if "joined_at" in keys else None,
+        "profile_image_url": row["profile_image_url"]
+        if "profile_image_url" in keys
+        else "",
+        "status": row["status"] if "status" in keys else "active",
+        "admin_note": row["admin_note"] if "admin_note" in keys else "",
     }
 
 
@@ -554,6 +564,37 @@ def require_wod_description(value: Any) -> str:
 
 SECTION_SCORE_TYPES = {"time", "rounds_reps", "weight"}
 MAX_SECTIONS_PER_CLASS = 10
+
+# Membership status vocabulary. Kept as a small closed set so the UI and
+# downstream queries can safely switch over the value. "removed" is used as a
+# soft delete — the row stays for audit, just hidden from the roster.
+MEMBERSHIP_STATUSES = {"active", "paused", "removed"}
+MAX_MEMBERSHIP_ADMIN_NOTE_LENGTH = 500
+
+
+def require_membership_status(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text not in MEMBERSHIP_STATUSES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Status must be 'active', 'paused', or 'removed'.",
+        )
+    return text
+
+
+def require_admin_note(value: Any) -> str:
+    """Coerces and length-checks the admin-only note attached to a membership.
+
+    Notes are free-text and may legitimately be empty (admin clears the field),
+    so this returns "" rather than raising for an empty input.
+    """
+    note = str(value or "").strip()
+    if len(note) > MAX_MEMBERSHIP_ADMIN_NOTE_LENGTH:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            f"Admin note must be {MAX_MEMBERSHIP_ADMIN_NOTE_LENGTH} characters or fewer.",
+        )
+    return note
 
 
 def require_optional_section_score_type(value: Any) -> str | None:

@@ -136,6 +136,8 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
         available_roles = [managed_role for managed_role in available_roles if managed_role in {"athlete", "trainer"}]
         if not available_roles:
             available_roles = ["athlete"]
+    total_bookings = int(row["total_bookings"]) if "total_bookings" in row.keys() else 0
+    attended_bookings = int(row["attended_bookings"]) if "attended_bookings" in row.keys() else 0
     return {
         "id": row["user_id"],
         "membership_id": row["id"],
@@ -145,6 +147,18 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
         "display_name": row["display_name"],
         "nickname": row["nickname"],
         "can_edit_role": can_edit_role,
+        "profile_image_url": row["profile_image_url"] if "profile_image_url" in row.keys() else "",
+        "status": row["status"] if "status" in row.keys() else "active",
+        "admin_note": row["admin_note"] if "admin_note" in row.keys() else "",
+        "joined_at": row["joined_at"] if "joined_at" in row.keys() else None,
+        "total_bookings": total_bookings,
+        "attended_bookings": attended_bookings,
+        "no_show_bookings": int(row["no_show_bookings"]) if "no_show_bookings" in row.keys() else 0,
+        "booking_rate": 0.0 if total_bookings <= 0 else round((attended_bookings / total_bookings) * 100, 1),
+        "last_booking_at": row["last_booking_at"] if "last_booking_at" in row.keys() else None,
+        "newest_pr_title": row["newest_pr_title"] if "newest_pr_title" in row.keys() else "",
+        "newest_pr_score": row["newest_pr_score"] if "newest_pr_score" in row.keys() else "",
+        "newest_pr_at": row["newest_pr_at"] if "newest_pr_at" in row.keys() else None,
     }
 
 
