@@ -131,6 +131,12 @@ class CreateGymRequest(BaseModel):
     timezone: str = "UTC"  # Default to UTC if not provided
 
 
+class ScheduleClassSection(BaseModel):
+    title: str
+    description: str | None = None
+    score_type: str | None = None
+
+
 class ScheduleClassRequest(BaseModel):
     title: str
     class_type: str
@@ -142,6 +148,7 @@ class ScheduleClassRequest(BaseModel):
     wod_description: str | None = None
     recurrence_frequency: str | None = None
     occurrence_count: int | None = None
+    sections: list[ScheduleClassSection] | None = None
 
 
 class UpdateScheduleClassRequest(ScheduleClassRequest):
@@ -158,6 +165,7 @@ class ScheduleClassImportRow(BaseModel):
     wod_description: str | None = None
     recurrence_frequency: str | None = None
     occurrence_count: int | None = None
+    sections: list[ScheduleClassSection] | None = None
 
 
 class ScheduleClassImportRequest(BaseModel):
@@ -1539,6 +1547,9 @@ def create_schedule_class(
         body.occurrence_count,
         recurrence_frequency=recurrence_frequency,
     )
+    sections = validation.require_class_sections(
+        [section.model_dump() for section in body.sections] if body.sections is not None else None
+    )
     connection = db.get_connection()
     try:
         gym_row = connection.execute(
@@ -1606,7 +1617,13 @@ def create_schedule_class(
                         timestamp,
                     ),
                 )
-                schedule_ids.append(int(cursor.fetchone()["id"]))
+                schedule_id = int(cursor.fetchone()["id"])
+                schedule_ids.append(schedule_id)
+                schedule_service.replace_schedule_sections(
+                    connection,
+                    class_schedule_id=schedule_id,
+                    sections=sections,
+                )
             payloads = []
             for schedule_id in schedule_ids:
                 row = schedule_service.get_schedule_class_row(connection, schedule_id)
@@ -1725,6 +1742,11 @@ def import_schedule_classes(
                 trainer_user_id = _resolve_import_trainer(
                     connection, session, row.trainer_email
                 )
+                sections = validation.require_class_sections(
+                    [section.model_dump() for section in row.sections]
+                    if row.sections is not None
+                    else None
+                )
                 start_times = schedule_service.build_recurrence_start_times(
                     start_time,
                     recurrence_frequency=recurrence_frequency,
@@ -1746,6 +1768,7 @@ def import_schedule_classes(
                         "capacity": capacity,
                         "trainer_user_id": trainer_user_id,
                         "wod_description": wod_description,
+                        "sections": sections,
                         "start_times": start_times,
                     }
                 )
@@ -1793,6 +1816,11 @@ def import_schedule_classes(
                         ),
                     )
                     schedule_id = int(cursor.fetchone()["id"])
+                    schedule_service.replace_schedule_sections(
+                        connection,
+                        class_schedule_id=schedule_id,
+                        sections=item["sections"],
+                    )
                     audit.write_audit_log(
                         connection,
                         gym_id=session["active_gym_id"],
@@ -1829,6 +1857,9 @@ def update_schedule_class(
     capacity = validation.require_capacity(body.capacity)
     trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
     wod_description = validation.require_wod_description(body.wod_description)
+    sections = validation.require_class_sections(
+        [section.model_dump() for section in body.sections] if body.sections is not None else None
+    )
     end_time = start_time + timedelta(minutes=duration_minutes)
     connection = db.get_connection()
     try:
@@ -1892,6 +1923,11 @@ def update_schedule_class(
                     security.isoformat(security.now_utc()),
                     schedule_id,
                 ),
+            )
+            schedule_service.replace_schedule_sections(
+                connection,
+                class_schedule_id=schedule_id,
+                sections=sections,
             )
             row = schedule_service.get_schedule_class_row(connection, schedule_id)
             if row is None:

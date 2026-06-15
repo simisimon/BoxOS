@@ -257,6 +257,88 @@ class ScheduleApiTests(FastApiTestCase):
         self.assertEqual(attendance.status_code, 400)
         self.assertEqual(attendance.json()["detail"], "Attendance can only be recorded after the class has started.")
 
+    def test_sections_are_persisted_and_returned(self) -> None:
+        admin_headers, _ = self.create_gym_as_admin("Sections Box")
+
+        created = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Sectioned WOD",
+                "class_type": "WOD",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 12,
+                "wod_description": "",
+                "recurrence_frequency": "none",
+                "sections": [
+                    {"title": "Warm Up", "description": "500m row"},
+                    {"title": "Strength", "description": "Back Squat 5x5", "score_type": "time"},
+                    {"title": "AMRAP", "description": "12 min", "score_type": "rounds_reps"},
+                ],
+            },
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        sections = created.json()["class"]["sections"]
+        self.assertEqual([section["title"] for section in sections], ["Warm Up", "Strength", "AMRAP"])
+        self.assertEqual([section["score_type"] for section in sections], [None, "time", "rounds_reps"])
+
+        listed = self.client.get("/schedule/classes", headers=admin_headers)
+        listed_sections = listed.json()["classes"][0]["sections"]
+        self.assertEqual(len(listed_sections), 3)
+        self.assertEqual(listed_sections[1]["description"], "Back Squat 5x5")
+
+    def test_section_score_type_is_validated(self) -> None:
+        admin_headers, _ = self.create_gym_as_admin("Section Score Box")
+
+        response = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Bad Score",
+                "class_type": "WOD",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 12,
+                "recurrence_frequency": "none",
+                "sections": [
+                    {"title": "Mystery", "score_type": "calories"},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn("score", response.json()["detail"].lower())
+
+    def test_sections_are_imported_via_csv_endpoint(self) -> None:
+        admin_headers, _ = self.create_gym_as_admin("Sections Import Box")
+
+        response = self.client.post(
+            "/schedule/classes/import",
+            headers=admin_headers,
+            json={
+                "rows": [
+                    {
+                        "start_time": security.isoformat(
+                            security.now_utc() + timedelta(days=1)
+                        ),
+                        "title": "Morning WOD",
+                        "duration_minutes": 60,
+                        "capacity": 12,
+                        "sections": [
+                            {"title": "Warm Up"},
+                            {"title": "Strength", "score_type": "time"},
+                        ],
+                    },
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+
+        listed = self.client.get("/schedule/classes", headers=admin_headers)
+        sections = listed.json()["classes"][0]["sections"]
+        self.assertEqual(len(sections), 2)
+        self.assertEqual(sections[1]["score_type"], "time")
+
     def test_assigning_non_trainer_to_schedule_class_is_rejected(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Trainer Validation Box")
         athlete_user_id = self.add_active_membership(settings.DEMO_EMAIL, gym_id, roles=["athlete"], active_role="athlete")

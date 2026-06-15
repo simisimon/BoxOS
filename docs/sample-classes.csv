@@ -1,8 +1,8 @@
-date,start_time,title,class_type,duration_minutes,capacity,trainer_email,wod_description,repeat,occurrences
-2026-06-22,06:00,Morning WOD,WOD,60,14,,"Fran: 21-15-9 Thrusters, Pull-ups",weekly,6
-2026-06-22,18:00,Evening WOD,WOD,60,16,,Back Squat 5x5 + accessory,,
-2026-06-23,12:00,Lunch Open Gym,Open Gym,90,20,,Open training — coach on the floor,,
-2026-06-24,19:00,Gymnastics Skills,Specialty,60,10,,Handstand walks & ring work,,
-2026-06-25,06:00,Morning WOD,WOD,60,14,,"AMRAP 20: row, burpees, KB swings",,
-2026-06-26,17:30,Endurance,WOD,45,12,,5k run + accessory strength,,
-2026-06-27,10:00,Partner WOD,WOD,75,18,,Partner chipper for time,,
+date,start_time,title,class_type,duration_minutes,capacity,trainer_email,wod_description,repeat,occurrences,section_1_title,section_1_description,section_1_score,section_2_title,section_2_description,section_2_score,section_3_title,section_3_description,section_3_score
+2026-06-22,06:00,Morning WOD,WOD,60,14,,,weekly,6,Warm Up,"500m row + dynamic stretching",,Strength,"Back Squat 5x5 @ 75%",time,Metcon,"Fran: 21-15-9 Thrusters, Pull-ups",time
+2026-06-22,18:00,Evening WOD,WOD,60,16,,,,,Warm Up,"3 rounds: 10 air squats, 10 push-ups, 10 sit-ups",,Strength,"Back Squat 5x5 + accessory",time,,,
+2026-06-23,12:00,Lunch Open Gym,Open Gym,90,20,,Open training — coach on the floor,,,,,,,,,,,
+2026-06-24,19:00,Gymnastics Skills,Specialty,60,10,,Handstand walks & ring work,,,Skill,"Handstand walks 4 x 15m",,AMRAP,"12 min AMRAP: 5 strict pull-ups, 10 ring rows",rounds_reps,,,
+2026-06-25,06:00,Morning WOD,WOD,60,14,,,,,Warm Up,"Row 2 min + mobility",,Metcon,"AMRAP 20: row, burpees, KB swings",rounds_reps,Cool Down,"5 min easy bike + stretching",,
+2026-06-26,17:30,Endurance,WOD,45,12,,5k run + accessory strength,,,,,,,,,,,
+2026-06-27,10:00,Partner WOD,WOD,75,18,,,,,Warm Up,"Partner mobility flow",,Metcon,"Partner chipper for time",time,,,

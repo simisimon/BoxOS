@@ -17,6 +17,7 @@ import 'package:app/features/auth/presentation/screens/delete_account_screen.dar
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
@@ -500,6 +501,7 @@ class RecordingScheduleRepository implements ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    List<ScheduleSection> sections = const [],
     String recurrenceFrequency = 'none',
     int occurrenceCount = 1,
   }) async {
@@ -712,6 +714,7 @@ class RecordingScheduleRepository implements ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    List<ScheduleSection> sections = const [],
   }) async {
     final trainer = trainers.firstWhere((item) => item.id == trainerUserId);
     final updated = ScheduleClass(

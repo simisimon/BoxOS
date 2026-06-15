@@ -552,6 +552,68 @@ def require_wod_description(value: Any) -> str:
     return description
 
 
+SECTION_SCORE_TYPES = {"time", "rounds_reps", "weight"}
+MAX_SECTIONS_PER_CLASS = 10
+
+
+def require_optional_section_score_type(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text not in SECTION_SCORE_TYPES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Section score must be 'time', 'rounds_reps', or 'weight'.",
+        )
+    return text
+
+
+def require_class_sections(value: Any) -> list[dict[str, Any]]:
+    """Normalize a list of section payloads into clean dicts.
+
+    Each section needs a non-empty title (max 80 chars), an optional description
+    (max 1000 chars), and an optional score_type from ``SECTION_SCORE_TYPES``.
+    Returns an empty list when nothing is provided.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Sections must be a list.")
+    if len(value) > MAX_SECTIONS_PER_CLASS:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            f"A class can have at most {MAX_SECTIONS_PER_CLASS} sections.",
+        )
+    sections: list[dict[str, Any]] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Each section must be an object.")
+        title = str(raw.get("title") or "").strip()
+        if not title:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} needs a title.",
+            )
+        if len(title) > 80:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} title must be 80 characters or fewer.",
+            )
+        description = str(raw.get("description") or "").strip()
+        if len(description) > 1000:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} description must be 1000 characters or fewer.",
+            )
+        score_type = require_optional_section_score_type(raw.get("score_type"))
+        sections.append(
+            {"title": title, "description": description, "score_type": score_type}
+        )
+    return sections
+
+
 def require_attendance_status(value: Any) -> str:
     attendance_status = str(value or "").strip().lower()
     if attendance_status not in {"booked", "attended", "no_show"}:

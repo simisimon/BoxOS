@@ -16,11 +16,18 @@ const _requiredHeaders = [
   'capacity',
 ];
 const _allowedRepeats = {'none', 'daily', 'weekly', 'monthly'};
+const _allowedSectionScores = {'time', 'rounds_reps', 'weight'};
+const _maxSectionsPerRow = 10;
+final _sectionTitleColumnPattern = RegExp(r'^section_(\d+)_title$');
 
 /// Example the user can drop into the paste box as a starting point.
 const importTemplateCsv =
-    'date,start_time,title,duration_minutes,capacity,trainer_email,wod_description,repeat,occurrences\n'
-    '2026-06-22,18:00,Evening WOD,60,12,coach@yourbox.app,"Fran 21-15-9",weekly,8';
+    'date,start_time,title,duration_minutes,capacity,trainer_email,wod_description,repeat,occurrences,'
+    'section_1_title,section_1_description,section_1_score,'
+    'section_2_title,section_2_description,section_2_score\n'
+    '2026-06-22,18:00,Evening WOD,60,12,coach@yourbox.app,,weekly,8,'
+    'Warm Up,"500m row + dynamic stretching",,'
+    'Strength,"Back Squat 5x5 @ 75%",time';
 
 /// One parsed row, either ready to import ([payload] set) or rejected
 /// ([error] set).
@@ -102,6 +109,20 @@ CsvParseOutcome parseClassesCsv(String content) {
     return row[i].toString().trim();
   }
 
+  // Detect which section indices (1-based) are present in the header so we can
+  // walk them in numeric order. Operators can leave gaps (e.g. only section_1
+  // and section_3); any non-empty section_N_title becomes one section in
+  // numeric-index order.
+  final sectionIndices = <int>[];
+  for (final column in indexOf.keys) {
+    final match = _sectionTitleColumnPattern.firstMatch(column);
+    if (match == null) continue;
+    final parsed = int.tryParse(match.group(1) ?? '');
+    if (parsed == null || parsed < 1 || parsed > _maxSectionsPerRow) continue;
+    if (!sectionIndices.contains(parsed)) sectionIndices.add(parsed);
+  }
+  sectionIndices.sort();
+
   final previews = <ImportRowPreview>[];
   for (var r = 1; r < table.length; r++) {
     final row = table[r];
@@ -142,6 +163,26 @@ CsvParseOutcome parseClassesCsv(String content) {
         throw const FormatException('occurrences must be a whole number');
       }
       final classType = cell(row, 'class_type');
+      final sections = <Map<String, dynamic>>[];
+      for (final sectionIndex in sectionIndices) {
+        final sectionTitle = cell(row, 'section_${sectionIndex}_title');
+        if (sectionTitle.isEmpty) continue;
+        final sectionDescription =
+            cell(row, 'section_${sectionIndex}_description');
+        final scoreRaw =
+            cell(row, 'section_${sectionIndex}_score').toLowerCase();
+        if (scoreRaw.isNotEmpty && !_allowedSectionScores.contains(scoreRaw)) {
+          throw FormatException(
+            'section_${sectionIndex}_score must be empty, time, rounds_reps, '
+            'or weight',
+          );
+        }
+        sections.add({
+          'title': sectionTitle,
+          'description': sectionDescription,
+          if (scoreRaw.isNotEmpty) 'score_type': scoreRaw,
+        });
+      }
       previews.add(
         ImportRowPreview(
           line: line,
@@ -155,6 +196,7 @@ CsvParseOutcome parseClassesCsv(String content) {
             if (cell(row, 'trainer_email').isNotEmpty)
               'trainer_email': cell(row, 'trainer_email'),
             'wod_description': cell(row, 'wod_description'),
+            if (sections.isNotEmpty) 'sections': sections,
             'recurrence_frequency': repeat,
             'occurrence_count': occurrences,
           },
@@ -343,8 +385,10 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
               '(Google Sheets / Excel). Comma- and tab-separated are both '
               'accepted. Required columns: date, start_time, title, '
               'duration_minutes, capacity. Optional: class_type, trainer_email, '
-              'wod_description, repeat, occurrences. The file is checked against '
-              'this schema before anything is imported.',
+              'wod_description, repeat, occurrences, plus per-section columns '
+              'section_N_title / section_N_description / section_N_score '
+              '(N = 1..10, score = time, rounds_reps, or weight). The file is '
+              'checked against this schema before anything is imported.',
               style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
             ),
             const SizedBox(height: 12),

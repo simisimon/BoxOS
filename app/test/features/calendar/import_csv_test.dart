@@ -68,5 +68,47 @@ void main() {
       expect(outcome.rows[1].error, contains('duration_minutes'));
       expect(outcome.canImport, isFalse);
     });
+
+    test('collects section columns into a sections list', () {
+      const csv =
+          'date,start_time,title,duration_minutes,capacity,'
+          'section_1_title,section_1_description,section_1_score,'
+          'section_2_title,section_2_description,section_2_score\n'
+          '2099-06-20,18:00,Sectioned WOD,60,12,'
+          'Warm Up,Foam roll,,Strength,Back Squat 5x5,time';
+      final outcome = parseClassesCsv(csv);
+      expect(outcome.headerError, isNull);
+      expect(outcome.validCount, 1);
+      final sections =
+          outcome.rows.first.payload!['sections'] as List<dynamic>;
+      expect(sections, hasLength(2));
+      expect(sections.first, {
+        'title': 'Warm Up',
+        'description': 'Foam roll',
+      });
+      expect(sections[1], {
+        'title': 'Strength',
+        'description': 'Back Squat 5x5',
+        'score_type': 'time',
+      });
+    });
+
+    test('omits sections key when no section columns are populated', () {
+      const csv = 'date,start_time,title,duration_minutes,capacity,'
+          'section_1_title,section_1_description,section_1_score\n'
+          '2099-06-20,18:00,No sections,60,12,,,';
+      final outcome = parseClassesCsv(csv);
+      expect(outcome.validCount, 1);
+      expect(outcome.rows.first.payload!.containsKey('sections'), isFalse);
+    });
+
+    test('rejects an unknown section score value', () {
+      const csv = 'date,start_time,title,duration_minutes,capacity,'
+          'section_1_title,section_1_score\n'
+          '2099-06-20,18:00,Bad score,60,12,Strength,calories';
+      final outcome = parseClassesCsv(csv);
+      expect(outcome.invalidCount, 1);
+      expect(outcome.rows.first.error, contains('section_1_score'));
+    });
   });
 }

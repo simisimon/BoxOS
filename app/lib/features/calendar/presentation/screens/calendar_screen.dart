@@ -3,6 +3,7 @@ import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/presentation/screens/import_classes_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -1084,6 +1085,22 @@ class _ScheduleClassCard extends StatelessWidget {
               ),
             ),
           ],
+          if (item.sections.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _ContentPanel(
+              label: 'Sections',
+              accentColor: appPrimary,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < item.sections.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    _SectionRow(section: item.sections[i]),
+                  ],
+                ],
+              ),
+            ),
+          ],
           if (item.attendanceStatus != null || item.isWaitlisted) ...[
             const SizedBox(height: 14),
             _ContentPanel(
@@ -1447,6 +1464,8 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
   late int _selectedDuration;
   String _recurrenceFrequency = 'none';
   bool _isSaving = false;
+  late List<_SectionDraft> _sections;
+  static const int _maxSections = 10;
 
   bool get _isCreating => widget.existing == null;
 
@@ -1469,6 +1488,8 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
     _wodDescriptionController =
         TextEditingController(text: widget.existing?.wodDescription ?? '');
     _occurrenceCountController = TextEditingController(text: '4');
+    final existingSections = widget.existing?.sections ?? const <ScheduleSection>[];
+    _sections = [for (final section in existingSections) _SectionDraft.from(section)];
   }
 
   @override
@@ -1477,7 +1498,21 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
     _capacityController.dispose();
     _wodDescriptionController.dispose();
     _occurrenceCountController.dispose();
+    for (final section in _sections) {
+      section.dispose();
+    }
     super.dispose();
+  }
+
+  void _addSection() {
+    if (_sections.length >= _maxSections) return;
+    setState(() => _sections.add(_SectionDraft.empty()));
+  }
+
+  void _removeSection(int index) {
+    setState(() {
+      _sections.removeAt(index).dispose();
+    });
   }
 
   static int _nearestMinuteStep(int minute) {
@@ -1517,6 +1552,7 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
     }
     final capacity = int.parse(_capacityController.text.trim());
     final wodDescription = _wodDescriptionController.text.trim();
+    final sections = [for (final draft in _sections) draft.toSection()];
     final startTime = DateTime(
       _baseDate.year,
       _baseDate.month,
@@ -1536,6 +1572,7 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
           capacity: capacity,
           trainerUserId: _selectedTrainerId ?? 0,
           wodDescription: wodDescription,
+          sections: sections,
           recurrenceFrequency: _recurrenceFrequency,
           occurrenceCount: _recurrenceFrequency == 'none'
               ? 1
@@ -1551,6 +1588,7 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
           capacity: capacity,
           trainerUserId: _selectedTrainerId ?? 0,
           wodDescription: wodDescription,
+          sections: sections,
         );
       }
       ref.invalidate(scheduleListProvider);
@@ -1698,6 +1736,13 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
             minLines: 3,
             maxLines: 5,
           ),
+          const SizedBox(height: 18),
+          _SectionsEditor(
+            sections: _sections,
+            onAdd: _sections.length >= _maxSections ? null : _addSection,
+            onRemove: _removeSection,
+            maxSections: _maxSections,
+          ),
           if (_isCreating) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -1759,6 +1804,258 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mutable draft of a single class section, used by the form. Owns its own
+/// controllers so the parent only has to dispose the draft when removing it.
+class _SectionDraft {
+  _SectionDraft({
+    required this.titleController,
+    required this.descriptionController,
+    this.scoreType,
+  });
+
+  factory _SectionDraft.empty() => _SectionDraft(
+        titleController: TextEditingController(),
+        descriptionController: TextEditingController(),
+      );
+
+  factory _SectionDraft.from(ScheduleSection section) => _SectionDraft(
+        titleController: TextEditingController(text: section.title),
+        descriptionController: TextEditingController(text: section.description),
+        scoreType: section.scoreType,
+      );
+
+  final TextEditingController titleController;
+  final TextEditingController descriptionController;
+  ScheduleSectionScore? scoreType;
+
+  ScheduleSection toSection() => ScheduleSection(
+        title: titleController.text.trim(),
+        description: descriptionController.text.trim(),
+        scoreType: scoreType,
+      );
+
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+  }
+}
+
+class _SectionRow extends StatelessWidget {
+  const _SectionRow({required this.section});
+
+  final ScheduleSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                section.title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: appText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (section.scoreType != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: appPrimarySoft,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: appPrimaryHairline),
+                ),
+                child: Text(
+                  section.scoreType!.label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: appText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        if (section.description.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            section.description,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: appText,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SectionsEditor extends StatefulWidget {
+  const _SectionsEditor({
+    required this.sections,
+    required this.onAdd,
+    required this.onRemove,
+    required this.maxSections,
+  });
+
+  final List<_SectionDraft> sections;
+  final VoidCallback? onAdd;
+  final void Function(int index) onRemove;
+  final int maxSections;
+
+  @override
+  State<_SectionsEditor> createState() => _SectionsEditorState();
+}
+
+class _SectionsEditorState extends State<_SectionsEditor> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Sections',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: appText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              '${widget.sections.length}/${widget.maxSections}',
+              style: theme.textTheme.labelSmall?.copyWith(color: appSubtleText),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Break the class down into Warm Up, Strength, AMRAP, etc. Each '
+          'section can optionally specify a Time, Rounds + Reps, or '
+          'Weight (kg) score.',
+          style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+        ),
+        const SizedBox(height: 10),
+        for (var index = 0; index < widget.sections.length; index++) ...[
+          _SectionCard(
+            index: index,
+            draft: widget.sections[index],
+            onRemove: () => widget.onRemove(index),
+            onScoreChanged: (value) =>
+                setState(() => widget.sections[index].scoreType = value),
+          ),
+          const SizedBox(height: 10),
+        ],
+        OutlinedButton.icon(
+          onPressed: widget.onAdd,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Add section'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.index,
+    required this.draft,
+    required this.onRemove,
+    required this.onScoreChanged,
+  });
+
+  final int index;
+  final _SectionDraft draft;
+  final VoidCallback onRemove;
+  final ValueChanged<ScheduleSectionScore?> onScoreChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
+      decoration: BoxDecoration(
+        color: appSurfaceAlt,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: appBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Section ${index + 1}',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: appPrimary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove section',
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded, color: appDanger),
+              ),
+            ],
+          ),
+          TextFormField(
+            controller: draft.titleController,
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              hintText: 'e.g. Warm Up, Strength, AMRAP',
+            ),
+            validator: (value) =>
+                (value ?? '').trim().isEmpty ? 'Enter a section title' : null,
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: draft.descriptionController,
+            decoration: const InputDecoration(labelText: 'Description'),
+            minLines: 2,
+            maxLines: 4,
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<ScheduleSectionScore?>(
+            initialValue: draft.scoreType,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Score (optional)'),
+            items: const [
+              DropdownMenuItem<ScheduleSectionScore?>(
+                value: null,
+                child: Text('No score'),
+              ),
+              DropdownMenuItem<ScheduleSectionScore?>(
+                value: ScheduleSectionScore.time,
+                child: Text('Time'),
+              ),
+              DropdownMenuItem<ScheduleSectionScore?>(
+                value: ScheduleSectionScore.roundsReps,
+                child: Text('Rounds and Reps'),
+              ),
+              DropdownMenuItem<ScheduleSectionScore?>(
+                value: ScheduleSectionScore.weight,
+                child: Text('Weight (kg)'),
+              ),
+            ],
+            onChanged: onScoreChanged,
           ),
         ],
       ),

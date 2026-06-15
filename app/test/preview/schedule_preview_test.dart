@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
@@ -116,6 +117,7 @@ class _FakeScheduleRepository implements ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    List<ScheduleSection> sections = const [],
     String recurrenceFrequency = 'none',
     int occurrenceCount = 1,
   }) async => _cls(99, startTime.day, startTime.hour, title);
@@ -130,6 +132,7 @@ class _FakeScheduleRepository implements ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    List<ScheduleSection> sections = const [],
   }) async => _cls(id, startTime.day, startTime.hour, title);
 
   @override

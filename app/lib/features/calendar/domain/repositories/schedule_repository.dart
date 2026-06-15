@@ -1,4 +1,5 @@
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 
 /// A single rejected row from a bulk class import (1-based row number).
@@ -39,6 +40,7 @@ abstract class ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    List<ScheduleSection> sections = const [],
     String recurrenceFrequency = 'none',
     int occurrenceCount = 1,
   });
@@ -52,6 +54,7 @@ abstract class ScheduleRepository {
     required int capacity,
     required int trainerUserId,
     required String wodDescription,
+    List<ScheduleSection> sections = const [],
   });
 
   Future<void> deleteClass({required int id});
