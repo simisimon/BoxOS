@@ -14,6 +14,7 @@ import 'package:app/features/auth/presentation/screens/verify_email_screen.dart'
 import 'package:app/features/gyms/presentation/screens/create_gym_screen.dart';
 import 'package:app/features/gyms/presentation/screens/gym_directory_screen.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
+import 'package:app/features/community/presentation/screens/community_screen.dart';
 import 'package:app/features/home/presentation/screens/authenticated_shell_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
@@ -131,6 +132,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/members',
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/community',
+                name: 'community',
+                builder: (context, state) => const CommunityScreen(),
               ),
             ],
           ),

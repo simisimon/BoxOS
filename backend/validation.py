@@ -712,6 +712,18 @@ def require_workout_sections(value: Any) -> list[dict[str, Any]]:
     return sections
 
 
+def require_chat_message_body(value: Any) -> str:
+    body = str(value or "").strip()
+    if not body:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Message body is required.")
+    if len(body) > 2000:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Message body must be 2000 characters or fewer.",
+        )
+    return body
+
+
 def require_whiteboard_score(score_type_value: Any, score_value_value: Any) -> tuple[str, float, str]:
     score_type = str(score_type_value or "").strip().lower()
     if score_type not in {"time", "reps", "load"}:
