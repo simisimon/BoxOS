@@ -138,7 +138,6 @@ class FastApiBackendTests(unittest.TestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 60,
                 "capacity": 1,
-                "wod_description": "Burpees and rowing",
                 "recurrence_frequency": "none",
             },
         )
@@ -532,9 +531,19 @@ class FastApiBackendTests(unittest.TestCase):
             json={
                 "scheduled_date": workout_date,
                 "title": "Fran",
-                "strength_text": "Front squats",
-                "metcon_text": "21-15-9 thrusters/pull-ups",
-                "notes_text": "Go hard",
+                "sections": [
+                    {
+                        "title": "Strength",
+                        "description": "Front squats",
+                        "score_type": "weight",
+                    },
+                    {
+                        "title": "MetCon",
+                        "description": "21-15-9 thrusters/pull-ups",
+                        "score_type": "time",
+                    },
+                ],
+                "status": "published",
             },
         )
         self.assertEqual(created_workout.status_code, 200)

@@ -83,3 +83,17 @@ get_workout_log_for_user = workout_service.get_workout_log_for_user
 refresh_pr_flags_for_workout_title = workout_service.refresh_pr_flags_for_workout_title
 list_whiteboard_results = workout_service.list_whiteboard_results
 get_whiteboard_result_for_user = workout_service.get_whiteboard_result_for_user
+DAILY_WORKOUT_COLUMNS = workout_service.DAILY_WORKOUT_COLUMNS
+replace_workout_sections = workout_service.replace_workout_sections
+fetch_workout_sections = workout_service.fetch_workout_sections
+
+
+def can_view_drafts(role: str | None) -> bool:
+    return role in {"admin", "trainer"}
+
+
+def require_workout_status(value: Any) -> str:
+    status = str(value or "").strip().lower()
+    if status not in {"draft", "published"}:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Status must be draft or published.")
+    return status

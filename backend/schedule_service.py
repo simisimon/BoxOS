@@ -22,58 +22,6 @@ def schedule_booking_payload(row: sqlite3.Row, *, current_user_id: int) -> dict[
     }
 
 
-def schedule_section_payload(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "title": row["title"],
-        "description": row["description"],
-        "score_type": row["score_type"],
-    }
-
-
-def fetch_schedule_sections(
-    connection: sqlite3.Connection, class_schedule_id: int
-) -> list[dict[str, Any]]:
-    rows = connection.execute(
-        """
-        select title, description, score_type
-        from class_schedule_sections
-        where class_schedule_id = ?
-        order by position asc, id asc
-        """,
-        (class_schedule_id,),
-    ).fetchall()
-    return [schedule_section_payload(row) for row in rows]
-
-
-def replace_schedule_sections(
-    connection: sqlite3.Connection,
-    *,
-    class_schedule_id: int,
-    sections: list[dict[str, Any]],
-) -> None:
-    """Replaces all sections for a class. ``sections`` is already validated."""
-    connection.execute(
-        "delete from class_schedule_sections where class_schedule_id = ?",
-        (class_schedule_id,),
-    )
-    for index, section in enumerate(sections):
-        connection.execute(
-            """
-            insert into class_schedule_sections (
-              class_schedule_id, position, title, description, score_type
-            )
-            values (?, ?, ?, ?, ?)
-            """,
-            (
-                class_schedule_id,
-                index,
-                section["title"],
-                section["description"],
-                section["score_type"],
-            ),
-        )
-
-
 def schedule_class_payload(
     connection: sqlite3.Connection,
     row: sqlite3.Row,
@@ -132,8 +80,6 @@ def schedule_class_payload(
             if row["assigned_trainer_user_id"] is not None
             else None
         ),
-        "wod_description": row["wod_description"],
-        "sections": fetch_schedule_sections(connection, row["id"]),
         "booked_count": booked_count,
         "remaining_spots": max(capacity - booked_count, 0),
         "waitlist_count": len(waitlist_rows),
@@ -373,8 +319,7 @@ def get_schedule_class_row(connection: sqlite3.Connection, schedule_id: int) -> 
           class_schedules.capacity,
           class_schedules.assigned_trainer_user_id,
           trainer.display_name as assigned_trainer_display_name,
-          trainer.nickname as assigned_trainer_nickname,
-          class_schedules.wod_description
+          trainer.nickname as assigned_trainer_nickname
         from class_schedules
         left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
         where class_schedules.id = ?

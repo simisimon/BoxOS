@@ -552,19 +552,6 @@ def require_schedule_duration_minutes(body: dict[str, Any]) -> int:
     return require_duration_minutes(duration_minutes)
 
 
-def require_wod_description(value: Any) -> str:
-    description = str(value or "").strip()
-    if len(description) > 2000:
-        raise ApiError(
-            HTTPStatus.BAD_REQUEST,
-            "WOD description must be 2000 characters or fewer.",
-        )
-    return description
-
-
-SECTION_SCORE_TYPES = {"time", "rounds_reps", "weight"}
-MAX_SECTIONS_PER_CLASS = 10
-
 # Membership status vocabulary. Kept as a small closed set so the UI and
 # downstream queries can safely switch over the value. "removed" is used as a
 # soft delete — the row stays for audit, just hidden from the roster.
@@ -595,64 +582,6 @@ def require_admin_note(value: Any) -> str:
             f"Admin note must be {MAX_MEMBERSHIP_ADMIN_NOTE_LENGTH} characters or fewer.",
         )
     return note
-
-
-def require_optional_section_score_type(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if not text:
-        return None
-    if text not in SECTION_SCORE_TYPES:
-        raise ApiError(
-            HTTPStatus.BAD_REQUEST,
-            "Section score must be 'time', 'rounds_reps', or 'weight'.",
-        )
-    return text
-
-
-def require_class_sections(value: Any) -> list[dict[str, Any]]:
-    """Normalize a list of section payloads into clean dicts.
-
-    Each section needs a non-empty title (max 80 chars), an optional description
-    (max 1000 chars), and an optional score_type from ``SECTION_SCORE_TYPES``.
-    Returns an empty list when nothing is provided.
-    """
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ApiError(HTTPStatus.BAD_REQUEST, "Sections must be a list.")
-    if len(value) > MAX_SECTIONS_PER_CLASS:
-        raise ApiError(
-            HTTPStatus.BAD_REQUEST,
-            f"A class can have at most {MAX_SECTIONS_PER_CLASS} sections.",
-        )
-    sections: list[dict[str, Any]] = []
-    for index, raw in enumerate(value):
-        if not isinstance(raw, dict):
-            raise ApiError(HTTPStatus.BAD_REQUEST, "Each section must be an object.")
-        title = str(raw.get("title") or "").strip()
-        if not title:
-            raise ApiError(
-                HTTPStatus.BAD_REQUEST,
-                f"Section {index + 1} needs a title.",
-            )
-        if len(title) > 80:
-            raise ApiError(
-                HTTPStatus.BAD_REQUEST,
-                f"Section {index + 1} title must be 80 characters or fewer.",
-            )
-        description = str(raw.get("description") or "").strip()
-        if len(description) > 1000:
-            raise ApiError(
-                HTTPStatus.BAD_REQUEST,
-                f"Section {index + 1} description must be 1000 characters or fewer.",
-            )
-        score_type = require_optional_section_score_type(raw.get("score_type"))
-        sections.append(
-            {"title": title, "description": description, "score_type": score_type}
-        )
-    return sections
 
 
 def require_attendance_status(value: Any) -> str:
@@ -721,11 +650,66 @@ def require_programming_title(value: Any) -> str:
     return title
 
 
-def require_programming_section(value: Any, *, label: str) -> str:
-    text_value = str(value or "").strip()
-    if len(text_value) > 4000:
-        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} must be 4000 characters or fewer.")
-    return text_value
+WORKOUT_SECTION_SCORE_TYPES = {"time", "rounds_reps", "weight"}
+MAX_WORKOUT_SECTIONS = 20
+
+
+def require_workout_section_score_type(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text not in WORKOUT_SECTION_SCORE_TYPES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Section score must be 'time', 'rounds_reps', or 'weight'.",
+        )
+    return text
+
+
+def require_workout_sections(value: Any) -> list[dict[str, Any]]:
+    """Normalize and validate the sections payload for a daily WOD.
+
+    Sections require a non-empty description (max 4000 chars) and a score type
+    from ``WORKOUT_SECTION_SCORE_TYPES``. Title is optional (max 80 chars).
+    A WOD must have at least one section so athletes have something to read.
+    """
+    if not isinstance(value, list) or not value:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "A WOD needs at least one section.",
+        )
+    if len(value) > MAX_WORKOUT_SECTIONS:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            f"A WOD can have at most {MAX_WORKOUT_SECTIONS} sections.",
+        )
+    sections: list[dict[str, Any]] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict):
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} must be an object.",
+            )
+        title = str(raw.get("title") or "").strip()
+        if len(title) > 80:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} title must be 80 characters or fewer.",
+            )
+        description = str(raw.get("description") or "").strip()
+        if not description:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} needs a description.",
+            )
+        if len(description) > 4000:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Section {index + 1} description must be 4000 characters or fewer.",
+            )
+        score_type = require_workout_section_score_type(raw.get("score_type"))
+        sections.append(
+            {"title": title, "description": description, "score_type": score_type}
+        )
+    return sections
 
 
 def require_whiteboard_score(score_type_value: Any, score_value_value: Any) -> tuple[str, float, str]:

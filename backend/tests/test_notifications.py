@@ -17,7 +17,6 @@ class NotificationCoreTests(FastApiTestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 60,
                 "capacity": 10,
-                "wod_description": "Work hard",
                 "recurrence_frequency": "none",
             },
         )

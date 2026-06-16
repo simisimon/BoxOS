@@ -1,8 +1,8 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
-import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
-import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/presentation/screens/csv_file_picker.dart';
+import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
+import 'package:app/features/programming/domain/repositories/programming_repository.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,24 +10,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const _requiredHeaders = [
   'date',
-  'start_time',
   'title',
-  'duration_minutes',
-  'capacity',
+  'section_1_description',
+  'section_1_score',
 ];
-const _allowedRepeats = {'none', 'daily', 'weekly', 'monthly'};
+const _allowedStatuses = {'draft', 'published'};
 const _allowedSectionScores = {'time', 'rounds_reps', 'weight'};
-const _maxSectionsPerRow = 10;
-final _sectionTitleColumnPattern = RegExp(r'^section_(\d+)_title$');
+const _maxSectionsPerRow = 20;
+
+final _sectionDescriptionColumnPattern =
+    RegExp(r'^section_(\d+)_description$');
 
 /// Example the user can drop into the paste box as a starting point.
 const importTemplateCsv =
-    'date,start_time,title,duration_minutes,capacity,trainer_email,wod_description,repeat,occurrences,'
-    'section_1_title,section_1_description,section_1_score,'
+    'date,title,status,section_1_title,section_1_description,section_1_score,'
     'section_2_title,section_2_description,section_2_score\n'
-    '2026-06-22,18:00,Evening WOD,60,12,coach@yourbox.app,,weekly,8,'
-    'Warm Up,"500m row + dynamic stretching",,'
-    'Strength,"Back Squat 5x5 @ 75%",time';
+    '2026-06-22,Murph,published,Warm Up,"500m row + dynamic stretching",time,'
+    'Strength,"Back Squat 5x5 @ 75%",weight';
 
 /// One parsed row, either ready to import ([payload] set) or rejected
 /// ([error] set).
@@ -61,15 +60,14 @@ class CsvParseOutcome {
       headerError == null && rows.isNotEmpty && invalidCount == 0;
 }
 
-/// Parses pasted class data into a preview. Accepts comma-separated (CSV) or
-/// tab-separated (e.g. cells copied from Google Sheets / Excel) content. Each
-/// row's date+time are read in the device's local zone and serialized to UTC
-/// (matching the manual create form).
-CsvParseOutcome parseClassesCsv(String content) {
+/// Parses pasted WOD data into a preview. Accepts comma- or tab-separated
+/// content. Each row produces a `{ scheduled_date, title, status?, sections }`
+/// payload matching `POST /programming/workouts/import`.
+CsvParseOutcome parseWorkoutsCsv(String content) {
   final normalized =
       content.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
   if (normalized.isEmpty) {
-    return CsvParseOutcome(headerError: 'Paste your class rows above.');
+    return CsvParseOutcome(headerError: 'Paste your WOD rows above.');
   }
 
   // Auto-detect the delimiter from the header line: tabs win when a spreadsheet
@@ -85,7 +83,7 @@ CsvParseOutcome parseClassesCsv(String content) {
     shouldParseNumbers: false,
   ).convert(normalized);
   if (table.isEmpty) {
-    return CsvParseOutcome(headerError: 'Paste your class rows above.');
+    return CsvParseOutcome(headerError: 'Paste your WOD rows above.');
   }
 
   final header =
@@ -109,13 +107,12 @@ CsvParseOutcome parseClassesCsv(String content) {
     return row[i].toString().trim();
   }
 
-  // Detect which section indices (1-based) are present in the header so we can
-  // walk them in numeric order. Operators can leave gaps (e.g. only section_1
-  // and section_3); any non-empty section_N_title becomes one section in
-  // numeric-index order.
+  // Detect which section indices (1-based) the header carries by scanning the
+  // section_N_description columns. Section_1 is required (enforced via the
+  // header check above), additional sections are opt-in per WOD.
   final sectionIndices = <int>[];
   for (final column in indexOf.keys) {
-    final match = _sectionTitleColumnPattern.firstMatch(column);
+    final match = _sectionDescriptionColumnPattern.firstMatch(column);
     if (match == null) continue;
     final parsed = int.tryParse(match.group(1) ?? '');
     if (parsed == null || parsed < 1 || parsed > _maxSectionsPerRow) continue;
@@ -131,74 +128,65 @@ CsvParseOutcome parseClassesCsv(String content) {
     }
     final line = r + 1;
     final dateStr = cell(row, 'date');
-    final timeStr = cell(row, 'start_time');
     final title = cell(row, 'title');
-    final summary =
-        '$dateStr $timeStr · ${title.isEmpty ? '(no title)' : title}';
+    final summary = '$dateStr · ${title.isEmpty ? '(no title)' : title}';
     try {
-      final start = _parseLocalDateTime(dateStr, timeStr);
+      if (DateTime.tryParse(dateStr) == null) {
+        throw const FormatException('date must be YYYY-MM-DD');
+      }
       if (title.isEmpty) {
         throw const FormatException('title is required');
       }
-      final duration = int.tryParse(cell(row, 'duration_minutes'));
-      if (duration == null) {
-        throw const FormatException('duration_minutes must be a whole number');
+      final statusCell = cell(row, 'status').toLowerCase();
+      final status = statusCell.isEmpty ? 'draft' : statusCell;
+      if (!_allowedStatuses.contains(status)) {
+        throw const FormatException('status must be draft or published');
       }
-      final capacity = int.tryParse(cell(row, 'capacity'));
-      if (capacity == null) {
-        throw const FormatException('capacity must be a whole number');
-      }
-      final repeatCell = cell(row, 'repeat').toLowerCase();
-      final repeat = repeatCell.isEmpty ? 'none' : repeatCell;
-      if (!_allowedRepeats.contains(repeat)) {
-        throw const FormatException(
-          'repeat must be none, daily, weekly, or monthly',
-        );
-      }
-      final occCell = cell(row, 'occurrences');
-      final occurrences = repeat == 'none'
-          ? 1
-          : int.tryParse(occCell.isEmpty ? '1' : occCell);
-      if (occurrences == null) {
-        throw const FormatException('occurrences must be a whole number');
-      }
-      final classType = cell(row, 'class_type');
       final sections = <Map<String, dynamic>>[];
       for (final sectionIndex in sectionIndices) {
-        final sectionTitle = cell(row, 'section_${sectionIndex}_title');
-        if (sectionTitle.isEmpty) continue;
-        final sectionDescription =
+        final description =
             cell(row, 'section_${sectionIndex}_description');
         final scoreRaw =
             cell(row, 'section_${sectionIndex}_score').toLowerCase();
-        if (scoreRaw.isNotEmpty && !_allowedSectionScores.contains(scoreRaw)) {
+        if (description.isEmpty && scoreRaw.isEmpty) continue;
+        if (description.isEmpty) {
           throw FormatException(
-            'section_${sectionIndex}_score must be empty, time, rounds_reps, '
-            'or weight',
+            'section_${sectionIndex}_description is required when '
+            'section_${sectionIndex}_score is set',
+          );
+        }
+        if (scoreRaw.isEmpty) {
+          throw FormatException(
+            'section_${sectionIndex}_score is required when '
+            'section_${sectionIndex}_description is set',
+          );
+        }
+        if (!_allowedSectionScores.contains(scoreRaw)) {
+          throw FormatException(
+            'section_${sectionIndex}_score must be time, rounds_reps, or weight',
           );
         }
         sections.add({
-          'title': sectionTitle,
-          'description': sectionDescription,
-          if (scoreRaw.isNotEmpty) 'score_type': scoreRaw,
+          'title': cell(row, 'section_${sectionIndex}_title'),
+          'description': description,
+          'score_type': scoreRaw,
         });
+      }
+      if (sections.isEmpty) {
+        throw const FormatException(
+          'A WOD needs at least one filled section',
+        );
       }
       previews.add(
         ImportRowPreview(
           line: line,
-          summary: summary,
+          summary: '$summary · ${sections.length} section'
+              '${sections.length == 1 ? '' : 's'}',
           payload: {
-            'start_time': start.toUtc().toIso8601String(),
+            'scheduled_date': dateStr,
             'title': title,
-            if (classType.isNotEmpty) 'class_type': classType,
-            'duration_minutes': duration,
-            'capacity': capacity,
-            if (cell(row, 'trainer_email').isNotEmpty)
-              'trainer_email': cell(row, 'trainer_email'),
-            'wod_description': cell(row, 'wod_description'),
-            if (sections.isNotEmpty) 'sections': sections,
-            'recurrence_frequency': repeat,
-            'occurrence_count': occurrences,
+            'status': status,
+            'sections': sections,
           },
         ),
       );
@@ -217,52 +205,32 @@ CsvParseOutcome parseClassesCsv(String content) {
   return CsvParseOutcome(rows: previews);
 }
 
-DateTime _parseLocalDateTime(String date, String time) {
-  final day = DateTime.tryParse(date);
-  if (day == null) {
-    throw const FormatException('date must be YYYY-MM-DD');
-  }
-  final parts = time.split(':');
-  final hour = parts.isEmpty ? null : int.tryParse(parts[0].trim());
-  final minute = parts.length < 2 ? null : int.tryParse(parts[1].trim());
-  if (hour == null ||
-      minute == null ||
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59) {
-    throw const FormatException('start_time must be HH:MM (24h)');
-  }
-  return DateTime(day.year, day.month, day.day, hour, minute);
-}
-
-/// Dialog to bulk-import classes by pasting CSV / spreadsheet rows. Parses and
+/// Dialog to bulk-import WODs by pasting CSV / spreadsheet rows. Parses and
 /// previews locally, then sends valid rows to the atomic backend endpoint.
-/// Plugin-free (no file picker) so it works the same on web, desktop and mobile.
-class ImportClassesDialog extends ConsumerStatefulWidget {
-  const ImportClassesDialog({super.key, this.debugInitialText});
+class ImportWorkoutsDialog extends ConsumerStatefulWidget {
+  const ImportWorkoutsDialog({super.key, this.debugInitialText});
 
   /// Pre-fills the paste box — for tests/screenshots.
   @visibleForTesting
   final String? debugInitialText;
 
   @override
-  ConsumerState<ImportClassesDialog> createState() =>
-      _ImportClassesDialogState();
+  ConsumerState<ImportWorkoutsDialog> createState() =>
+      _ImportWorkoutsDialogState();
 }
 
-class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
+class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
   late final TextEditingController _controller =
       TextEditingController(text: widget.debugInitialText ?? '');
   CsvParseOutcome? _outcome;
   bool _importing = false;
-  List<ScheduleImportError> _serverErrors = const [];
+  List<WorkoutImportError> _serverErrors = const [];
 
   @override
   void initState() {
     super.initState();
     if (_controller.text.trim().isNotEmpty) {
-      _outcome = parseClassesCsv(_controller.text);
+      _outcome = parseWorkoutsCsv(_controller.text);
     }
   }
 
@@ -275,7 +243,7 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
   void _onChanged(String value) {
     setState(() {
       _serverErrors = const [];
-      _outcome = value.trim().isEmpty ? null : parseClassesCsv(value);
+      _outcome = value.trim().isEmpty ? null : parseWorkoutsCsv(value);
     });
   }
 
@@ -315,8 +283,9 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
       _serverErrors = const [];
     });
     try {
-      final result =
-          await ref.read(scheduleRepositoryProvider).importClasses(payloads);
+      final result = await ref
+          .read(programmingRepositoryProvider)
+          .importWorkouts(payloads);
       if (!mounted) {
         return;
       }
@@ -324,9 +293,9 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
         setState(() => _serverErrors = result.errors);
         return;
       }
-      ref.invalidate(scheduleListProvider);
+      ref.invalidate(programmingListProvider);
       Navigator.of(context).pop(true);
-      _showSnackBar('Imported ${result.createdCount} classes.');
+      _showSnackBar('Imported ${result.createdCount} WODs.');
     } catch (error) {
       if (!mounted) {
         return;
@@ -340,8 +309,9 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.maybeOf(context)
-        ?.showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -361,7 +331,7 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
         children: [
           Expanded(
             child: Text(
-              'Import classes',
+              'Import WODs',
               style: theme.textTheme.titleLarge?.copyWith(
                 color: appText,
                 fontWeight: FontWeight.w800,
@@ -375,7 +345,7 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
         ],
       ),
       content: SizedBox(
-        width: 460,
+        width: 520,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -383,12 +353,11 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
             Text(
               'Upload a .csv file or paste rows from a spreadsheet '
               '(Google Sheets / Excel). Comma- and tab-separated are both '
-              'accepted. Required columns: date, start_time, title, '
-              'duration_minutes, capacity. Optional: class_type, trainer_email, '
-              'wod_description, repeat, occurrences, plus per-section columns '
+              'accepted. Required columns: date, title, section_1_description, '
+              'section_1_score. Optional: status (draft/published), additional '
               'section_N_title / section_N_description / section_N_score '
-              '(N = 1..10, score = time, rounds_reps, or weight). The file is '
-              'checked against this schema before anything is imported.',
+              '(N = 1..20, score = time, rounds_reps, or weight). The file is '
+              'checked before anything is imported.',
               style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
             ),
             const SizedBox(height: 12),
@@ -403,8 +372,8 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
                 color: appText,
               ),
               decoration: const InputDecoration(
-                hintText: 'date,start_time,title,duration_minutes,capacity\n'
-                    '2026-06-22,18:00,Evening WOD,60,12',
+                hintText: 'date,title,section_1_description,section_1_score\n'
+                    '2026-06-22,Murph,"21-15-9 thrusters/pull-ups",time',
               ),
             ),
             const SizedBox(height: 8),
@@ -473,13 +442,15 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
       actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       actions: [
         TextButton(
-          onPressed:
-              _importing ? null : () => Navigator.of(context).pop(false),
+          onPressed: _importing
+              ? null
+              : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed:
-              (outcome?.canImport ?? false) && !_importing ? _import : null,
+          onPressed: (outcome?.canImport ?? false) && !_importing
+              ? _import
+              : null,
           child: _importing
               ? const SizedBox(
                   height: 20,
@@ -489,7 +460,7 @@ class _ImportClassesDialogState extends ConsumerState<ImportClassesDialog> {
               : Text(
                   outcome == null
                       ? 'Import'
-                      : 'Import ${outcome.validCount} classes',
+                      : 'Import ${outcome.validCount} WODs',
                 ),
         ),
       ],
@@ -534,7 +505,9 @@ class _RowTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     'Line ${row.line}: ${row.error}',
-                    style: theme.textTheme.bodySmall?.copyWith(color: appDanger),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: appDanger,
+                    ),
                   ),
                 ],
               ],
@@ -576,10 +549,9 @@ class _MessageCard extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: appText),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: appText),
             ),
           ),
         ],

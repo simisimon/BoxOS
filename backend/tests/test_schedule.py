@@ -19,7 +19,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 60,
                 "capacity": 12,
-                "wod_description": "Intervals",
                 "recurrence_frequency": "daily",
                 "occurrence_count": 3,
             },
@@ -29,82 +28,6 @@ class ScheduleApiTests(FastApiTestCase):
         self.assertEqual(payload["created_count"], 3)
         self.assertEqual(len(payload["classes"]), 3)
         self.assertEqual(payload["classes"][0]["title"], "Lunch WOD")
-
-    def test_import_creates_multiple_classes(self) -> None:
-        admin_headers, _ = self.create_gym_as_admin("Import Box")
-
-        response = self.client.post(
-            "/schedule/classes/import",
-            headers=admin_headers,
-            json={
-                "rows": [
-                    {
-                        "start_time": security.isoformat(
-                            security.now_utc() + timedelta(days=1)
-                        ),
-                        "title": "Morning WOD",
-                        "duration_minutes": 60,
-                        "capacity": 12,
-                    },
-                    {
-                        "start_time": security.isoformat(
-                            security.now_utc() + timedelta(days=2)
-                        ),
-                        "title": "Evening WOD",
-                        "class_type": "Open Gym",
-                        "duration_minutes": 45,
-                        "capacity": 10,
-                        "recurrence_frequency": "weekly",
-                        "occurrence_count": 2,
-                    },
-                ]
-            },
-        )
-        self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
-        # 1 single + 2 weekly occurrences.
-        self.assertEqual(payload["created_count"], 3)
-
-        listed = self.client.get("/schedule/classes", headers=admin_headers)
-        titles = sorted(item["title"] for item in listed.json()["classes"])
-        self.assertEqual(titles, ["Evening WOD", "Evening WOD", "Morning WOD"])
-
-    def test_import_is_atomic_when_a_row_is_invalid(self) -> None:
-        admin_headers, _ = self.create_gym_as_admin("Atomic Import Box")
-
-        response = self.client.post(
-            "/schedule/classes/import",
-            headers=admin_headers,
-            json={
-                "rows": [
-                    {
-                        "start_time": security.isoformat(
-                            security.now_utc() + timedelta(days=1)
-                        ),
-                        "title": "Valid WOD",
-                        "duration_minutes": 60,
-                        "capacity": 12,
-                    },
-                    {
-                        # Past start time -> invalid.
-                        "start_time": security.isoformat(
-                            security.now_utc() - timedelta(days=1)
-                        ),
-                        "title": "Past WOD",
-                        "duration_minutes": 60,
-                        "capacity": 12,
-                    },
-                ]
-            },
-        )
-        self.assertEqual(response.status_code, 422, response.text)
-        payload = response.json()
-        self.assertEqual(payload["created_count"], 0)
-        self.assertEqual(payload["errors"][0]["row"], 2)
-
-        # Nothing was created (atomic).
-        listed = self.client.get("/schedule/classes", headers=admin_headers)
-        self.assertEqual(listed.json()["classes"], [])
 
     def test_cannot_join_waitlist_while_class_has_open_capacity(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Open Spot Box")
@@ -119,7 +42,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 60,
                 "capacity": 2,
-                "wod_description": None,
                 "recurrence_frequency": "none",
             },
         )
@@ -148,7 +70,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 45,
                 "capacity": 1,
-                "wod_description": "Sprint",
                 "recurrence_frequency": "none",
             },
         )
@@ -194,7 +115,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
                 "duration_minutes": 60,
                 "capacity": 2,
-                "wod_description": "Chipper",
                 "recurrence_frequency": "none",
             },
         )
@@ -220,7 +140,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "duration_minutes": schedule_class["duration_minutes"],
                 "capacity": 1,
                 "trainer_user_id": None if schedule_class["assigned_trainer"] is None else schedule_class["assigned_trainer"]["id"],
-                "wod_description": schedule_class["wod_description"],
             },
         )
         self.assertEqual(updated.status_code, 400)
@@ -239,7 +158,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "start_time": security.isoformat(security.now_utc() + timedelta(hours=2)),
                 "duration_minutes": 60,
                 "capacity": 10,
-                "wod_description": "EMOM",
                 "recurrence_frequency": "none",
             },
         )
@@ -257,88 +175,6 @@ class ScheduleApiTests(FastApiTestCase):
         self.assertEqual(attendance.status_code, 400)
         self.assertEqual(attendance.json()["detail"], "Attendance can only be recorded after the class has started.")
 
-    def test_sections_are_persisted_and_returned(self) -> None:
-        admin_headers, _ = self.create_gym_as_admin("Sections Box")
-
-        created = self.client.post(
-            "/schedule/classes",
-            headers=admin_headers,
-            json={
-                "title": "Sectioned WOD",
-                "class_type": "WOD",
-                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
-                "duration_minutes": 60,
-                "capacity": 12,
-                "wod_description": "",
-                "recurrence_frequency": "none",
-                "sections": [
-                    {"title": "Warm Up", "description": "500m row"},
-                    {"title": "Strength", "description": "Back Squat 5x5", "score_type": "time"},
-                    {"title": "AMRAP", "description": "12 min", "score_type": "rounds_reps"},
-                ],
-            },
-        )
-        self.assertEqual(created.status_code, 201, created.text)
-        sections = created.json()["class"]["sections"]
-        self.assertEqual([section["title"] for section in sections], ["Warm Up", "Strength", "AMRAP"])
-        self.assertEqual([section["score_type"] for section in sections], [None, "time", "rounds_reps"])
-
-        listed = self.client.get("/schedule/classes", headers=admin_headers)
-        listed_sections = listed.json()["classes"][0]["sections"]
-        self.assertEqual(len(listed_sections), 3)
-        self.assertEqual(listed_sections[1]["description"], "Back Squat 5x5")
-
-    def test_section_score_type_is_validated(self) -> None:
-        admin_headers, _ = self.create_gym_as_admin("Section Score Box")
-
-        response = self.client.post(
-            "/schedule/classes",
-            headers=admin_headers,
-            json={
-                "title": "Bad Score",
-                "class_type": "WOD",
-                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
-                "duration_minutes": 60,
-                "capacity": 12,
-                "recurrence_frequency": "none",
-                "sections": [
-                    {"title": "Mystery", "score_type": "calories"},
-                ],
-            },
-        )
-        self.assertEqual(response.status_code, 400, response.text)
-        self.assertIn("score", response.json()["detail"].lower())
-
-    def test_sections_are_imported_via_csv_endpoint(self) -> None:
-        admin_headers, _ = self.create_gym_as_admin("Sections Import Box")
-
-        response = self.client.post(
-            "/schedule/classes/import",
-            headers=admin_headers,
-            json={
-                "rows": [
-                    {
-                        "start_time": security.isoformat(
-                            security.now_utc() + timedelta(days=1)
-                        ),
-                        "title": "Morning WOD",
-                        "duration_minutes": 60,
-                        "capacity": 12,
-                        "sections": [
-                            {"title": "Warm Up"},
-                            {"title": "Strength", "score_type": "time"},
-                        ],
-                    },
-                ]
-            },
-        )
-        self.assertEqual(response.status_code, 200, response.text)
-
-        listed = self.client.get("/schedule/classes", headers=admin_headers)
-        sections = listed.json()["classes"][0]["sections"]
-        self.assertEqual(len(sections), 2)
-        self.assertEqual(sections[1]["score_type"], "time")
-
     def test_assigning_non_trainer_to_schedule_class_is_rejected(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Trainer Validation Box")
         athlete_user_id = self.add_active_membership(settings.DEMO_EMAIL, gym_id, roles=["athlete"], active_role="athlete")
@@ -353,7 +189,6 @@ class ScheduleApiTests(FastApiTestCase):
                 "duration_minutes": 60,
                 "capacity": 10,
                 "trainer_user_id": athlete_user_id,
-                "wod_description": "Heavy day",
                 "recurrence_frequency": "none",
             },
         )

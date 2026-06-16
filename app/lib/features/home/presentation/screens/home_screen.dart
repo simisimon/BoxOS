@@ -305,7 +305,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _TodayHero(
               workoutsFuture: _workoutsFuture,
               scheduleFuture: _scheduleFuture,
-              onOpenWorkout: () => context.go('/programming'),
+              onOpenWorkout: () => context.go('/my-box'),
               onOpenBooking: () => context.go('/my-box'),
             ),
             const SizedBox(height: appSpace2xl),
@@ -584,10 +584,10 @@ class _TodayHeroBody extends StatelessWidget {
               letterSpacing: -0.5,
             ),
           ),
-          if (today != null && today!.metconText.trim().isNotEmpty) ...[
+          if (today != null && today!.sections.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
-              today!.metconText.trim(),
+              today!.sections.first.description.trim(),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -2250,8 +2250,8 @@ class _QuickAccessGrid extends StatelessWidget {
         icon: hasActiveGym
             ? Icons.local_fire_department_outlined
             : Icons.notifications_outlined,
-        title: hasActiveGym ? 'See Programming' : 'Open Notifications',
-        route: hasActiveGym ? '/programming' : '/notifications',
+        title: hasActiveGym ? "See Today's WOD" : 'Open Notifications',
+        route: hasActiveGym ? '/my-box' : '/notifications',
         accentColor: _homeAccent,
       ),
     ];

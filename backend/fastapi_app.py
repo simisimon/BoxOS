@@ -131,12 +131,6 @@ class CreateGymRequest(BaseModel):
     timezone: str = "UTC"  # Default to UTC if not provided
 
 
-class ScheduleClassSection(BaseModel):
-    title: str
-    description: str | None = None
-    score_type: str | None = None
-
-
 class ScheduleClassRequest(BaseModel):
     title: str
     class_type: str
@@ -145,31 +139,12 @@ class ScheduleClassRequest(BaseModel):
     duration: int | None = None
     capacity: int
     trainer_user_id: int | None = None
-    wod_description: str | None = None
     recurrence_frequency: str | None = None
     occurrence_count: int | None = None
-    sections: list[ScheduleClassSection] | None = None
 
 
 class UpdateScheduleClassRequest(ScheduleClassRequest):
     id: int
-
-
-class ScheduleClassImportRow(BaseModel):
-    start_time: str
-    title: str
-    class_type: str | None = None
-    duration_minutes: int | None = None
-    capacity: int | None = None
-    trainer_email: str | None = None
-    wod_description: str | None = None
-    recurrence_frequency: str | None = None
-    occurrence_count: int | None = None
-    sections: list[ScheduleClassSection] | None = None
-
-
-class ScheduleClassImportRequest(BaseModel):
-    rows: list[ScheduleClassImportRow]
 
 
 class ClassIdRequest(BaseModel):
@@ -279,16 +254,41 @@ class PersonalWorkoutDeleteRequest(BaseModel):
     id: int
 
 
+class DailyWorkoutSectionPayload(BaseModel):
+    title: str | None = None
+    description: str
+    score_type: str
+
+
 class DailyWorkoutRequest(BaseModel):
     scheduled_date: str
     title: str
-    strength_text: str | None = None
-    metcon_text: str | None = None
-    notes_text: str | None = None
+    sections: list[DailyWorkoutSectionPayload]
+    status: str | None = None
 
 
 class DailyWorkoutUpdateRequest(DailyWorkoutRequest):
     id: int
+
+
+class DailyWorkoutImportRow(BaseModel):
+    scheduled_date: str
+    title: str
+    status: str | None = None
+    sections: list[DailyWorkoutSectionPayload]
+
+
+class DailyWorkoutImportRequest(BaseModel):
+    rows: list[DailyWorkoutImportRow]
+
+
+class DailyWorkoutPublishRequest(BaseModel):
+    id: int
+
+
+class DailyWorkoutDuplicateRequest(BaseModel):
+    source_date: str
+    target_date: str
 
 
 class WhiteboardResultRequest(BaseModel):
@@ -1647,8 +1647,7 @@ def list_schedule_classes(
               class_schedules.capacity,
               class_schedules.assigned_trainer_user_id,
               trainer.display_name as assigned_trainer_display_name,
-              trainer.nickname as assigned_trainer_nickname,
-              class_schedules.wod_description
+              trainer.nickname as assigned_trainer_nickname
             from class_schedules
             left join users trainer on trainer.id = class_schedules.assigned_trainer_user_id
             where class_schedules.gym_id = ?
@@ -1715,14 +1714,10 @@ def create_schedule_class(
     duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
     capacity = validation.require_capacity(body.capacity)
     trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
-    wod_description = validation.require_wod_description(body.wod_description)
     recurrence_frequency = validation.require_recurrence_frequency(body.recurrence_frequency)
     occurrence_count = validation.require_occurrence_count(
         body.occurrence_count,
         recurrence_frequency=recurrence_frequency,
-    )
-    sections = validation.require_class_sections(
-        [section.model_dump() for section in body.sections] if body.sections is not None else None
     )
     connection = db.get_connection()
     try:
@@ -1769,10 +1764,10 @@ def create_schedule_class(
                 cursor = connection.execute(
                     """
                     insert into class_schedules (
-                      gym_id, title, class_type, start_time, end_time, duration_minutes, capacity, assigned_trainer_user_id, wod_description,
+                      gym_id, title, class_type, start_time, end_time, duration_minutes, capacity, assigned_trainer_user_id,
                       created_by_user_id, updated_by_user_id, created_at, updated_at
                     )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     returning id
                     """,
                     (
@@ -1784,7 +1779,6 @@ def create_schedule_class(
                         duration_minutes,
                         capacity,
                         trainer_user_id,
-                        wod_description,
                         session["user_id"],
                         session["user_id"],
                         timestamp,
@@ -1793,11 +1787,6 @@ def create_schedule_class(
                 )
                 schedule_id = int(cursor.fetchone()["id"])
                 schedule_ids.append(schedule_id)
-                schedule_service.replace_schedule_sections(
-                    connection,
-                    class_schedule_id=schedule_id,
-                    sections=sections,
-                )
             payloads = []
             for schedule_id in schedule_ids:
                 row = schedule_service.get_schedule_class_row(connection, schedule_id)
@@ -1835,189 +1824,6 @@ def create_schedule_class(
         connection.close()
 
 
-def _resolve_import_trainer(
-    connection: Any,
-    session: dict[str, Any],
-    trainer_email: str | None,
-) -> int | None:
-    """Resolve a CSV ``trainer_email`` to an active trainer's user id, or None."""
-    email = str(trainer_email or "").strip().lower()
-    if not email:
-        return None
-    row = connection.execute(
-        """
-        select users.id
-        from gym_memberships
-        join users on users.id = gym_memberships.user_id
-        where gym_memberships.gym_id = ?
-          and gym_memberships.status = 'active'
-          and gym_memberships.active_role = 'trainer'
-          and users.deleted_at is null
-          and lower(users.email) = ?
-        """,
-        (session["active_gym_id"], email),
-    ).fetchone()
-    if row is None:
-        raise validation.ApiError(
-            HTTPStatus.BAD_REQUEST,
-            f"Trainer '{trainer_email}' is not an active trainer in this gym.",
-        )
-    return int(row["id"])
-
-
-@app.post("/schedule/classes/import")
-def import_schedule_classes(
-    body: ScheduleClassImportRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
-) -> Any:
-    if not body.rows:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value, detail="No rows to import."
-        )
-    if len(body.rows) > 500:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value,
-            detail="Too many rows to import (max 500).",
-        )
-    connection = db.get_connection()
-    try:
-        gym_row = connection.execute(
-            "select timezone from gyms where id = ?",
-            (session["active_gym_id"],),
-        ).fetchone()
-        if gym_row is None:
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND.value, detail="Active gym not found."
-            )
-        gym_timezone = gym_row["timezone"]
-
-        # Phase 1 — validate every row read-only. The import is atomic: if any
-        # row is invalid nothing is created and all errors are reported at once.
-        resolved: list[dict[str, Any]] = []
-        errors: list[dict[str, Any]] = []
-        for index, row in enumerate(body.rows):
-            try:
-                title = validation.require_schedule_title(row.title)
-                class_type = validation.require_class_type(row.class_type or "WOD")
-                start_time = validation.require_future_datetime(
-                    row.start_time, label="Start time"
-                )
-                duration_minutes = validation.require_schedule_duration_minutes(
-                    {"duration_minutes": row.duration_minutes}
-                )
-                capacity = validation.require_capacity(row.capacity)
-                wod_description = validation.require_wod_description(row.wod_description)
-                recurrence_frequency = validation.require_recurrence_frequency(
-                    row.recurrence_frequency
-                )
-                occurrence_count = validation.require_occurrence_count(
-                    row.occurrence_count, recurrence_frequency=recurrence_frequency
-                )
-                trainer_user_id = _resolve_import_trainer(
-                    connection, session, row.trainer_email
-                )
-                sections = validation.require_class_sections(
-                    [section.model_dump() for section in row.sections]
-                    if row.sections is not None
-                    else None
-                )
-                start_times = schedule_service.build_recurrence_start_times(
-                    start_time,
-                    recurrence_frequency=recurrence_frequency,
-                    occurrence_count=occurrence_count,
-                    gym_timezone=gym_timezone,
-                )
-                if recurrence_frequency != "none":
-                    for generated_start_time in start_times:
-                        if generated_start_time <= security.now_utc():
-                            raise validation.ApiError(
-                                HTTPStatus.BAD_REQUEST,
-                                "Recurring classes must all be scheduled in the future.",
-                            )
-                resolved.append(
-                    {
-                        "title": title,
-                        "class_type": class_type,
-                        "duration_minutes": duration_minutes,
-                        "capacity": capacity,
-                        "trainer_user_id": trainer_user_id,
-                        "wod_description": wod_description,
-                        "sections": sections,
-                        "start_times": start_times,
-                    }
-                )
-            except validation.ApiError as error:
-                errors.append({"row": index + 1, "message": error.message})
-
-        if errors:
-            return JSONResponse(
-                status_code=HTTPStatus.UNPROCESSABLE_ENTITY.value,
-                content={"errors": errors, "created_count": 0},
-            )
-
-        # Phase 2 — insert everything in a single transaction.
-        timestamp = security.isoformat(security.now_utc())
-        created_count = 0
-        with connection:
-            for item in resolved:
-                for generated_start_time in item["start_times"]:
-                    generated_end_time = generated_start_time + timedelta(
-                        minutes=item["duration_minutes"]
-                    )
-                    cursor = connection.execute(
-                        """
-                        insert into class_schedules (
-                          gym_id, title, class_type, start_time, end_time, duration_minutes, capacity, assigned_trainer_user_id, wod_description,
-                          created_by_user_id, updated_by_user_id, created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        returning id
-                        """,
-                        (
-                            session["active_gym_id"],
-                            item["title"],
-                            item["class_type"],
-                            security.isoformat(generated_start_time),
-                            security.isoformat(generated_end_time),
-                            item["duration_minutes"],
-                            item["capacity"],
-                            item["trainer_user_id"],
-                            item["wod_description"],
-                            session["user_id"],
-                            session["user_id"],
-                            timestamp,
-                            timestamp,
-                        ),
-                    )
-                    schedule_id = int(cursor.fetchone()["id"])
-                    schedule_service.replace_schedule_sections(
-                        connection,
-                        class_schedule_id=schedule_id,
-                        sections=item["sections"],
-                    )
-                    audit.write_audit_log(
-                        connection,
-                        gym_id=session["active_gym_id"],
-                        actor_user_id=session["user_id"],
-                        action="schedule_class_created",
-                        entity_type="schedule_class",
-                        entity_id=schedule_id,
-                        details={
-                            "title": item["title"],
-                            "class_type": item["class_type"],
-                            "start_time": security.isoformat(generated_start_time),
-                            "duration_minutes": item["duration_minutes"],
-                            "capacity": item["capacity"],
-                            "trainer_user_id": item["trainer_user_id"],
-                            "source": "import",
-                        },
-                    )
-                    created_count += 1
-        return {"created_count": created_count, "row_count": len(resolved)}
-    finally:
-        connection.close()
-
-
 @app.patch("/schedule/classes")
 def update_schedule_class(
     body: UpdateScheduleClassRequest,
@@ -2030,10 +1836,6 @@ def update_schedule_class(
     duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
     capacity = validation.require_capacity(body.capacity)
     trainer_user_id = validation.require_optional_user_id(body.trainer_user_id)
-    wod_description = validation.require_wod_description(body.wod_description)
-    sections = validation.require_class_sections(
-        [section.model_dump() for section in body.sections] if body.sections is not None else None
-    )
     end_time = start_time + timedelta(minutes=duration_minutes)
     connection = db.get_connection()
     try:
@@ -2081,7 +1883,7 @@ def update_schedule_class(
                 """
                 update class_schedules
                 set title = ?, class_type = ?, start_time = ?, end_time = ?, duration_minutes = ?, capacity = ?,
-                    assigned_trainer_user_id = ?, wod_description = ?, updated_by_user_id = ?, updated_at = ?
+                    assigned_trainer_user_id = ?, updated_by_user_id = ?, updated_at = ?
                 where id = ?
                 """,
                 (
@@ -2092,16 +1894,10 @@ def update_schedule_class(
                     duration_minutes,
                     capacity,
                     trainer_user_id,
-                    wod_description,
                     session["user_id"],
                     security.isoformat(security.now_utc()),
                     schedule_id,
                 ),
-            )
-            schedule_service.replace_schedule_sections(
-                connection,
-                class_schedule_id=schedule_id,
-                sections=sections,
             )
             row = schedule_service.get_schedule_class_row(connection, schedule_id)
             if row is None:
@@ -2634,30 +2430,33 @@ def unregister_device(body: DeviceTokenRequest, session: dict[str, Any] = Depend
 def list_daily_workouts(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
     connection = db.get_connection()
     try:
-        rows = connection.execute(
-            """
-            select
-              daily_workouts.id,
-              daily_workouts.gym_id,
-              daily_workouts.scheduled_date,
-              daily_workouts.title,
-              daily_workouts.strength_text,
-              daily_workouts.metcon_text,
-              daily_workouts.notes_text,
-              daily_workouts.created_at,
-              daily_workouts.updated_at
-            from daily_workouts
-            where daily_workouts.gym_id = ?
-            order by daily_workouts.scheduled_date asc
-            """,
-            (session["active_gym_id"],),
-        ).fetchall()
+        can_manage = programming_service.can_view_drafts(session["role"])
+        if can_manage:
+            rows = connection.execute(
+                f"""
+                select {programming_service.DAILY_WORKOUT_COLUMNS}
+                from daily_workouts
+                where daily_workouts.gym_id = ?
+                order by daily_workouts.scheduled_date asc
+                """,
+                (session["active_gym_id"],),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                f"""
+                select {programming_service.DAILY_WORKOUT_COLUMNS}
+                from daily_workouts
+                where daily_workouts.gym_id = ? and daily_workouts.status = 'published'
+                order by daily_workouts.scheduled_date asc
+                """,
+                (session["active_gym_id"],),
+            ).fetchall()
         workouts = [
             programming_service.daily_workout_payload(
                 connection,
                 row,
                 current_user_id=session["user_id"],
-                can_edit=session["role"] in {"admin", "trainer"},
+                can_edit=can_manage,
             )
             for row in rows
         ]
@@ -2673,9 +2472,10 @@ def create_daily_workout(
 ) -> dict[str, Any]:
     scheduled_date = validation.require_programming_date(body.scheduled_date)
     title = validation.require_programming_title(body.title)
-    strength_text = validation.require_programming_section(body.strength_text, label="Strength")
-    metcon_text = validation.require_programming_section(body.metcon_text, label="MetCon")
-    notes_text = validation.require_programming_section(body.notes_text, label="Notes")
+    sections = validation.require_workout_sections(
+        [section.model_dump() for section in body.sections]
+    )
+    status = programming_service.require_workout_status(body.status or "draft")
     connection = db.get_connection()
     try:
         existing = connection.execute(
@@ -2685,11 +2485,14 @@ def create_daily_workout(
         if existing is not None:
             raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="A workout already exists for this date.")
         timestamp = security.isoformat(security.now_utc())
+        published_at = timestamp if status == "published" else None
+        published_by = session["user_id"] if status == "published" else None
         with connection:
             cursor = connection.execute(
                 """
                 insert into daily_workouts (
-                  gym_id, scheduled_date, title, strength_text, metcon_text, notes_text,
+                  gym_id, scheduled_date, title,
+                  status, published_at, published_by_user_id,
                   created_by_user_id, updated_by_user_id, created_at, updated_at
                 )
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2699,9 +2502,9 @@ def create_daily_workout(
                     session["active_gym_id"],
                     scheduled_date,
                     title,
-                    strength_text,
-                    metcon_text,
-                    notes_text,
+                    status,
+                    published_at,
+                    published_by,
                     session["user_id"],
                     session["user_id"],
                     timestamp,
@@ -2709,13 +2512,19 @@ def create_daily_workout(
                 ),
             )
             workout_id = int(cursor.fetchone()["id"])
+            programming_service.replace_workout_sections(
+                connection,
+                daily_workout_id=workout_id,
+                sections=sections,
+            )
             row = connection.execute(
-                "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
+                f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
                 (workout_id,),
             ).fetchone()
             payload = programming_service.daily_workout_payload(connection, row, current_user_id=session["user_id"], can_edit=True)
-            notifications_core.create_wod_notifications(connection, gym_id=session["active_gym_id"], workout_id=workout_id, scheduled_date=scheduled_date, title=title, is_update=False)
-            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_created", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": scheduled_date, "title": title})
+            if status == "published":
+                notifications_core.create_wod_notifications(connection, gym_id=session["active_gym_id"], workout_id=workout_id, scheduled_date=scheduled_date, title=title, is_update=False)
+            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_created", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": scheduled_date, "title": title, "status": status})
         return {"workout": payload}
     finally:
         connection.close()
@@ -2729,13 +2538,13 @@ def update_daily_workout(
     workout_id = validation.require_user_id(body.id)
     scheduled_date = validation.require_programming_date(body.scheduled_date)
     title = validation.require_programming_title(body.title)
-    strength_text = validation.require_programming_section(body.strength_text, label="Strength")
-    metcon_text = validation.require_programming_section(body.metcon_text, label="MetCon")
-    notes_text = validation.require_programming_section(body.notes_text, label="Notes")
+    sections = validation.require_workout_sections(
+        [section.model_dump() for section in body.sections]
+    )
     connection = db.get_connection()
     try:
         existing = connection.execute(
-            "select id, scheduled_date from daily_workouts where id = ? and gym_id = ?",
+            "select id, scheduled_date, status from daily_workouts where id = ? and gym_id = ?",
             (workout_id, session["active_gym_id"]),
         ).fetchone()
         if existing is None:
@@ -2754,23 +2563,320 @@ def update_daily_workout(
                 update daily_workouts
                 set scheduled_date = ?,
                     title = ?,
-                    strength_text = ?,
-                    metcon_text = ?,
-                    notes_text = ?,
                     updated_by_user_id = ?,
                     updated_at = ?
                 where id = ?
                 """,
-                (scheduled_date, title, strength_text, metcon_text, notes_text, session["user_id"], security.isoformat(security.now_utc()), workout_id),
+                (
+                    scheduled_date,
+                    title,
+                    session["user_id"],
+                    security.isoformat(security.now_utc()),
+                    workout_id,
+                ),
+            )
+            programming_service.replace_workout_sections(
+                connection,
+                daily_workout_id=workout_id,
+                sections=sections,
             )
             row = connection.execute(
-                "select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at from daily_workouts where id = ?",
+                f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
                 (workout_id,),
             ).fetchone()
             payload = programming_service.daily_workout_payload(connection, row, current_user_id=session["user_id"], can_edit=True)
-            notifications_core.create_wod_notifications(connection, gym_id=session["active_gym_id"], workout_id=workout_id, scheduled_date=scheduled_date, title=title, is_update=True)
+            if existing["status"] == "published":
+                notifications_core.create_wod_notifications(connection, gym_id=session["active_gym_id"], workout_id=workout_id, scheduled_date=scheduled_date, title=title, is_update=True)
             audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_updated", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": scheduled_date, "title": title})
         return {"workout": payload}
+    finally:
+        connection.close()
+
+
+@app.post("/programming/workouts/publish")
+def publish_daily_workout(
+    body: DailyWorkoutPublishRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    workout_id = validation.require_user_id(body.id)
+    connection = db.get_connection()
+    try:
+        existing = connection.execute(
+            "select id, scheduled_date, title, status from daily_workouts where id = ? and gym_id = ?",
+            (workout_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
+        already_published = existing["status"] == "published"
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            connection.execute(
+                """
+                update daily_workouts
+                set status = 'published',
+                    published_at = ?,
+                    published_by_user_id = ?,
+                    updated_by_user_id = ?,
+                    updated_at = ?
+                where id = ?
+                """,
+                (timestamp, session["user_id"], session["user_id"], timestamp, workout_id),
+            )
+            row = connection.execute(
+                f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
+                (workout_id,),
+            ).fetchone()
+            payload = programming_service.daily_workout_payload(connection, row, current_user_id=session["user_id"], can_edit=True)
+            if not already_published:
+                notifications_core.create_wod_notifications(connection, gym_id=session["active_gym_id"], workout_id=workout_id, scheduled_date=existing["scheduled_date"], title=existing["title"], is_update=False)
+            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_published", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": existing["scheduled_date"]})
+        return {"workout": payload}
+    finally:
+        connection.close()
+
+
+@app.post("/programming/workouts/unpublish")
+def unpublish_daily_workout(
+    body: DailyWorkoutPublishRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    workout_id = validation.require_user_id(body.id)
+    connection = db.get_connection()
+    try:
+        existing = connection.execute(
+            "select id, scheduled_date from daily_workouts where id = ? and gym_id = ?",
+            (workout_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            connection.execute(
+                """
+                update daily_workouts
+                set status = 'draft',
+                    published_at = null,
+                    published_by_user_id = null,
+                    updated_by_user_id = ?,
+                    updated_at = ?
+                where id = ?
+                """,
+                (session["user_id"], timestamp, workout_id),
+            )
+            row = connection.execute(
+                f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
+                (workout_id,),
+            ).fetchone()
+            payload = programming_service.daily_workout_payload(connection, row, current_user_id=session["user_id"], can_edit=True)
+            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_unpublished", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": existing["scheduled_date"]})
+        return {"workout": payload}
+    finally:
+        connection.close()
+
+
+@app.post("/programming/workouts/duplicate")
+def duplicate_daily_workout(
+    body: DailyWorkoutDuplicateRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    target_date = validation.require_programming_date(body.target_date)
+    source_raw = str(body.source_date or "").strip()
+    if not source_raw:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Source date is required.")
+    try:
+        validation.parse_programming_date(source_raw)
+    except ValueError as error:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Source date must be a valid ISO-8601 date.") from error
+    if source_raw == target_date:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Source and target dates must differ.")
+    connection = db.get_connection()
+    try:
+        source = connection.execute(
+            f"""
+            select {programming_service.DAILY_WORKOUT_COLUMNS}
+            from daily_workouts
+            where gym_id = ? and scheduled_date = ?
+            """,
+            (session["active_gym_id"], source_raw),
+        ).fetchone()
+        if source is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Source workout not found.")
+        clash = connection.execute(
+            "select id from daily_workouts where gym_id = ? and scheduled_date = ?",
+            (session["active_gym_id"], target_date),
+        ).fetchone()
+        if clash is not None:
+            raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="A workout already exists for this date.")
+        source_sections = programming_service.fetch_workout_sections(connection, source["id"])
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into daily_workouts (
+                  gym_id, scheduled_date, title,
+                  status, published_at, published_by_user_id,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at
+                )
+                values (?, ?, ?, 'draft', null, null, ?, ?, ?, ?)
+                returning id
+                """,
+                (
+                    session["active_gym_id"],
+                    target_date,
+                    source["title"],
+                    session["user_id"],
+                    session["user_id"],
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            workout_id = int(cursor.fetchone()["id"])
+            programming_service.replace_workout_sections(
+                connection,
+                daily_workout_id=workout_id,
+                sections=source_sections,
+            )
+            row = connection.execute(
+                f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
+                (workout_id,),
+            ).fetchone()
+            payload = programming_service.daily_workout_payload(connection, row, current_user_id=session["user_id"], can_edit=True)
+            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_duplicated", entity_type="daily_workout", entity_id=workout_id, details={"source_date": source_raw, "target_date": target_date})
+        return {"workout": payload}
+    finally:
+        connection.close()
+
+
+@app.post("/programming/workouts/import")
+def import_daily_workouts(
+    body: DailyWorkoutImportRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> Any:
+    if not body.rows:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            detail="No rows to import.",
+        )
+    if len(body.rows) > 500:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            detail="Too many rows to import (max 500).",
+        )
+    connection = db.get_connection()
+    try:
+        # Phase 1 — validate every row read-only. The import is atomic: if any
+        # row is invalid nothing is created and all errors are reported at once.
+        resolved: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        seen_dates: dict[str, int] = {}
+        for index, row in enumerate(body.rows):
+            try:
+                scheduled_date = validation.require_programming_date(
+                    row.scheduled_date
+                )
+                if scheduled_date in seen_dates:
+                    raise validation.ApiError(
+                        HTTPStatus.BAD_REQUEST,
+                        f"Date {scheduled_date} appears in row {seen_dates[scheduled_date]} already; only one WOD per date.",
+                    )
+                seen_dates[scheduled_date] = index + 1
+                clash = connection.execute(
+                    "select id from daily_workouts where gym_id = ? and scheduled_date = ?",
+                    (session["active_gym_id"], scheduled_date),
+                ).fetchone()
+                if clash is not None:
+                    raise validation.ApiError(
+                        HTTPStatus.CONFLICT,
+                        f"A workout already exists for {scheduled_date}.",
+                    )
+                title = validation.require_programming_title(row.title)
+                status = programming_service.require_workout_status(
+                    row.status or "draft"
+                )
+                sections = validation.require_workout_sections(
+                    [section.model_dump() for section in row.sections]
+                )
+                resolved.append(
+                    {
+                        "scheduled_date": scheduled_date,
+                        "title": title,
+                        "status": status,
+                        "sections": sections,
+                    }
+                )
+            except validation.ApiError as error:
+                errors.append({"row": index + 1, "message": error.message})
+
+        if errors:
+            return JSONResponse(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY.value,
+                content={"errors": errors, "created_count": 0},
+            )
+
+        # Phase 2 — insert everything in a single transaction. The whole batch
+        # rolls back if any insert fails.
+        timestamp = security.isoformat(security.now_utc())
+        created_count = 0
+        with connection:
+            for item in resolved:
+                published_at = timestamp if item["status"] == "published" else None
+                published_by = (
+                    session["user_id"] if item["status"] == "published" else None
+                )
+                cursor = connection.execute(
+                    """
+                    insert into daily_workouts (
+                      gym_id, scheduled_date, title,
+                      status, published_at, published_by_user_id,
+                      created_by_user_id, updated_by_user_id, created_at, updated_at
+                    )
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    returning id
+                    """,
+                    (
+                        session["active_gym_id"],
+                        item["scheduled_date"],
+                        item["title"],
+                        item["status"],
+                        published_at,
+                        published_by,
+                        session["user_id"],
+                        session["user_id"],
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+                workout_id = int(cursor.fetchone()["id"])
+                programming_service.replace_workout_sections(
+                    connection,
+                    daily_workout_id=workout_id,
+                    sections=item["sections"],
+                )
+                if item["status"] == "published":
+                    notifications_core.create_wod_notifications(
+                        connection,
+                        gym_id=session["active_gym_id"],
+                        workout_id=workout_id,
+                        scheduled_date=item["scheduled_date"],
+                        title=item["title"],
+                        is_update=False,
+                    )
+                audit.write_audit_log(
+                    connection,
+                    gym_id=session["active_gym_id"],
+                    actor_user_id=session["user_id"],
+                    action="daily_workout_created",
+                    entity_type="daily_workout",
+                    entity_id=workout_id,
+                    details={
+                        "scheduled_date": item["scheduled_date"],
+                        "title": item["title"],
+                        "status": item["status"],
+                        "source": "import",
+                    },
+                )
+                created_count += 1
+        return {"created_count": created_count, "row_count": len(resolved)}
     finally:
         connection.close()
 
@@ -2786,8 +2892,8 @@ def submit_whiteboard_result(
     connection = db.get_connection()
     try:
         workout = connection.execute(
-            """
-            select id, gym_id, scheduled_date, title, strength_text, metcon_text, notes_text, created_at, updated_at
+            f"""
+            select {programming_service.DAILY_WORKOUT_COLUMNS}
             from daily_workouts
             where id = ? and gym_id = ?
             """,
@@ -2797,6 +2903,8 @@ def submit_whiteboard_result(
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
         if validation.parse_programming_date(workout["scheduled_date"]) > programming_service.today_utc_date():
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Results can only be submitted on or after the workout date.")
+        if workout["status"] != "published" and not programming_service.can_view_drafts(session["role"]):
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
         timestamp = security.isoformat(security.now_utc())
         with connection:
             existing = connection.execute(
@@ -2958,10 +3066,12 @@ def submit_workout_log(
     connection = db.get_connection()
     try:
         workout = connection.execute(
-            "select id, gym_id, scheduled_date, title from daily_workouts where id = ? and gym_id = ?",
+            "select id, gym_id, scheduled_date, title, status from daily_workouts where id = ? and gym_id = ?",
             (workout_id, session["active_gym_id"]),
         ).fetchone()
         if workout is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
+        if workout["status"] != "published" and not programming_service.can_view_drafts(session["role"]):
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
         if class_id is not None:
             class_row = connection.execute(

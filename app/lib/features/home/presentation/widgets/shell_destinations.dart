@@ -9,8 +9,7 @@ const int kHomeBranch = 0;
 const int kMyBoxBranch = 1;
 const int kLogbookBranch = 2;
 const int kMembersBranch = 3;
-const int kProgrammingBranch = 4;
-const int kProfileBranch = 5;
+const int kProfileBranch = 4;
 
 /// A single bottom-nav / rail destination. [branchIndex] is the shell branch it
 /// activates, decoupling the role-specific tab order from the fixed branch
@@ -76,12 +75,6 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.groups_outlined,
     activeIcon: Icons.groups_rounded,
     label: 'Members',
-  ),
-  ShellDestination(
-    branchIndex: kProgrammingBranch,
-    icon: Icons.local_fire_department_outlined,
-    activeIcon: Icons.local_fire_department_rounded,
-    label: 'Programming',
   ),
   ShellDestination(
     branchIndex: kProfileBranch,

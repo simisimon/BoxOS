@@ -204,20 +204,79 @@ def get_whiteboard_result_for_user(connection: sqlite3.Connection, workout_id: i
     }
 
 
+def workout_section_payload(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "title": row["title"],
+        "description": row["description"],
+        "score_type": row["score_type"],
+    }
+
+
+def fetch_workout_sections(
+    connection: sqlite3.Connection, daily_workout_id: int
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """
+        select title, description, score_type
+        from daily_workout_sections
+        where daily_workout_id = ?
+        order by position asc, id asc
+        """,
+        (daily_workout_id,),
+    ).fetchall()
+    return [workout_section_payload(row) for row in rows]
+
+
+def replace_workout_sections(
+    connection: sqlite3.Connection,
+    *,
+    daily_workout_id: int,
+    sections: list[dict[str, Any]],
+) -> None:
+    """Replaces all sections for a WOD. ``sections`` is already validated."""
+    connection.execute(
+        "delete from daily_workout_sections where daily_workout_id = ?",
+        (daily_workout_id,),
+    )
+    for index, section in enumerate(sections):
+        connection.execute(
+            """
+            insert into daily_workout_sections (
+              daily_workout_id, position, title, description, score_type
+            )
+            values (?, ?, ?, ?, ?)
+            """,
+            (
+                daily_workout_id,
+                index,
+                section["title"],
+                section["description"],
+                section["score_type"],
+            ),
+        )
+
+
 def daily_workout_payload(connection: sqlite3.Connection, row: sqlite3.Row, *, current_user_id: int, can_edit: bool) -> dict[str, Any]:
     return {
         "id": row["id"],
         "gym_id": row["gym_id"],
         "scheduled_date": row["scheduled_date"],
         "title": row["title"],
-        "strength_text": row["strength_text"],
-        "metcon_text": row["metcon_text"],
-        "notes_text": row["notes_text"],
+        "sections": fetch_workout_sections(connection, row["id"]),
+        "status": row["status"],
+        "published_at": row["published_at"],
         "can_edit": can_edit,
         "whiteboard_results": list_whiteboard_results(connection, row["id"]),
         "my_whiteboard_result": get_whiteboard_result_for_user(connection, row["id"], current_user_id),
         "my_workout_log": get_workout_log_for_user(connection, row["id"], current_user_id),
     }
+
+
+DAILY_WORKOUT_COLUMNS = (
+    "id, gym_id, scheduled_date, title, "
+    "status, published_at, published_by_user_id, created_by_user_id, updated_by_user_id, "
+    "created_at, updated_at"
+)
 
 
 def exercise_payload(row: sqlite3.Row) -> dict[str, Any]:

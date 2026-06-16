@@ -22,7 +22,6 @@ import 'package:app/features/profile/presentation/screens/edit_profile_screen.da
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
-import 'package:app/features/programming/presentation/screens/programming_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -111,6 +110,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/calendar',
                 redirect: (context, state) => '/my-box',
               ),
+              GoRoute(
+                path: '/programming',
+                redirect: (context, state) => '/my-box',
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -128,15 +131,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/members',
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/programming',
-                name: 'programming',
-                builder: (context, state) => const ProgrammingScreen(),
               ),
             ],
           ),

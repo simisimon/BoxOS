@@ -12,6 +12,10 @@ final programmingRepositoryProvider = Provider<ProgrammingRepository>((ref) {
   return ApiProgrammingRepository(dio: dio, tokenStorage: tokenStorage);
 });
 
+final programmingListProvider = FutureProvider.autoDispose<List<DailyWorkout>>(
+  (ref) => ref.watch(programmingRepositoryProvider).fetchWorkouts(),
+);
+
 class ApiProgrammingRepository implements ProgrammingRepository {
   ApiProgrammingRepository({
     required Dio dio,
@@ -35,21 +39,47 @@ class ApiProgrammingRepository implements ProgrammingRepository {
   }
 
   @override
+  Future<WorkoutImportResult> importWorkouts(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/programming/workouts/import',
+      data: {'rows': rows},
+      options: Options(
+        headers: await _authHeaders(),
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+    final data = response.data ?? const <String, dynamic>{};
+    final errors = ((data['errors'] as List<dynamic>?) ?? const [])
+        .map((item) {
+          final map = item as Map<String, dynamic>;
+          return WorkoutImportError(
+            row: map['row'] as int? ?? 0,
+            message: map['message'] as String? ?? 'Invalid row',
+          );
+        })
+        .toList();
+    return WorkoutImportResult(
+      createdCount: data['created_count'] as int? ?? 0,
+      errors: errors,
+    );
+  }
+
+  @override
   Future<DailyWorkout> createWorkout({
     required DateTime scheduledDate,
     required String title,
-    required String strengthText,
-    required String metconText,
-    required String notesText,
+    required List<DailyWorkoutSection> sections,
+    required DailyWorkoutStatus status,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/programming/workouts',
       data: {
         'scheduled_date': _dateOnly(scheduledDate),
         'title': title,
-        'strength_text': strengthText,
-        'metcon_text': metconText,
-        'notes_text': notesText,
+        'sections': [for (final section in sections) section.toJson()],
+        'status': dailyWorkoutStatusToWire(status),
       },
       options: Options(headers: await _authHeaders()),
     );
@@ -61,9 +91,7 @@ class ApiProgrammingRepository implements ProgrammingRepository {
     required int id,
     required DateTime scheduledDate,
     required String title,
-    required String strengthText,
-    required String metconText,
-    required String notesText,
+    required List<DailyWorkoutSection> sections,
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/programming/workouts',
@@ -71,9 +99,43 @@ class ApiProgrammingRepository implements ProgrammingRepository {
         'id': id,
         'scheduled_date': _dateOnly(scheduledDate),
         'title': title,
-        'strength_text': strengthText,
-        'metcon_text': metconText,
-        'notes_text': notesText,
+        'sections': [for (final section in sections) section.toJson()],
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return _fromJson(response.data?['workout'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<DailyWorkout> publishWorkout({required int id}) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/programming/workouts/publish',
+      data: {'id': id},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _fromJson(response.data?['workout'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<DailyWorkout> unpublishWorkout({required int id}) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/programming/workouts/unpublish',
+      data: {'id': id},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _fromJson(response.data?['workout'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<DailyWorkout> duplicateWorkout({
+    required DateTime sourceDate,
+    required DateTime targetDate,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/programming/workouts/duplicate',
+      data: {
+        'source_date': _dateOnly(sourceDate),
+        'target_date': _dateOnly(targetDate),
       },
       options: Options(headers: await _authHeaders()),
     );
@@ -112,14 +174,19 @@ class ApiProgrammingRepository implements ProgrammingRepository {
     if (data == null) {
       throw Exception('Missing workout data.');
     }
+    final publishedAtRaw = data['published_at'] as String?;
     return DailyWorkout(
       id: data['id'] as int? ?? 0,
       gymId: data['gym_id'] as int? ?? 0,
       scheduledDate: DateTime.parse(data['scheduled_date'] as String? ?? ''),
       title: data['title'] as String? ?? '',
-      strengthText: data['strength_text'] as String? ?? '',
-      metconText: data['metcon_text'] as String? ?? '',
-      notesText: data['notes_text'] as String? ?? '',
+      sections: ((data['sections'] as List<dynamic>?) ?? const [])
+          .map((item) => _sectionFromJson(item as Map<String, dynamic>?))
+          .toList(),
+      status: parseDailyWorkoutStatus(data['status']),
+      publishedAt: publishedAtRaw == null || publishedAtRaw.isEmpty
+          ? null
+          : DateTime.parse(publishedAtRaw),
       canEdit: data['can_edit'] as bool? ?? false,
       whiteboardResults:
           (data['whiteboard_results'] as List<dynamic>? ?? const [])
@@ -135,6 +202,17 @@ class ApiProgrammingRepository implements ProgrammingRepository {
           : _workoutLogSummaryFromJson(
               data['my_workout_log'] as Map<String, dynamic>?,
             ),
+    );
+  }
+
+  DailyWorkoutSection _sectionFromJson(Map<String, dynamic>? data) {
+    if (data == null) {
+      throw Exception('Missing section data.');
+    }
+    return DailyWorkoutSection(
+      title: data['title'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      scoreType: parseWorkoutSectionScore(data['score_type']),
     );
   }
 

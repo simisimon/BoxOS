@@ -1,5 +1,4 @@
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
-import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 
 class ScheduleClass {
@@ -12,8 +11,6 @@ class ScheduleClass {
     required this.durationMinutes,
     required this.capacity,
     this.assignedTrainer,
-    this.wodDescription = '',
-    this.sections = const [],
     this.bookedCount = 0,
     this.remainingSpots = 0,
     this.waitlistCount = 0,
@@ -31,8 +28,6 @@ class ScheduleClass {
   final int durationMinutes;
   final int capacity;
   final ScheduleTrainer? assignedTrainer;
-  final String wodDescription;
-  final List<ScheduleSection> sections;
   final int bookedCount;
   final int remainingSpots;
   final int waitlistCount;

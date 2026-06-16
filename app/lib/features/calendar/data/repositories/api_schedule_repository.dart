@@ -3,7 +3,6 @@ import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
-import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:dio/dio.dart';
@@ -43,36 +42,6 @@ class ApiScheduleRepository implements ScheduleRepository {
   }
 
   @override
-  Future<ScheduleImportResult> importClasses(
-    List<Map<String, dynamic>> rows,
-  ) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/schedule/classes/import',
-      data: {'rows': rows},
-      options: Options(
-        headers: await _authHeaders(),
-        // 422 carries the per-row validation errors — read it instead of
-        // throwing so the dialog can surface them.
-        validateStatus: (status) => status != null && status < 500,
-      ),
-    );
-    final data = response.data ?? const <String, dynamic>{};
-    final errors = ((data['errors'] as List<dynamic>?) ?? const [])
-        .map((item) {
-          final map = item as Map<String, dynamic>;
-          return ScheduleImportError(
-            row: map['row'] as int? ?? 0,
-            message: map['message'] as String? ?? 'Invalid row',
-          );
-        })
-        .toList();
-    return ScheduleImportResult(
-      createdCount: data['created_count'] as int? ?? 0,
-      errors: errors,
-    );
-  }
-
-  @override
   Future<List<ScheduleTrainer>> fetchTrainers() async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/schedule/trainers',
@@ -92,8 +61,6 @@ class ApiScheduleRepository implements ScheduleRepository {
     required int durationMinutes,
     required int capacity,
     required int trainerUserId,
-    required String wodDescription,
-    List<ScheduleSection> sections = const [],
     String recurrenceFrequency = 'none',
     int occurrenceCount = 1,
   }) async {
@@ -108,8 +75,6 @@ class ApiScheduleRepository implements ScheduleRepository {
         'duration_minutes': durationMinutes,
         'capacity': capacity,
         'trainer_user_id': trainerUserId,
-        'wod_description': wodDescription,
-        'sections': [for (final section in sections) section.toJson()],
         'recurrence_frequency': recurrenceFrequency,
         'occurrence_count': occurrenceCount,
       },
@@ -127,8 +92,6 @@ class ApiScheduleRepository implements ScheduleRepository {
     required int durationMinutes,
     required int capacity,
     required int trainerUserId,
-    required String wodDescription,
-    List<ScheduleSection> sections = const [],
   }) async {
     final endTime = startTime.add(Duration(minutes: durationMinutes));
     final response = await _dio.patch<Map<String, dynamic>>(
@@ -142,8 +105,6 @@ class ApiScheduleRepository implements ScheduleRepository {
         'duration_minutes': durationMinutes,
         'capacity': capacity,
         'trainer_user_id': trainerUserId,
-        'wod_description': wodDescription,
-        'sections': [for (final section in sections) section.toJson()],
       },
       options: Options(headers: await _authHeaders()),
     );
@@ -236,10 +197,6 @@ class ApiScheduleRepository implements ScheduleRepository {
       assignedTrainer: _nullableTrainerFromJson(
         data['assigned_trainer'] as Map<String, dynamic>?,
       ),
-      wodDescription: data['wod_description'] as String? ?? '',
-      sections: ((data['sections'] as List<dynamic>?) ?? const [])
-          .map((item) => _sectionFromJson(item as Map<String, dynamic>?))
-          .toList(),
       bookedCount: data['booked_count'] as int? ?? 0,
       remainingSpots: data['remaining_spots'] as int? ?? 0,
       waitlistCount: data['waitlist_count'] as int? ?? 0,
@@ -249,17 +206,6 @@ class ApiScheduleRepository implements ScheduleRepository {
       bookings: ((data['bookings'] as List<dynamic>?) ?? const [])
           .map((item) => _bookingFromJson(item as Map<String, dynamic>?))
           .toList(),
-    );
-  }
-
-  ScheduleSection _sectionFromJson(Map<String, dynamic>? data) {
-    if (data == null) {
-      throw Exception('Missing section data.');
-    }
-    return ScheduleSection(
-      title: data['title'] as String? ?? '',
-      description: data['description'] as String? ?? '',
-      scoreType: ScheduleSectionScore.fromApi(data['score_type'] as String?),
     );
   }
 
