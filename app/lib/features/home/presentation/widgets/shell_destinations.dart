@@ -11,6 +11,7 @@ const int kLogbookBranch = 2;
 const int kMembersBranch = 3;
 const int kCommunityBranch = 4;
 const int kProfileBranch = 5;
+const int kTrackingBranch = 6;
 
 /// A single bottom-nav / rail destination. [branchIndex] is the shell branch it
 /// activates, decoupling the role-specific tab order from the fixed branch
@@ -56,6 +57,12 @@ const List<ShellDestination> _athleteDestinations = [
     label: 'Logbook',
   ),
   ShellDestination(
+    branchIndex: kTrackingBranch,
+    icon: Icons.insights_outlined,
+    activeIcon: Icons.insights_rounded,
+    label: 'Tracking',
+  ),
+  ShellDestination(
     branchIndex: kProfileBranch,
     icon: Icons.person_outline_rounded,
     activeIcon: Icons.person_rounded,
@@ -88,6 +95,18 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.chat_bubble_outline_rounded,
     activeIcon: Icons.chat_bubble_rounded,
     label: 'Community',
+  ),
+  ShellDestination(
+    branchIndex: kLogbookBranch,
+    icon: Icons.menu_book_outlined,
+    activeIcon: Icons.menu_book_rounded,
+    label: 'Logbook',
+  ),
+  ShellDestination(
+    branchIndex: kTrackingBranch,
+    icon: Icons.insights_outlined,
+    activeIcon: Icons.insights_rounded,
+    label: 'Tracking',
   ),
   ShellDestination(
     branchIndex: kProfileBranch,

@@ -19,6 +19,7 @@ import 'package:app/features/home/presentation/screens/authenticated_shell_scree
 import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
 import 'package:app/features/members/presentation/screens/members_screen.dart';
+import 'package:app/features/tracking/presentation/screens/tracking_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
@@ -150,6 +151,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/profile',
                 name: 'profile',
                 builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/tracking',
+                name: 'tracking',
+                builder: (context, state) => const TrackingScreen(),
               ),
             ],
           ),

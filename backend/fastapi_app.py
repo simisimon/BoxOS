@@ -254,6 +254,15 @@ class PersonalWorkoutDeleteRequest(BaseModel):
     id: int
 
 
+class TrackingSessionRequest(BaseModel):
+    source_kind: str
+    source_key: str
+    workout_title: str
+    score_type: str
+    score_value: Any
+    notes_text: str | None = None
+
+
 class DailyWorkoutSectionPayload(BaseModel):
     title: str | None = None
     description: str
@@ -3218,6 +3227,91 @@ def delete_personal_workout(body: PersonalWorkoutDeleteRequest, session: dict[st
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
             connection.execute("delete from personal_workouts where id = ?", (workout_id,))
         return {"deleted": True}
+    finally:
+        connection.close()
+
+
+def _tracking_session_payload(row: Any) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "source_kind": row["source_kind"],
+        "source_key": row["source_key"],
+        "workout_title": row["workout_title"],
+        "score_type": row["score_type"],
+        "score_value": row["score_value"],
+        "score_label": row["score_label"],
+        "notes_text": row["notes_text"],
+        "created_at": row["created_at"],
+    }
+
+
+@app.get("/tracking-sessions")
+def list_tracking_sessions(
+    source_kind: str,
+    source_key: str,
+    limit: int = 20,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    kind = validation.require_tracking_source_kind(source_kind)
+    key = validation.require_tracking_source_key(source_key)
+    capped_limit = max(1, min(limit, 100))
+    connection = db.get_connection()
+    try:
+        rows = connection.execute(
+            """
+            select id, source_kind, source_key, workout_title, score_type,
+                   score_value, score_label, notes_text, created_at
+            from tracking_sessions
+            where user_id = ? and source_kind = ? and source_key = ?
+            order by created_at desc, id desc
+            limit ?
+            """,
+            (session["user_id"], kind, key, capped_limit),
+        ).fetchall()
+        return {"sessions": [_tracking_session_payload(row) for row in rows]}
+    finally:
+        connection.close()
+
+
+@app.post("/tracking-sessions", status_code=HTTPStatus.CREATED.value)
+def create_tracking_session(
+    body: TrackingSessionRequest,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    kind = validation.require_tracking_source_kind(body.source_kind)
+    key = validation.require_tracking_source_key(body.source_key)
+    title = validation.require_tracking_workout_title(body.workout_title)
+    score_type, score_value, score_label = validation.require_tracking_score(
+        body.score_type, body.score_value
+    )
+    notes = validation.require_tracking_notes(body.notes_text)
+    timestamp = security.isoformat(security.now_utc())
+    connection = db.get_connection()
+    try:
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into tracking_sessions (
+                  user_id, source_kind, source_key, workout_title,
+                  score_type, score_value, score_label, notes_text, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                returning id, source_kind, source_key, workout_title, score_type,
+                          score_value, score_label, notes_text, created_at
+                """,
+                (
+                    session["user_id"],
+                    kind,
+                    key,
+                    title,
+                    score_type,
+                    score_value,
+                    score_label,
+                    notes,
+                    timestamp,
+                ),
+            )
+            row = cursor.fetchone()
+        return {"session": _tracking_session_payload(row)}
     finally:
         connection.close()
 

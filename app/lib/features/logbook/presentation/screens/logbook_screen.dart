@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
-import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/logbook/data/repositories/api_benchmark_repository.dart';
 import 'package:app/features/logbook/data/repositories/api_exercise_repository.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
@@ -142,11 +140,6 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
     }
   }
 
-  void _startWorkout() {
-    // Active session + timer/logging lands in the next slice.
-    _showSnack('Starting a workout arrives in the next update.');
-  }
-
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
@@ -170,17 +163,7 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            if (hasActiveGym) ...[
-              const _SectionTitle(title: 'Performance board'),
-              const SizedBox(height: 12),
-              _buildPerformanceBoard(),
-              const SizedBox(height: 20),
-              const _SectionTitle(title: 'Benchmark history'),
-              const SizedBox(height: 12),
-              _buildBenchmarkHistory(),
-              const SizedBox(height: 20),
-            ],
-            _LogbookActions(onStart: _startWorkout, onCreate: _createWorkout),
+            _CreateWorkoutAction(onCreate: _createWorkout),
             const SizedBox(height: 20),
             const _SectionTitle(title: 'My workouts'),
             const SizedBox(height: 12),
@@ -195,82 +178,12 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
                 icon: Icons.history_outlined,
                 title: 'Join a gym for history',
                 message:
-                    'Your workout history and performance board appear once a gym is active. You can still create personal workouts above.',
+                    'Your workout history appears once a gym is active. You can still create personal workouts above.',
                 accentColor: appPrimary,
               ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildPerformanceBoard() {
-    return FutureBuilder<List<WorkoutLogEntry>>(
-      future: _entriesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return _StateCard(
-            icon: Icons.error_outline,
-            title: 'Failed to load logbook',
-            message: errorMessageFrom(
-              snapshot.error!,
-              fallback: 'Failed to load logbook',
-            ),
-            accentColor: appPrimary,
-          );
-        }
-        return _SnapshotGrid(
-          entries: snapshot.data ?? const <WorkoutLogEntry>[],
-        );
-      },
-    );
-  }
-
-  Widget _buildBenchmarkHistory() {
-    return FutureBuilder<List<WorkoutLogEntry>>(
-      future: _entriesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const AppLoadingState(height: 160);
-        }
-        if (snapshot.hasError) {
-          return _StateCard(
-            icon: Icons.error_outline,
-            title: 'Failed to load progress',
-            message: errorMessageFrom(
-              snapshot.error!,
-              fallback: 'Failed to load progress',
-            ),
-            accentColor: appPrimary,
-          );
-        }
-        final entries = snapshot.data ?? const <WorkoutLogEntry>[];
-        // Need at least two attempts of the same workout to show progression.
-        final groups = _BenchmarkGroup.from(entries);
-        if (groups.isEmpty) {
-          return const _StateCard(
-            icon: Icons.show_chart_rounded,
-            title: 'Log it twice to see progress',
-            message:
-                'Once you’ve logged the same workout more than once, the trend, your best, and since-last-time delta show up here.',
-            accentColor: appPrimary,
-          );
-        }
-        return Column(
-          children: [
-            for (var i = 0; i < groups.length; i++) ...[
-              _BenchmarkCard(group: groups[i]),
-              if (i != groups.length - 1) const SizedBox(height: 12),
-            ],
-          ],
-        );
-      },
     );
   }
 
@@ -377,76 +290,6 @@ class _SectionTitle extends StatelessWidget {
         color: appText,
         fontWeight: FontWeight.w800,
       ),
-    );
-  }
-}
-
-class _SnapshotGrid extends StatelessWidget {
-  const _SnapshotGrid({required this.entries});
-
-  final List<WorkoutLogEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final thisWeekCount = entries
-        .where(
-          (entry) => entry.scheduledDate.isAfter(
-            now.subtract(const Duration(days: 7)),
-          ),
-        )
-        .length;
-    final latest = entries.isEmpty ? 'Not yet' : entries.first.scoreLabel;
-    WorkoutLogEntry? latestPr;
-    for (final entry in entries) {
-      if (entry.isPr) {
-        latestPr = entry;
-        break;
-      }
-    }
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: AppStatTile(
-                label: 'Workouts This Week',
-                value: '$thisWeekCount',
-                accentColor: appPrimary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: AppStatTile(
-                label: 'Total Logged',
-                value: '${entries.length}',
-                accentColor: appPrimary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: AppStatTile(
-                label: 'Latest Score',
-                value: latest,
-                accentColor: appPrimary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: AppStatTile(
-                label: 'Latest PR',
-                value: latestPr?.scoreLabel ?? 'Not yet',
-                accentColor: appPrimary,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -829,36 +672,19 @@ class _WorkoutDraft {
   final Map<String, dynamic> structure;
 }
 
-class _LogbookActions extends StatelessWidget {
-  const _LogbookActions({required this.onStart, required this.onCreate});
+class _CreateWorkoutAction extends StatelessWidget {
+  const _CreateWorkoutAction({required this.onCreate});
 
-  final VoidCallback onStart;
   final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionCard(
-            icon: Icons.play_arrow_rounded,
-            title: 'Start',
-            subtitle: 'workout',
-            primary: true,
-            onTap: onStart,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionCard(
-            icon: Icons.add_rounded,
-            title: 'Create',
-            subtitle: 'workout',
-            primary: false,
-            onTap: onCreate,
-          ),
-        ),
-      ],
+    return _ActionCard(
+      icon: Icons.add_rounded,
+      title: 'Create',
+      subtitle: 'workout',
+      primary: true,
+      onTap: onCreate,
     );
   }
 }
@@ -1991,283 +1817,5 @@ class _BenchmarkTile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Groups workout-log entries by `(workoutTitle, scoreType)` so the same WOD
-/// retested across weeks forms a single trend. A group needs at least two
-/// attempts; otherwise there's nothing to compare and no shape to draw.
-class _BenchmarkGroup {
-  const _BenchmarkGroup({
-    required this.title,
-    required this.scoreType,
-    required this.attempts,
-    required this.bestAttempt,
-    required this.lastAttempt,
-    required this.previousAttempt,
-  });
-
-  final String title;
-  final String scoreType;
-  final List<WorkoutLogEntry> attempts; // oldest -> newest
-  final WorkoutLogEntry bestAttempt;
-  final WorkoutLogEntry lastAttempt;
-  final WorkoutLogEntry? previousAttempt;
-
-  /// True if a lower score is better for this group (time-based WODs).
-  bool get lowerIsBetter => scoreType.toLowerCase() == 'time';
-
-  /// Signed delta between the most recent attempt and the one before. Positive
-  /// always means *improvement* — so for time WODs the sign is flipped.
-  double? get improvementDelta {
-    if (previousAttempt == null) return null;
-    final diff = lastAttempt.scoreValue - previousAttempt!.scoreValue;
-    return lowerIsBetter ? -diff : diff;
-  }
-
-  static List<_BenchmarkGroup> from(List<WorkoutLogEntry> entries) {
-    final byKey = <String, List<WorkoutLogEntry>>{};
-    for (final entry in entries) {
-      final key = '${entry.workoutTitle}|${entry.scoreType}';
-      byKey.putIfAbsent(key, () => []).add(entry);
-    }
-    final groups = <_BenchmarkGroup>[];
-    for (final attempts in byKey.values) {
-      if (attempts.length < 2) continue;
-      attempts.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
-      final scoreType = attempts.first.scoreType.toLowerCase();
-      final lowerIsBetter = scoreType == 'time';
-      final best = attempts.reduce(
-        (acc, e) => lowerIsBetter
-            ? (e.scoreValue < acc.scoreValue ? e : acc)
-            : (e.scoreValue > acc.scoreValue ? e : acc),
-      );
-      groups.add(
-        _BenchmarkGroup(
-          title: attempts.first.workoutTitle,
-          scoreType: attempts.first.scoreType,
-          attempts: List.unmodifiable(attempts),
-          bestAttempt: best,
-          lastAttempt: attempts.last,
-          previousAttempt: attempts[attempts.length - 2],
-        ),
-      );
-    }
-    // Surface the benchmarks with the most recent activity first.
-    groups.sort(
-      (a, b) => b.lastAttempt.scheduledDate.compareTo(a.lastAttempt.scheduledDate),
-    );
-    return groups;
-  }
-}
-
-class _BenchmarkCard extends StatelessWidget {
-  const _BenchmarkCard({required this.group});
-
-  final _BenchmarkGroup group;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final delta = group.improvementDelta;
-    final deltaTone = delta == null
-        ? AppMetricTone.neutral
-        : (delta > 0 ? AppMetricTone.positive : AppMetricTone.negative);
-    return AppCard(
-      padding: const EdgeInsets.all(appSpaceLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: appText,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${group.attempts.length} attempts · ${group.scoreType.toUpperCase()}',
-                      style: const TextStyle(
-                        color: appSubtleText,
-                        fontSize: 11,
-                        letterSpacing: 0.6,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              AppPill(
-                label: 'PR ${group.bestAttempt.scoreLabel}',
-                icon: Icons.emoji_events_outlined,
-                intent: AppPillIntent.primary,
-                dense: true,
-              ),
-            ],
-          ),
-          const SizedBox(height: appSpaceMd),
-          SizedBox(
-            height: 56,
-            child: CustomPaint(
-              painter: _SparklinePainter(
-                values: group.attempts.map((e) => e.scoreValue).toList(),
-                lowerIsBetter: group.lowerIsBetter,
-              ),
-              child: const SizedBox.expand(),
-            ),
-          ),
-          const SizedBox(height: appSpaceMd),
-          Row(
-            children: [
-              Expanded(
-                child: AppMetric(
-                  label: 'Latest',
-                  value: group.lastAttempt.scoreLabel,
-                  valueSize: 18,
-                ),
-              ),
-              if (group.previousAttempt != null)
-                Expanded(
-                  child: AppMetric(
-                    label: 'Previous',
-                    value: group.previousAttempt!.scoreLabel,
-                    valueSize: 18,
-                  ),
-                ),
-              Expanded(
-                child: AppMetric(
-                  label: 'Best',
-                  value: group.bestAttempt.scoreLabel,
-                  valueSize: 18,
-                  delta: delta == null
-                      ? null
-                      : AppMetricDelta(
-                          _formatDelta(delta, group.scoreType),
-                          tone: deltaTone,
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _formatDelta(double improvement, String scoreType) {
-    final abs = improvement.abs();
-    final sign = improvement >= 0 ? '+' : '−';
-    switch (scoreType.toLowerCase()) {
-      case 'time':
-        // Improvement is already expressed as seconds shaved off when positive.
-        final mins = abs ~/ 60;
-        final secs = (abs % 60).round();
-        if (mins > 0) {
-          return '$sign${mins}m ${secs.toString().padLeft(2, '0')}s';
-        }
-        return '$sign${abs.toStringAsFixed(0)}s';
-      case 'load':
-        return '$sign${abs.toStringAsFixed(abs >= 10 ? 0 : 1)}';
-      case 'reps':
-        return '$sign${abs.toStringAsFixed(0)}';
-      default:
-        return '$sign${abs.toStringAsFixed(1)}';
-    }
-  }
-}
-
-class _SparklinePainter extends CustomPainter {
-  _SparklinePainter({required this.values, required this.lowerIsBetter});
-
-  final List<double> values;
-  final bool lowerIsBetter;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
-
-    final minValue = values.reduce(math.min);
-    final maxValue = values.reduce(math.max);
-    final span = (maxValue - minValue).abs();
-    final safeSpan = span < 0.0001 ? 1.0 : span;
-
-    double normalize(double value) {
-      // Always draw "better" toward the top of the box.
-      final ratio = (value - minValue) / safeSpan;
-      return lowerIsBetter ? 1 - ratio : ratio;
-    }
-
-    final padding = 4.0;
-    final w = size.width - padding * 2;
-    final h = size.height - padding * 2;
-    final step = w / (values.length - 1);
-
-    final points = <Offset>[];
-    for (var i = 0; i < values.length; i++) {
-      final x = padding + step * i;
-      final y = padding + (1 - normalize(values[i])) * h;
-      points.add(Offset(x, y));
-    }
-
-    // Base track — quiet horizontal hairline so even a flat trend reads.
-    final baseLine = Paint()
-      ..color = appBorder
-      ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(padding, size.height - padding),
-      Offset(size.width - padding, size.height - padding),
-      baseLine,
-    );
-
-    // Filled gradient under the line for a hint of volume without noise.
-    final fillPath = Path()..moveTo(points.first.dx, size.height - padding);
-    for (final p in points) {
-      fillPath.lineTo(p.dx, p.dy);
-    }
-    fillPath.lineTo(points.last.dx, size.height - padding);
-    fillPath.close();
-    final fill = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          appPrimary.withValues(alpha: 0.22),
-          appPrimary.withValues(alpha: 0.0),
-        ],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(fillPath, fill);
-
-    // Main stroke.
-    final strokePath = Path()..moveTo(points.first.dx, points.first.dy);
-    for (var i = 1; i < points.length; i++) {
-      strokePath.lineTo(points[i].dx, points[i].dy);
-    }
-    final stroke = Paint()
-      ..color = appPrimary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(strokePath, stroke);
-
-    // Highlight the most recent point.
-    final last = points.last;
-    canvas.drawCircle(last, 4, Paint()..color = appPrimary);
-    canvas.drawCircle(last, 2, Paint()..color = appText);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter old) =>
-      old.values.length != values.length || old.lowerIsBetter != lowerIsBetter;
 }
 

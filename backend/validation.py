@@ -808,6 +808,128 @@ def require_personal_workout_structure(value: Any) -> dict[str, Any]:
     return value
 
 
+_TRACKING_SOURCE_KINDS = {"personal", "benchmark", "daily"}
+_TRACKING_SCORE_TYPES = {"time", "rounds_reps", "load"}
+
+
+def require_tracking_source_kind(value: Any) -> str:
+    kind = str(value or "").strip().lower()
+    if kind not in _TRACKING_SOURCE_KINDS:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Source kind must be personal, benchmark, or daily.",
+        )
+    return kind
+
+
+def require_tracking_source_key(value: Any) -> str:
+    key = str(value or "").strip()
+    if not key:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Source key is required.")
+    if len(key) > 120:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Source key must be 120 characters or fewer.")
+    return key
+
+
+def require_tracking_workout_title(value: Any) -> str:
+    title = str(value or "").strip()
+    if not title:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title is required.")
+    if len(title) > 200:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Workout title must be 200 characters or fewer.")
+    return title
+
+
+def require_tracking_notes(value: Any) -> str:
+    notes = str(value or "").strip()
+    if len(notes) > 500:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Notes must be 500 characters or fewer.")
+    return notes
+
+
+def require_tracking_score(score_type_value: Any, score_value_value: Any) -> tuple[str, float, str]:
+    """Parse a tracking score into (score_type, sortable_value, display_label).
+
+    Score types:
+      - 'time'        → mm:ss or hh:mm:ss, stored as total seconds (lower is better)
+      - 'rounds_reps' → 'rounds+reps' or just 'rounds', stored as rounds*1000+reps
+      - 'load'        → numeric kg, stored as the float
+    """
+    score_type = str(score_type_value or "").strip().lower()
+    if score_type not in _TRACKING_SCORE_TYPES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "Score type must be time, rounds_reps, or load.",
+        )
+    raw = str(score_value_value or "").strip()
+    if not raw:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Score value is required.")
+
+    if score_type == "time":
+        normalized = raw.replace(".", ":")
+        parts = normalized.split(":")
+        if len(parts) not in {2, 3}:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Time score must be mm:ss or hh:mm:ss.")
+        try:
+            numbers = [int(part) for part in parts]
+        except ValueError:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Time score must be mm:ss or hh:mm:ss.")
+        if any(number < 0 for number in numbers):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Time score must be positive.")
+        if len(numbers) == 2:
+            minutes, seconds = numbers
+            hours = 0
+        else:
+            hours, minutes, seconds = numbers
+            if minutes >= 60:
+                raise ApiError(HTTPStatus.BAD_REQUEST, "Minutes must be below 60 for hh:mm:ss.")
+        if seconds >= 60:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Seconds must be below 60.")
+        total_seconds = float(hours * 3600 + minutes * 60 + seconds)
+        if total_seconds <= 0:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Time score must be positive.")
+        label = (
+            f"{hours}:{minutes:02d}:{seconds:02d}"
+            if hours > 0
+            else f"{minutes}:{seconds:02d}"
+        )
+        return score_type, total_seconds, label
+
+    if score_type == "rounds_reps":
+        normalized = raw.replace("+", " ").replace("/", " ")
+        parts = [p for p in normalized.split() if p]
+        if len(parts) not in {1, 2}:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "Rounds + reps must be 'rounds' or 'rounds+reps'.",
+            )
+        try:
+            rounds = int(parts[0])
+            reps = int(parts[1]) if len(parts) == 2 else 0
+        except ValueError:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "Rounds + reps must be whole numbers.",
+            )
+        if rounds < 0 or reps < 0:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Rounds and reps must be positive.")
+        if rounds == 0 and reps == 0:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Score value must be positive.")
+        sortable = float(rounds * 1000 + reps)
+        label = f"{rounds}+{reps}" if reps > 0 else f"{rounds}"
+        return score_type, sortable, label
+
+    # load
+    try:
+        value_float = float(raw.replace(",", "."))
+    except ValueError:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Weight must be numeric.")
+    if value_float <= 0:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Weight must be positive.")
+    label = f"{value_float:g} kg"
+    return score_type, value_float, label
+
+
 def require_personal_workout_id(value: Any) -> int:
     try:
         workout_id = int(value)
