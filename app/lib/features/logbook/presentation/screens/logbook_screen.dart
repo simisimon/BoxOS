@@ -62,18 +62,7 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _createWorkout() async {
-    final type = await showModalBottomSheet<WorkoutType>(
-      context: context,
-      backgroundColor: appSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(appRadiusXl)),
-      ),
-      builder: (context) => const _WorkoutTypeSheet(),
-    );
-    if (type == null || !mounted) {
-      return;
-    }
+  Future<void> _createWorkout(WorkoutType type) async {
     final draft = await showDialog<_WorkoutDraft>(
       context: context,
       builder: (context) => type == WorkoutType.crossfit
@@ -163,7 +152,7 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            _CreateWorkoutAction(onCreate: _createWorkout),
+            _CreateWorkoutActions(onCreate: _createWorkout),
             const SizedBox(height: 20),
             const _SectionTitle(title: 'My workouts'),
             const SizedBox(height: 12),
@@ -672,86 +661,106 @@ class _WorkoutDraft {
   final Map<String, dynamic> structure;
 }
 
-class _CreateWorkoutAction extends StatelessWidget {
-  const _CreateWorkoutAction({required this.onCreate});
+class _CreateWorkoutActions extends StatelessWidget {
+  const _CreateWorkoutActions({required this.onCreate});
 
-  final VoidCallback onCreate;
+  final ValueChanged<WorkoutType> onCreate;
 
   @override
   Widget build(BuildContext context) {
-    return _ActionCard(
-      icon: Icons.add_rounded,
-      title: 'Create',
-      subtitle: 'workout',
-      primary: true,
-      onTap: onCreate,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(title: 'Create workout'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _TypeActionCard(
+                icon: Icons.fitness_center_outlined,
+                title: 'Fitness',
+                subtitle: 'Strength · sets, reps, weight',
+                color: appPrimary,
+                onTap: () => onCreate(WorkoutType.fitness),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _TypeActionCard(
+                icon: Icons.local_fire_department_outlined,
+                title: 'CrossFit',
+                subtitle: 'WOD · format, time cap, movements',
+                color: _crossfitColor,
+                onTap: () => onCreate(WorkoutType.crossfit),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
+class _TypeActionCard extends StatelessWidget {
+  const _TypeActionCard({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.primary,
+    required this.color,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool primary;
+  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = primary ? Colors.white : appText;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(appRadiusLg),
         onTap: onTap,
         child: Ink(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: primary ? appPrimary : appSurface,
+            color: appSurface,
             borderRadius: BorderRadius.circular(appRadiusLg),
-            border: Border.all(color: primary ? appPrimary : appBorder),
+            border: Border.all(color: appBorder),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: primary
-                      ? Colors.white.withValues(alpha: 0.18)
-                      : appPrimary.withValues(alpha: 0.12),
+                  color: color.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(appRadiusMd),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
-                child: Icon(
-                  icon,
-                  color: primary ? Colors.white : appPrimary,
-                  size: 26,
-                ),
+                child: Icon(icon, color: color, size: 22),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Text(
                 title,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 18,
+                style: const TextStyle(
+                  color: appText,
+                  fontSize: 17,
                   fontWeight: FontWeight.w900,
                   height: 1,
                 ),
               ),
+              const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(
-                  color: primary ? Colors.white70 : appSubtleText,
+                style: const TextStyle(
+                  color: appSubtleText,
+                  fontSize: 12,
+                  height: 1.35,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -762,6 +771,7 @@ class _ActionCard extends StatelessWidget {
     );
   }
 }
+
 
 class _TypeBadge extends StatelessWidget {
   const _TypeBadge({required this.type});
@@ -868,119 +878,6 @@ class _PersonalWorkoutCard extends StatelessWidget {
             tooltip: 'Delete',
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkoutTypeSheet extends StatelessWidget {
-  const _WorkoutTypeSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Create workout',
-              style: TextStyle(
-                color: appText,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Choose a workout type.',
-              style: TextStyle(color: appSubtleText),
-            ),
-            const SizedBox(height: 16),
-            _TypeOptionTile(
-              icon: Icons.fitness_center_outlined,
-              title: 'Fitness',
-              subtitle: 'Strength & accessory — exercises with sets, reps, weight.',
-              color: appPrimary,
-              onTap: () => Navigator.of(context).pop(WorkoutType.fitness),
-            ),
-            const SizedBox(height: 12),
-            _TypeOptionTile(
-              icon: Icons.local_fire_department_outlined,
-              title: 'CrossFit',
-              subtitle: 'WOD — format, time cap, and a list of movements.',
-              color: _crossfitColor,
-              onTap: () => Navigator.of(context).pop(WorkoutType.crossfit),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TypeOptionTile extends StatelessWidget {
-  const _TypeOptionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(appRadiusLg),
-        onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(appRadiusLg),
-            border: Border.all(color: appBorder),
-          ),
-          child: Row(
-            children: [
-              AppAccentBadge(icon: icon, color: color),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: appText,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: appSubtleText,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: appSubtleText),
-            ],
-          ),
-        ),
       ),
     );
   }

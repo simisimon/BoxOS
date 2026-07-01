@@ -391,15 +391,20 @@ class _SectionRow extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: appPrimary.withOpacity(0.07),
+        color: appPrimary.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: appPrimary.withOpacity(0.18)),
+        border: Border.all(color: appPrimary.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Text(
+                (index + 1).toString().padLeft(2, '0'),
+                style: appMono(fontSize: 11, color: appPrimary),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   label.toUpperCase(),
@@ -435,18 +440,15 @@ class _ScoreBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: appPrimary.withOpacity(0.18),
+        color: appPrimary.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: appPrimary.withOpacity(0.35)),
+        border: Border.all(color: appPrimary.withValues(alpha: 0.35)),
       ),
       child: Text(
-        workoutSectionScoreLabel(score),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: appText,
-          fontWeight: FontWeight.w700,
-        ),
+        workoutSectionScoreLabel(score).toUpperCase(),
+        style: appMono(fontSize: 9, letterSpacing: 1.1, color: appText),
       ),
     );
   }
@@ -465,9 +467,9 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.16),
+        color: color.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
         label,

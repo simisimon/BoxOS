@@ -441,6 +441,14 @@ class _HistorySection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _PrHistoryChart(
+                sessions: sessions,
+                best: best,
+                lowerIsBetter: lowerIsBetter,
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: appBorder, height: 1),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   const Text(
@@ -469,6 +477,138 @@ class _HistorySection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Compact PR-history sparkline. Bars run oldest → newest; taller always means
+/// "better" (for time-scored workouts the value axis is inverted so a faster
+/// time reads as a taller bar), and the personal best glows cyan. A caption
+/// summarises the trend and the since-last-time delta.
+class _PrHistoryChart extends StatelessWidget {
+  const _PrHistoryChart({
+    required this.sessions,
+    required this.best,
+    required this.lowerIsBetter,
+  });
+
+  final List<TrackingSession> sessions;
+  final TrackingSession best;
+  final bool lowerIsBetter;
+
+  @override
+  Widget build(BuildContext context) {
+    final ordered = [...sessions]
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final values = ordered.map((s) => s.scoreValue).toList();
+    final minValue = values.reduce((a, b) => a < b ? a : b);
+    final maxValue = values.reduce((a, b) => a > b ? a : b);
+    final span = (maxValue - minValue).abs();
+
+    double heightFraction(double value) {
+      if (span == 0) return 1;
+      final normalized = (value - minValue) / span; // 0 worst-low .. 1 best-high
+      final goodness = lowerIsBetter ? 1 - normalized : normalized;
+      return 0.18 + goodness * 0.82;
+    }
+
+    // Since-last-time: compare the two most recent attempts.
+    String? deltaLabel;
+    Color deltaColor = appSubtleText;
+    IconData? deltaIcon;
+    if (ordered.length >= 2) {
+      final latest = ordered[ordered.length - 1];
+      final previous = ordered[ordered.length - 2];
+      final improved = lowerIsBetter
+          ? latest.scoreValue < previous.scoreValue
+          : latest.scoreValue > previous.scoreValue;
+      final same = latest.scoreValue == previous.scoreValue;
+      if (same) {
+        deltaLabel = 'matched last';
+      } else {
+        deltaLabel = improved ? 'improved vs last' : 'down vs last';
+        deltaColor = improved ? appSuccess : appWarning;
+        deltaIcon =
+            improved ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'PR HISTORY · ${ordered.length} '
+              'ATTEMPT${ordered.length == 1 ? '' : 'S'}',
+              style: appMono(fontSize: 10, letterSpacing: 1.3),
+            ),
+            const Spacer(),
+            Text(
+              lowerIsBetter ? 'lower is faster' : 'higher is better',
+              style: appMono(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 66,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var i = 0; i < ordered.length; i++) ...[
+                if (i > 0) const SizedBox(width: 5),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      height: 66 * heightFraction(ordered[i].scoreValue),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(3),
+                        color: ordered[i].id == best.id
+                            ? appPrimary
+                            : appPrimary.withValues(alpha: 0.28),
+                        boxShadow: ordered[i].id == best.id
+                            ? [
+                                BoxShadow(
+                                  color: appPrimary.withValues(alpha: 0.5),
+                                  blurRadius: 10,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (deltaLabel != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (deltaIcon != null) ...[
+                Icon(deltaIcon, size: 13, color: deltaColor),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                deltaLabel,
+                style: appMono(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                  color: deltaColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

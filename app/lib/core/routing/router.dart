@@ -11,6 +11,7 @@ import 'package:app/features/auth/presentation/screens/admin_sign_up_screen.dart
 import 'package:app/features/auth/presentation/screens/reset_password_screen.dart';
 import 'package:app/features/auth/presentation/screens/sign_up_screen.dart';
 import 'package:app/features/auth/presentation/screens/verify_email_screen.dart';
+import 'package:app/features/gyms/presentation/screens/box_settings_screen.dart';
 import 'package:app/features/gyms/presentation/screens/create_gym_screen.dart';
 import 'package:app/features/gyms/presentation/screens/gym_directory_screen.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
@@ -191,6 +192,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin-analytics',
         name: 'admin-analytics',
         builder: (context, state) => const AdminAnalyticsScreen(),
+      ),
+      GoRoute(
+        path: '/box-settings',
+        name: 'box-settings',
+        builder: (context, state) => const BoxSettingsScreen(),
       ),
       GoRoute(
         path: '/change-password',

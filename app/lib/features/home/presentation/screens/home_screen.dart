@@ -9,6 +9,8 @@ import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
+import 'package:app/features/gyms/domain/models/gym_join_request.dart';
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
@@ -36,6 +38,14 @@ const _weeklySessionGoal = 5;
 const _perfRed = Color(0xFFFF5C6E);
 const _perfAmber = Color(0xFFFFB454);
 const _perfGreen = Color(0xFF3DDC97);
+
+// Pending join requests for the owner dashboard's inline-approve strip. Kept
+// auto-disposing so it re-fetches whenever the owner returns to /home, and is
+// invalidated after each approve/reject so the strip stays in sync.
+final _dashboardJoinRequestsProvider =
+    FutureProvider.autoDispose<List<GymJoinRequest>>((ref) async {
+  return ref.read(gymRepositoryProvider).fetchJoinRequests();
+});
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -2712,137 +2722,305 @@ class _OwnerDashboard extends ConsumerWidget {
   }
 }
 
-class _OwnerDashboardContent extends StatelessWidget {
+class _OwnerDashboardContent extends ConsumerWidget {
   const _OwnerDashboardContent({required this.overview});
 
   final AdminAnalyticsOverview overview;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final window = overview.windowDays;
+    final attendancePct = (overview.attendanceRateInWindow * 100).round();
+    final utilizationPct = (overview.utilizationRateInWindow * 100).round();
+    final noShowPct = (overview.noShowRateInWindow * 100).round();
+
     return Column(
       children: [
-        // Key metrics row
+        // Review-window selector + jump to full analytics.
         Row(
           children: [
-            Expanded(
-              child: _DashboardMetricCard(
-                icon: Icons.people_outline,
-                label: 'Active Members',
-                value: '${overview.activeMembers}',
-                accentColor: appPrimary,
-              ),
+            _WindowSelector(
+              selected: window,
+              onSelected: (value) => ref
+                  .read(adminAnalyticsWindowDaysProvider.notifier)
+                  .setWindowDays(value),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _DashboardMetricCard(
-                icon: Icons.person_add_outlined,
-                label: 'Join Requests',
-                value: '${overview.pendingJoinRequests}',
-                accentColor:
-                    overview.pendingJoinRequests > 0 ? _perfAmber : appPrimary,
-              ),
+            const Spacer(),
+            _FullAnalyticsButton(
+              onTap: () => context.go('/admin-analytics'),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _DashboardMetricCard(
-                icon: Icons.event_available_outlined,
-                label: 'Attendance Rate',
-                value: '${(overview.attendanceRateInWindow * 100).toStringAsFixed(0)}%',
-                accentColor: _getPerformanceColor(overview.attendanceRateInWindow),
-              ),
+        const SizedBox(height: appSpaceLg),
+        // KPI strip — six operational signals, mono-labelled with a status dot.
+        _KpiGrid(
+          tiles: [
+            _KpiData(
+              label: 'Active members',
+              value: '${overview.activeMembers}',
+              caption: overview.newMembersInWindow > 0
+                  ? '+${overview.newMembersInWindow} this window'
+                  : 'no new joins',
+              captionColor: overview.newMembersInWindow > 0
+                  ? _perfGreen
+                  : appSubtleText,
+              dot: appPrimary,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _DashboardMetricCard(
-                icon: Icons.trending_up_outlined,
-                label: 'Utilization',
-                value: '${(overview.utilizationRateInWindow * 100).toStringAsFixed(0)}%',
-                accentColor: _getPerformanceColor(overview.utilizationRateInWindow),
-              ),
+            _KpiData(
+              label: 'Attendance',
+              value: '$attendancePct%',
+              caption: '${overview.attendedInWindow} / '
+                  '${overview.bookingsInWindow} booked',
+              dot: _perfGreen,
+            ),
+            _KpiData(
+              label: 'Utilization',
+              value: '$utilizationPct%',
+              caption: 'of seated capacity',
+              dot: _perfAmber,
+            ),
+            _KpiData(
+              label: 'No-show rate',
+              value: '$noShowPct%',
+              caption: '${overview.noShowsInWindow} no-shows',
+              dot: _perfRed,
+            ),
+            _KpiData(
+              label: 'Pending requests',
+              value: '${overview.pendingJoinRequests}',
+              caption: overview.pendingJoinRequests > 0
+                  ? 'needs review'
+                  : 'all clear',
+              captionColor: overview.pendingJoinRequests > 0
+                  ? _perfAmber
+                  : appSubtleText,
+              dot: _perfAmber,
+              highlight: overview.pendingJoinRequests > 0,
+            ),
+            _KpiData(
+              label: 'Forward load · 7d',
+              value: '${overview.upcomingClassesNext7Days}',
+              caption: 'classes scheduled',
+              dot: appInfo,
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        AppCard(
-          padding: const EdgeInsets.all(appSpaceLg),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _DashboardStat(
-                label: 'Classes',
-                value: '${overview.upcomingClassesNext7Days}',
-                sublabel: 'next 7 days',
-              ),
-              Container(width: 1, height: 36, color: appBorder),
-              _DashboardStat(
-                label: 'Bookings',
-                value: '${overview.upcomingBookingsNext7Days}',
-                sublabel: 'upcoming',
-              ),
-              Container(width: 1, height: 36, color: appBorder),
-              _DashboardStat(
-                label: 'No-shows',
-                value: '${overview.noShowsInWindow}',
-                sublabel: 'last ${overview.windowDays}d',
-              ),
-            ],
-          ),
+        const SizedBox(height: appSpaceMd),
+        _AttendanceTimelineCard(
+          days: overview.dailyAttendance,
+          windowDays: window,
         ),
+        if (overview.pressureClasses.isNotEmpty) ...[
+          const SizedBox(height: appSpaceMd),
+          _PressureClassCard(classes: overview.pressureClasses),
+        ],
+        const SizedBox(height: appSpaceMd),
+        const _JoinRequestsCard(),
       ],
     );
   }
-
-  Color _getPerformanceColor(double rate) {
-    if (rate >= 0.75) return _perfGreen;
-    if (rate >= 0.50) return _perfAmber;
-    return _perfRed;
-  }
 }
 
-class _DashboardMetricCard extends StatelessWidget {
-  const _DashboardMetricCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accentColor,
-  });
+/// 7 / 14 / 30-day review-window segmented control, mirroring the analytics
+/// screen's horizon chips but compact enough for the dashboard top bar.
+class _WindowSelector extends StatelessWidget {
+  const _WindowSelector({required this.selected, required this.onSelected});
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accentColor;
+  final int selected;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(appSpaceLg),
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: appSurface,
+        borderRadius: BorderRadius.circular(appRadiusSm),
+        border: Border.all(color: appBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final days in const [7, 14, 30])
+            GestureDetector(
+              onTap: () => onSelected(days),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: days == selected ? appPrimary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  '${days}D',
+                  style: appMono(
+                    fontSize: 11,
+                    color: days == selected ? Colors.white : appSubtleText,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FullAnalyticsButton extends StatelessWidget {
+  const _FullAnalyticsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(appRadiusSm),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: appPrimary,
+            borderRadius: BorderRadius.circular(appRadiusSm),
+            boxShadow: [
+              BoxShadow(
+                color: appPrimary.withValues(alpha: 0.35),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Full analytics',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+              SizedBox(width: 6),
+              Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KpiData {
+  const _KpiData({
+    required this.label,
+    required this.value,
+    required this.caption,
+    required this.dot,
+    this.captionColor = appSubtleText,
+    this.highlight = false,
+  });
+
+  final String label;
+  final String value;
+  final String caption;
+  final Color dot;
+  final Color captionColor;
+  final bool highlight;
+}
+
+/// Two-column KPI grid that reflows the six dashboard signals into stacked
+/// pairs, sized to whatever width the dashboard column provides.
+class _KpiGrid extends StatelessWidget {
+  const _KpiGrid({required this.tiles});
+
+  final List<_KpiData> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < tiles.length; i += 2) {
+      if (i > 0) rows.add(const SizedBox(height: appSpaceMd));
+      rows.add(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _KpiTile(data: tiles[i])),
+            const SizedBox(width: appSpaceMd),
+            if (i + 1 < tiles.length)
+              Expanded(child: _KpiTile(data: tiles[i + 1]))
+            else
+              const Spacer(),
+          ],
+        ),
+      );
+    }
+    return Column(children: rows);
+  }
+}
+
+class _KpiTile extends StatelessWidget {
+  const _KpiTile({required this.data});
+
+  final _KpiData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: appSurfaceAlt,
+        borderRadius: BorderRadius.circular(appRadiusMd),
+        border: Border.all(
+          color: data.highlight ? data.dot.withValues(alpha: 0.35) : appBorder,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppAccentBadge(icon: icon, color: accentColor),
-          const SizedBox(height: appSpaceMd),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  data.label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: appMono(
+                    fontSize: 9.5,
+                    letterSpacing: 1.3,
+                    color: data.highlight ? data.dot : appSubtleText,
+                  ),
+                ),
+              ),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: data.dot,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: appSpaceSm),
           Text(
-            value,
-            style: const TextStyle(
-              color: appText,
+            data.value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontSize: 28,
-              fontWeight: FontWeight.w800,
               height: 1,
-              letterSpacing: -0.6,
+              letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              color: appSubtleText,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.3,
+            data.caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: appMono(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+              color: data.captionColor,
             ),
           ),
         ],
@@ -2851,50 +3029,384 @@ class _DashboardMetricCard extends StatelessWidget {
   }
 }
 
-class _DashboardStat extends StatelessWidget {
-  const _DashboardStat({
-    required this.label,
-    required this.value,
-    required this.sublabel,
-  });
+/// Daily-attendance sparkline. Bars are normalized against the busiest day in
+/// the window; the most recent day is highlighted in bright cyan.
+class _AttendanceTimelineCard extends StatelessWidget {
+  const _AttendanceTimelineCard({required this.days, required this.windowDays});
 
-  final String label;
-  final String value;
-  final String sublabel;
+  final List<AdminAnalyticsDailyAttendance> days;
+  final int windowDays;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    // dailyAttendance arrives most-recent-first; render oldest → newest.
+    final ordered = days.reversed.toList();
+    final maxAttended = ordered.fold<int>(
+      1,
+      (max, d) => d.attended > max ? d.attended : max,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: appPanelDecoration(radius: appRadiusMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DAILY ATTENDANCE · ${windowDays}D',
+            style: appMono(fontSize: 10, letterSpacing: 1.4),
+          ),
+          const SizedBox(height: appSpaceLg),
+          if (ordered.isEmpty)
+            Text(
+              'No attendance recorded in this window yet.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: appMutedText),
+            )
+          else
+            SizedBox(
+              height: 96,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < ordered.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 5),
+                    Expanded(
+                      child: _TimelineBar(
+                        fraction: ordered[i].attended / maxAttended,
+                        isLatest: i == ordered.length - 1,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineBar extends StatelessWidget {
+  const _TimelineBar({required this.fraction, required this.isLatest});
+
+  final double fraction;
+  final bool isLatest;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = (fraction.clamp(0.08, 1.0)) * 96;
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(3),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isLatest
+                ? const [Color(0xFF7EF6FF), appPrimary]
+                : const [appPrimary, Color(0xFF044E57)],
+          ),
+          boxShadow: isLatest
+              ? [BoxShadow(color: appPrimary.withValues(alpha: 0.5), blurRadius: 12)]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// "Pressure classes" — sessions at or over capacity, with waitlist or
+/// low-fill status pulled straight from the analytics overview.
+class _PressureClassCard extends StatelessWidget {
+  const _PressureClassCard({required this.classes});
+
+  final List<AdminAnalyticsPressureClass> classes;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = classes.take(4).toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: appPanelDecoration(radius: appRadiusMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PRESSURE CLASSES',
+            style: appMono(fontSize: 10, letterSpacing: 1.4),
+          ),
+          const SizedBox(height: appSpaceLg),
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0) ...[
+              const SizedBox(height: appSpaceMd),
+              const Divider(height: 1),
+              const SizedBox(height: appSpaceMd),
+            ],
+            _PressureClassRow(item: shown[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PressureClassRow extends StatelessWidget {
+  const _PressureClassRow({required this.item});
+
+  final AdminAnalyticsPressureClass item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isFull = item.bookings >= item.capacity;
+    final time = TimeOfDay.fromDateTime(item.startTime.toLocal());
+    final timeLabel = time.format(context);
+    final AppPillIntent intent;
+    final String pill;
+    if (item.waitlistCount > 0) {
+      intent = AppPillIntent.danger;
+      pill = '+${item.waitlistCount} waitlist';
+    } else if (isFull) {
+      intent = AppPillIntent.danger;
+      pill = 'Full';
+    } else {
+      intent = AppPillIntent.warning;
+      pill = 'Low fill';
+    }
+    return Row(
       children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            color: appSubtleText,
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.3,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$timeLabel · ${item.title}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: appText,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${item.bookings}/${item.capacity} booked',
+                style: appMono(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: appText,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            height: 1,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          sublabel,
-          style: const TextStyle(
-            color: appMutedText,
-            fontSize: 11,
-          ),
-        ),
+        const SizedBox(width: appSpaceMd),
+        AppPill(label: pill, intent: intent, dense: true),
       ],
+    );
+  }
+}
+
+/// Inline join-request approvals. Reads the pending queue, lets the owner
+/// approve/reject without leaving /home, and refreshes the dashboard counts.
+class _JoinRequestsCard extends ConsumerStatefulWidget {
+  const _JoinRequestsCard();
+
+  @override
+  ConsumerState<_JoinRequestsCard> createState() => _JoinRequestsCardState();
+}
+
+class _JoinRequestsCardState extends ConsumerState<_JoinRequestsCard> {
+  int? _pendingId;
+
+  Future<void> _review(GymJoinRequest request, bool approve) async {
+    setState(() => _pendingId = request.id);
+    try {
+      await ref
+          .read(gymRepositoryProvider)
+          .reviewJoinRequest(requestId: request.id, approve: approve);
+      if (!mounted) return;
+      ref.invalidate(_dashboardJoinRequestsProvider);
+      ref.invalidate(adminAnalyticsOverviewProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            approve
+                ? 'Approved ${request.email}.'
+                : 'Rejected ${request.email}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessageFrom(error, fallback: 'Review failed')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _pendingId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final requestsAsync = ref.watch(_dashboardJoinRequestsProvider);
+    final requests = requestsAsync.value ?? const <GymJoinRequest>[];
+    if (requests.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: appPanelDecoration(radius: appRadiusMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'JOIN REQUESTS · INLINE APPROVE',
+                style: appMono(fontSize: 10, letterSpacing: 1.4),
+              ),
+              const Spacer(),
+              AppPill(
+                label: '${requests.length} pending',
+                intent: AppPillIntent.warning,
+                dense: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: appSpaceLg),
+          for (var i = 0; i < requests.length; i++) ...[
+            if (i > 0) const SizedBox(height: appSpaceSm),
+            _JoinRequestRow(
+              request: requests[i],
+              busy: _pendingId == requests[i].id,
+              onApprove: () => _review(requests[i], true),
+              onReject: () => _review(requests[i], false),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _JoinRequestRow extends StatelessWidget {
+  const _JoinRequestRow({
+    required this.request,
+    required this.busy,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final GymJoinRequest request;
+  final bool busy;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = request.displayName.trim().isNotEmpty
+        ? request.displayName
+        : request.email;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: appInsetDecoration(),
+      child: Row(
+        children: [
+          AppAvatar(displayName: name, size: 34),
+          const SizedBox(width: appSpaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: appText,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  request.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: appMono(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: appSpaceMd),
+          if (busy)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else ...[
+            _RequestActionButton(
+              icon: Icons.check_rounded,
+              filled: true,
+              onTap: onApprove,
+            ),
+            const SizedBox(width: 6),
+            _RequestActionButton(
+              icon: Icons.close_rounded,
+              filled: false,
+              onTap: onReject,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestActionButton extends StatelessWidget {
+  const _RequestActionButton({
+    required this.icon,
+    required this.filled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(appRadiusSm),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: filled ? _perfGreen : Colors.transparent,
+            borderRadius: BorderRadius.circular(appRadiusSm),
+            border: filled ? null : Border.all(color: appBorderStrong),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: filled ? appInverseText : appSubtleText,
+          ),
+        ),
+      ),
     );
   }
 }

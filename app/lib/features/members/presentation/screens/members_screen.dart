@@ -244,8 +244,11 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
               subtitle: 'Approved members of your box show up here.',
               compact: true,
             )
-          else
+          else ...[
+            _RoleMixSummary(users: _users),
+            const SizedBox(height: appSpaceMd),
             MemberRoster(users: _users, onSave: _saveDraft),
+          ],
         ],
       ),
     );
@@ -272,6 +275,87 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             onApprove: () => _review(request, true),
             onReject: () => _review(request, false),
           ),
+      ],
+    );
+  }
+}
+
+/// Role-mix summary — athlete / trainer / admin headcounts drawn from the
+/// active roster, so large boxes read their composition at a glance before
+/// diving into the searchable table.
+class _RoleMixSummary extends StatelessWidget {
+  const _RoleMixSummary({required this.users});
+
+  final List<RoleManagedUser> users;
+
+  @override
+  Widget build(BuildContext context) {
+    var athletes = 0;
+    var trainers = 0;
+    var admins = 0;
+    for (final user in users) {
+      switch (user.role) {
+        case UserRole.athlete:
+          athletes++;
+        case UserRole.trainer:
+          trainers++;
+        case UserRole.admin:
+          admins++;
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: appSpaceLg,
+        vertical: appSpaceMd,
+      ),
+      decoration: appPanelDecoration(radius: appRadiusMd),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RoleMixCell(count: athletes, label: 'ATHLETES'),
+          ),
+          _roleMixDivider,
+          Expanded(
+            child: _RoleMixCell(count: trainers, label: 'TRAINERS'),
+          ),
+          _roleMixDivider,
+          Expanded(
+            child: _RoleMixCell(count: admins, label: 'ADMINS'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static final Widget _roleMixDivider = Container(
+    width: 1,
+    height: 34,
+    margin: const EdgeInsets.symmetric(horizontal: appSpaceSm),
+    color: appBorder,
+  );
+}
+
+class _RoleMixCell extends StatelessWidget {
+  const _RoleMixCell({required this.count, required this.label});
+
+  final int count;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$count',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontSize: 24,
+            height: 1,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(label, style: appMono(fontSize: 9, letterSpacing: 1.2)),
       ],
     );
   }

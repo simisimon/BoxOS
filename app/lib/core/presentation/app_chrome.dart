@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ============================================================================
 // BoxOS design tokens — dark-first, premium, restrained.
@@ -29,12 +30,13 @@ const appSubtleText = Color(0xFF767C86);
 const appInverseText = Color(0xFF07080B); // for use on light accents
 
 // --- Brand & semantic accents ----------------------------------------------
-// One restrained accent color. Electric indigo reads premium on near-black,
-// works as a button background with white text, and stays out of the way when
-// used sparingly for focus, links, and highlights.
-const appPrimary = Color(0xFF5B6FFF);
-const appPrimarySoft = Color(0x335B6FFF); // ~20% — chips, hover backgrounds
-const appPrimaryHairline = Color(0x665B6FFF); // ~40% — borders, dividers
+// One restrained accent color. Neon cyan reads premium on near-black, works as
+// a button background with white text, carries the restrained cyberpunk accent
+// of the BoxOS wireframes, and stays out of the way when used sparingly for
+// focus, links, and highlights.
+const appPrimary = Color(0xFF00E5FF);
+const appPrimarySoft = Color(0x2400E5FF); // ~14% — chips, hover backgrounds
+const appPrimaryHairline = Color(0x6600E5FF); // ~40% — borders, dividers
 
 const appDanger = Color(0xFFFF5C6E);
 const appDangerSoft = Color(0x33FF5C6E);
@@ -74,6 +76,27 @@ const _shadowHero = BoxShadow(
   color: Color(0x99000000),
   blurRadius: 36,
   offset: Offset(0, 22),
+);
+
+// ============================================================================
+// Typography helpers
+// ============================================================================
+
+/// JetBrains Mono eyebrow / micro-label — the BoxOS "operational" voice used
+/// for section eyebrows, KPI captions, status chips and timestamps. Uppercase
+/// the text at the call site; this only carries the face, tracking and weight.
+TextStyle appMono({
+  double fontSize = 11,
+  FontWeight fontWeight = FontWeight.w700,
+  double letterSpacing = 1.4,
+  Color color = appSubtleText,
+  double? height,
+}) => GoogleFonts.jetBrainsMono(
+  fontSize: fontSize,
+  fontWeight: fontWeight,
+  letterSpacing: letterSpacing,
+  color: color,
+  height: height,
 );
 
 // ============================================================================

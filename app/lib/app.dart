@@ -60,42 +60,42 @@ class BoxOsApp extends ConsumerWidget {
 
     final textTheme = baseTextTheme
         .copyWith(
-          displayLarge: GoogleFonts.oswald(
+          displayLarge: GoogleFonts.chakraPetch(
             textStyle: baseTextTheme.displayLarge?.copyWith(
               color: appText,
               letterSpacing: -1.0,
               fontWeight: FontWeight.w700,
             ),
           ),
-          displayMedium: GoogleFonts.oswald(
+          displayMedium: GoogleFonts.chakraPetch(
             textStyle: baseTextTheme.displayMedium?.copyWith(
               color: appText,
               letterSpacing: -0.8,
               fontWeight: FontWeight.w700,
             ),
           ),
-          displaySmall: GoogleFonts.oswald(
+          displaySmall: GoogleFonts.chakraPetch(
             textStyle: baseTextTheme.displaySmall?.copyWith(
               color: appText,
               letterSpacing: -0.6,
               fontWeight: FontWeight.w700,
             ),
           ),
-          headlineLarge: GoogleFonts.oswald(
+          headlineLarge: GoogleFonts.chakraPetch(
             textStyle: baseTextTheme.headlineLarge?.copyWith(
               color: appText,
               letterSpacing: -0.5,
               fontWeight: FontWeight.w700,
             ),
           ),
-          headlineMedium: GoogleFonts.oswald(
+          headlineMedium: GoogleFonts.chakraPetch(
             textStyle: baseTextTheme.headlineMedium?.copyWith(
               color: appText,
               letterSpacing: -0.4,
               fontWeight: FontWeight.w700,
             ),
           ),
-          headlineSmall: GoogleFonts.oswald(
+          headlineSmall: GoogleFonts.chakraPetch(
             textStyle: baseTextTheme.headlineSmall?.copyWith(
               color: appText,
               letterSpacing: -0.3,

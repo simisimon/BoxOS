@@ -1028,7 +1028,7 @@ class _ScheduleClassCard extends StatelessWidget {
         border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
-            color: appPrimary.withOpacity(0.08),
+            color: appPrimary.withValues(alpha: 0.08),
             blurRadius: 24,
             offset: const Offset(0, 16),
           ),
@@ -1079,6 +1079,12 @@ class _ScheduleClassCard extends StatelessWidget {
           Text(
             date,
             style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
+          ),
+          const SizedBox(height: 16),
+          _CapacityBar(
+            booked: item.bookedCount,
+            capacity: item.capacity,
+            waitlist: item.waitlistCount,
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -1209,6 +1215,89 @@ bool _isSameDay(DateTime left, DateTime right) {
   return left.year == right.year &&
       left.month == right.month &&
       left.day == right.day;
+}
+
+/// Capacity fill bar promoting the booked/capacity ratio to a glance-able
+/// state. Cyan while there's room, amber as it nears full, danger when full
+/// or carrying a waitlist — with the count labelled in the BoxOS mono voice.
+class _CapacityBar extends StatelessWidget {
+  const _CapacityBar({
+    required this.booked,
+    required this.capacity,
+    required this.waitlist,
+  });
+
+  final int booked;
+  final int capacity;
+  final int waitlist;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction =
+        capacity <= 0 ? 0.0 : (booked / capacity).clamp(0.0, 1.0);
+    final isFull = capacity > 0 && booked >= capacity;
+    final Color fill;
+    final String status;
+    if (waitlist > 0) {
+      fill = appDanger;
+      status = '+$waitlist waitlist';
+    } else if (isFull) {
+      fill = appDanger;
+      status = 'Full';
+    } else if (fraction >= 0.8) {
+      fill = appWarning;
+      status = 'Filling up';
+    } else {
+      fill = appPrimary;
+      status = '${capacity - booked} open';
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              'CAPACITY',
+              style: appMono(fontSize: 9.5, letterSpacing: 1.3),
+            ),
+            const Spacer(),
+            Text(
+              '$booked/$capacity · $status',
+              style: appMono(
+                fontSize: 10.5,
+                letterSpacing: 0,
+                color: fill,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(appRadiusPill),
+          child: Stack(
+            children: [
+              Container(height: 7, color: appSurfaceAlt),
+              FractionallySizedBox(
+                widthFactor: fraction == 0 ? 0.02 : fraction,
+                child: Container(
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: fill,
+                    boxShadow: [
+                      BoxShadow(
+                        color: fill.withValues(alpha: 0.5),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _MetricTile extends StatelessWidget {
