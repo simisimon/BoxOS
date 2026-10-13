@@ -11,6 +11,10 @@ const int kLogbookBranch = 2;
 const int kMembersBranch = 3;
 const int kCommunityBranch = 4;
 const int kProfileBranch = 5;
+
+/// Tracking has no tab of its own: it answers the same question as the logbook
+/// ("how am I doing"), so it is reached from there. The router still keeps the
+/// branch, which is why the index stays.
 const int kTrackingBranch = 6;
 
 /// A single bottom-nav / rail destination. [branchIndex] is the shell branch it
@@ -57,12 +61,6 @@ const List<ShellDestination> _athleteDestinations = [
     label: 'Logbook',
   ),
   ShellDestination(
-    branchIndex: kTrackingBranch,
-    icon: Icons.insights_outlined,
-    activeIcon: Icons.insights_rounded,
-    label: 'Tracking',
-  ),
-  ShellDestination(
     branchIndex: kProfileBranch,
     icon: Icons.person_outline_rounded,
     activeIcon: Icons.person_rounded,
@@ -103,12 +101,6 @@ const List<ShellDestination> _ownerDestinations = [
     label: 'Logbook',
   ),
   ShellDestination(
-    branchIndex: kTrackingBranch,
-    icon: Icons.insights_outlined,
-    activeIcon: Icons.insights_rounded,
-    label: 'Tracking',
-  ),
-  ShellDestination(
     branchIndex: kProfileBranch,
     icon: Icons.person_outline_rounded,
     activeIcon: Icons.person_rounded,
@@ -123,6 +115,13 @@ bool isOwnerView({
   required UserRole? role,
 }) =>
     accountType == AccountType.admin && role == UserRole.admin;
+
+/// The tab that should read as active for [branchIndex].
+///
+/// Tracking has no tab of its own and is entered from the logbook, so it keeps
+/// the Logbook tab lit instead of falling back to the first one.
+int navBranchFor(int branchIndex) =>
+    branchIndex == kTrackingBranch ? kLogbookBranch : branchIndex;
 
 /// The nav destinations for the current account/role pair.
 List<ShellDestination> destinationsForView({

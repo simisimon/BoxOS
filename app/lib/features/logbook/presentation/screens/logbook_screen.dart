@@ -13,6 +13,7 @@ import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class LogbookScreen extends ConsumerStatefulWidget {
   const LogbookScreen({super.key});
@@ -152,6 +153,11 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
+            // Tracking lost its own tab: it answers the same question as the
+            // logbook, so this is its entry point until the two views are
+            // merged properly.
+            const _TrackWorkoutCard(),
+            const SizedBox(height: 20),
             _CreateWorkoutActions(onCreate: _createWorkout),
             const SizedBox(height: 20),
             const _SectionTitle(title: 'My workouts'),
@@ -659,6 +665,80 @@ class _WorkoutDraft {
 
   final String title;
   final Map<String, dynamic> structure;
+}
+
+/// Entry point into the tracking flow (workout picker → timer), which used to
+/// be a bottom-nav tab of its own.
+class _TrackWorkoutCard extends StatelessWidget {
+  const _TrackWorkoutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(appRadiusLg),
+        onTap: () => context.go('/tracking'),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: appSurface,
+            borderRadius: BorderRadius.circular(appRadiusLg),
+            border: Border.all(color: appPrimaryHairline),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: appPrimarySoft,
+                  borderRadius: BorderRadius.circular(appRadiusMd),
+                ),
+                child: const Icon(
+                  Icons.timer_outlined,
+                  color: appPrimary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Track a workout',
+                      style: TextStyle(
+                        color: appText,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Pick today’s WOD, a benchmark, or your own — then start the timer.',
+                      style: TextStyle(
+                        color: appSubtleText,
+                        fontSize: 12.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: appPrimary,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CreateWorkoutActions extends StatelessWidget {

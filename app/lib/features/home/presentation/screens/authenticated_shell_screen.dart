@@ -36,7 +36,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
         (currentIndex == kHomeBranch && isOwner);
 
     return AuthenticatedScaffold(
-      selectedBranchIndex: navigationShell.currentIndex,
+      selectedBranchIndex: navBranchFor(navigationShell.currentIndex),
       destinations: destinations,
       displayName: profile?.displayName ?? '',
       roleLabel: profile?.role.label ?? 'Athlete',
