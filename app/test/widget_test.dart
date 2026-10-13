@@ -12,12 +12,18 @@ import 'package:app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
+import 'package:app/features/announcements/presentation/widgets/announcement_feed_section.dart';
+import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
+import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
+import 'package:app/features/logbook/domain/repositories/logbook_repository.dart';
+import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
+import 'package:app/features/programming/domain/models/daily_workout.dart';
+import 'package:app/features/programming/domain/repositories/programming_repository.dart';
 import 'package:app/features/auth/presentation/screens/change_password_screen.dart';
 import 'package:app/features/auth/presentation/screens/delete_account_screen.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
-import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
@@ -484,7 +490,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
         displayName: 'Demo Trainer',
         nickname: 'trainer',
       ),
-      wodDescription: '18.1',
       bookedCount: 3,
       remainingSpots: 9,
       waitlistCount: 0,
@@ -515,8 +520,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
     required int durationMinutes,
     required int capacity,
     required int trainerUserId,
-    required String wodDescription,
-    List<ScheduleSection> sections = const [],
     String recurrenceFrequency = 'none',
     int occurrenceCount = 1,
   }) async {
@@ -530,7 +533,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
       durationMinutes: durationMinutes,
       capacity: capacity,
       assignedTrainer: trainer,
-      wodDescription: wodDescription,
       bookedCount: 0,
       remainingSpots: capacity,
       waitlistCount: 0,
@@ -570,7 +572,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
             durationMinutes: item.durationMinutes,
             capacity: item.capacity,
             assignedTrainer: item.assignedTrainer,
-            wodDescription: item.wodDescription,
             bookedCount: item.bookedCount + 1,
             remainingSpots: item.remainingSpots - 1,
             waitlistCount: item.waitlistCount,
@@ -597,7 +598,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
             durationMinutes: item.durationMinutes,
             capacity: item.capacity,
             assignedTrainer: item.assignedTrainer,
-            wodDescription: item.wodDescription,
             bookedCount: item.bookedCount - 1,
             remainingSpots: item.remainingSpots + 1,
             waitlistCount: item.waitlistCount,
@@ -624,7 +624,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
             durationMinutes: item.durationMinutes,
             capacity: item.capacity,
             assignedTrainer: item.assignedTrainer,
-            wodDescription: item.wodDescription,
             bookedCount: item.bookedCount,
             remainingSpots: item.remainingSpots,
             waitlistCount: item.waitlistCount + 1,
@@ -653,7 +652,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
             durationMinutes: item.durationMinutes,
             capacity: item.capacity,
             assignedTrainer: item.assignedTrainer,
-            wodDescription: item.wodDescription,
             bookedCount: item.bookedCount,
             remainingSpots: item.remainingSpots,
             waitlistCount: item.waitlistCount > 0 ? item.waitlistCount - 1 : 0,
@@ -689,7 +687,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
             durationMinutes: item.durationMinutes,
             capacity: item.capacity,
             assignedTrainer: item.assignedTrainer,
-            wodDescription: item.wodDescription,
             bookedCount: item.bookedCount,
             remainingSpots: item.remainingSpots,
             waitlistCount: item.waitlistCount,
@@ -728,8 +725,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
     required int durationMinutes,
     required int capacity,
     required int trainerUserId,
-    required String wodDescription,
-    List<ScheduleSection> sections = const [],
   }) async {
     final trainer = trainers.firstWhere((item) => item.id == trainerUserId);
     final updated = ScheduleClass(
@@ -741,7 +736,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
       durationMinutes: durationMinutes,
       capacity: capacity,
       assignedTrainer: trainer,
-      wodDescription: wodDescription,
       bookedCount: 0,
       remainingSpots: capacity,
       waitlistCount: 0,
@@ -1022,6 +1016,63 @@ Future<void> _configureTestViewport(WidgetTester tester) async {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
+}
+
+/// Offline stubs for the two feeds the slimmed-down home reads. Without them
+/// the hero and the weekly stat stay on their loading state, because the real
+/// repositories would attempt an HTTP call.
+class _StubProgrammingRepository implements ProgrammingRepository {
+  @override
+  Future<List<DailyWorkout>> fetchWorkouts() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
+}
+
+class _StubLogbookRepository implements LogbookRepository {
+  @override
+  Future<List<WorkoutLogEntry>> fetchEntries() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
+}
+
+/// Pumps the box-news section by itself.
+///
+/// The feed used to sit on the home screen; home now shows only today's WOD,
+/// the next booking and the weekly stat, and the feed is mounted in Community.
+/// Pumping the section directly keeps these tests off the chat screen's
+/// polling timer.
+Future<void> _pumpAnnouncementFeed(
+  WidgetTester tester, {
+  required RecordingProfileRepository profileRepository,
+  required RecordingAnnouncementRepository announcementRepository,
+}) async {
+  await _configureTestViewport(tester);
+
+  final container = ProviderContainer(
+    overrides: [
+      profileRepositoryProvider.overrideWith((ref) => profileRepository),
+      announcementRepositoryProvider.overrideWith(
+        (ref) => announcementRepository,
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(child: AnnouncementFeedSection()),
+        ),
+      ),
+    ),
+  );
+  await _settleApp(tester);
 }
 
 Future<void> _settleApp(WidgetTester tester) async {
@@ -1454,7 +1505,7 @@ void main() {
     expect(repository.changeCurrentPassword, 'oldpassword');
     expect(repository.changeNewPassword, 'newpassword123');
     expect(repository.changeLogoutOtherSessions, isTrue);
-    expect(find.text('News'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
   });
 
   testWidgets('Delete account flow opens confirmation dialog', (
@@ -1504,10 +1555,10 @@ void main() {
 
     expect(profileRepository.updatedDisplayName, 'Basti Athlete');
     expect(profileRepository.updatedNickname, 'basti');
-    expect(find.text('News'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
   });
 
-  testWidgets('Home screen uses stacked full-width sections', (
+  testWidgets('Home shows only the hero and the weekly stat', (
     WidgetTester tester,
   ) async {
     final profileRepository = RecordingProfileRepository()
@@ -1574,6 +1625,10 @@ void main() {
           (ref) => announcementRepository,
         ),
         scheduleRepositoryProvider.overrideWith((ref) => scheduleRepository),
+        programmingRepositoryProvider.overrideWithValue(
+          _StubProgrammingRepository(),
+        ),
+        logbookRepositoryProvider.overrideWithValue(_StubLogbookRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -1586,24 +1641,27 @@ void main() {
     );
     await _settleApp(tester);
 
-    expect(find.text('Today at a glance'), findsNothing);
-    expect(find.text('Class access'), findsOneWidget);
-    expect(find.text('Book a class'), findsOneWidget);
-    final bookingSectionTop = tester.getTopLeft(find.text('Class access')).dy;
-    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
-    await _settleApp(tester);
-    expect(find.text('Murph briefing'), findsOneWidget);
-    final todayTop = tester.getTopLeft(find.text('Murph briefing')).dy;
-    expect(bookingSectionTop, lessThan(todayTop));
+    // Home is an entry point: today's hero (WOD + next booking) and one
+    // weekly stat. Everything else was removed because it duplicated a tab.
+    expect(find.text('This Week'), findsOneWidget);
+    expect(find.text('PERFORMANCE'), findsOneWidget);
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
-    await _settleApp(tester);
+    // The booking rail, the news feed and the shortcut grid moved out.
+    expect(find.text('Your Bookings'), findsNothing);
+    expect(find.text('Class access'), findsNothing);
+    expect(find.text('News'), findsNothing);
+    expect(find.text('Murph briefing'), findsNothing);
+    expect(find.text('Quick actions'), findsNothing);
+
+    // The hero sits above the weekly stat.
+    final heroTop = tester.getTopLeft(find.text('TODAY')).dy;
+    final statTop = tester.getTopLeft(find.text('This Week')).dy;
+    expect(heroTop, lessThan(statTop));
   });
 
-  testWidgets('Coach can create and expand announcements on home', (
+  testWidgets('Coach can create and expand announcements in the feed', (
     WidgetTester tester,
   ) async {
-    final repository = RecordingAuthRepository()..isSignedIn = true;
     final profileRepository = RecordingProfileRepository()
       ..profile = const UserProfile(
         email: 'trainer@boxos.app',
@@ -1661,11 +1719,9 @@ void main() {
         ),
       ];
 
-    await _pumpAuthenticatedRouter(
+    await _pumpAnnouncementFeed(
       tester,
-      repository,
-      profileRepository,
-      initialLocation: '/home',
+      profileRepository: profileRepository,
       announcementRepository: announcementRepository,
     );
 
@@ -1730,10 +1786,9 @@ void main() {
     expect(announcementRepository.lastDeletedAnnouncementId, isNotNull);
   });
 
-  testWidgets('Home announcements support likes and comments', (
+  testWidgets('Box news supports likes and comments', (
     WidgetTester tester,
   ) async {
-    final repository = RecordingAuthRepository()..isSignedIn = true;
     final profileRepository = RecordingProfileRepository()
       ..profile = const UserProfile(
         email: 'athlete@boxos.app',
@@ -1792,14 +1847,15 @@ void main() {
         ),
       ];
 
-    await _pumpAuthenticatedRouter(
+    await _pumpAnnouncementFeed(
       tester,
-      repository,
-      profileRepository,
-      initialLocation: '/home',
+      profileRepository: profileRepository,
       announcementRepository: announcementRepository,
     );
 
+    // The card is an ExpansionTile, so likes, the comment composer and the
+    // comment list only exist while it is open. Tapping the title again would
+    // collapse it and unmount them.
     await tester.tap(find.text('Friday throwdown'));
     await _settleApp(tester);
 
@@ -1807,204 +1863,17 @@ void main() {
     await _settleApp(tester);
     expect(announcementRepository.lastLikedAnnouncementId, 1);
 
-    await tester.tap(find.text('Friday throwdown'));
-    await _settleApp(tester);
     await tester.enterText(
       find.byType(TextField).first,
       'I will scale volume but keep the pace.',
     );
+    await _settleApp(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Post'));
     await _settleApp(tester);
 
     expect(announcementRepository.lastCreatedComment, isNotNull);
-    await tester.tap(find.text('Friday throwdown'));
-    await _settleApp(tester);
     expect(find.text('I will scale volume but keep the pace.'), findsOneWidget);
     expect(announcementRepository.announcements.first.commentCount, 1);
-  });
-
-  testWidgets('Home booking quick access shows placeholder without bookings', (
-    WidgetTester tester,
-  ) async {
-    final repository = RecordingAuthRepository()..isSignedIn = true;
-    final profileRepository = RecordingProfileRepository()
-      ..profile = const UserProfile(
-        email: 'athlete@boxos.app',
-        accountType: AccountType.athlete,
-        role: UserRole.athlete,
-        availableRoles: [UserRole.athlete],
-        displayName: 'Demo Athlete',
-        nickname: 'athlete',
-        notificationPreferences: NotificationPreferences(
-          bookingConfirmations: true,
-          waitlistPromotions: true,
-          paymentIssues: true,
-          wodPosted: true,
-          prAchievements: true,
-          announcementActivity: true,
-        ),
-        activeGym: GymSummary(
-          id: 1,
-          name: 'CrossFit Mitte',
-          slug: 'crossfit-mitte',
-          logoUrl: 'https://example.com/m.png',
-          timezone: 'Europe/Berlin',
-        ),
-        memberships: [
-          GymMembership(
-            gym: GymSummary(
-              id: 1,
-              name: 'CrossFit Mitte',
-              slug: 'crossfit-mitte',
-              logoUrl: 'https://example.com/m.png',
-              timezone: 'Europe/Berlin',
-            ),
-            role: UserRole.athlete,
-            availableRoles: [UserRole.athlete],
-            status: 'active',
-          ),
-        ],
-      );
-    final scheduleRepository = RecordingScheduleRepository()
-      ..classes = [
-        ScheduleClass(
-          id: 1,
-          gymId: 1,
-          title: 'Morning WOD',
-          classType: 'WOD',
-          startTime: DateTime.now().add(const Duration(hours: 3)),
-          durationMinutes: 60,
-          capacity: 12,
-          assignedTrainer: const ScheduleTrainer(
-            id: 2,
-            displayName: 'Demo Trainer',
-            nickname: 'trainer',
-          ),
-          wodDescription: '18.1',
-          bookedCount: 3,
-          remainingSpots: 9,
-          waitlistCount: 0,
-          isBooked: false,
-          isWaitlisted: false,
-          attendanceStatus: null,
-          bookings: const [],
-        ),
-      ];
-
-    await _pumpAuthenticatedRouter(
-      tester,
-      repository,
-      profileRepository,
-      initialLocation: '/home',
-      scheduleRepository: scheduleRepository,
-    );
-
-    expect(find.text('Book a class'), findsOneWidget);
-    expect(find.text('No class booked yet'), findsOneWidget);
-  });
-
-  testWidgets('Home booking quick access shows booked classes carousel', (
-    WidgetTester tester,
-  ) async {
-    final repository = RecordingAuthRepository()..isSignedIn = true;
-    final profileRepository = RecordingProfileRepository()
-      ..profile = const UserProfile(
-        email: 'athlete@boxos.app',
-        accountType: AccountType.athlete,
-        role: UserRole.athlete,
-        availableRoles: [UserRole.athlete],
-        displayName: 'Demo Athlete',
-        nickname: 'athlete',
-        notificationPreferences: NotificationPreferences(
-          bookingConfirmations: true,
-          waitlistPromotions: true,
-          paymentIssues: true,
-          wodPosted: true,
-          prAchievements: true,
-          announcementActivity: true,
-        ),
-        activeGym: GymSummary(
-          id: 1,
-          name: 'CrossFit Mitte',
-          slug: 'crossfit-mitte',
-          logoUrl: 'https://example.com/m.png',
-          timezone: 'Europe/Berlin',
-        ),
-        memberships: [
-          GymMembership(
-            gym: GymSummary(
-              id: 1,
-              name: 'CrossFit Mitte',
-              slug: 'crossfit-mitte',
-              logoUrl: 'https://example.com/m.png',
-              timezone: 'Europe/Berlin',
-            ),
-            role: UserRole.athlete,
-            availableRoles: [UserRole.athlete],
-            status: 'active',
-          ),
-        ],
-      );
-    final scheduleRepository = RecordingScheduleRepository()
-      ..classes = [
-        ScheduleClass(
-          id: 11,
-          gymId: 1,
-          title: 'Lunch Lift',
-          classType: 'Strength',
-          startTime: DateTime.now().add(const Duration(hours: 4)),
-          durationMinutes: 60,
-          capacity: 12,
-          assignedTrainer: const ScheduleTrainer(
-            id: 2,
-            displayName: 'Demo Trainer',
-            nickname: 'trainer',
-          ),
-          wodDescription: '',
-          bookedCount: 8,
-          remainingSpots: 4,
-          waitlistCount: 0,
-          isBooked: true,
-          isWaitlisted: false,
-          attendanceStatus: null,
-          bookings: const [],
-        ),
-        ScheduleClass(
-          id: 12,
-          gymId: 1,
-          title: 'Evening Engine',
-          classType: 'Conditioning',
-          startTime: DateTime.now().add(const Duration(hours: 8)),
-          durationMinutes: 60,
-          capacity: 14,
-          assignedTrainer: const ScheduleTrainer(
-            id: 3,
-            displayName: 'Coach Maya',
-            nickname: 'maya',
-          ),
-          wodDescription: '',
-          bookedCount: 10,
-          remainingSpots: 4,
-          waitlistCount: 0,
-          isBooked: true,
-          isWaitlisted: false,
-          attendanceStatus: null,
-          bookings: const [],
-        ),
-      ];
-
-    await _pumpAuthenticatedRouter(
-      tester,
-      repository,
-      profileRepository,
-      initialLocation: '/home',
-      scheduleRepository: scheduleRepository,
-    );
-
-    expect(find.text('Book a class'), findsOneWidget);
-    expect(find.text('Lunch Lift'), findsOneWidget);
-    expect(find.text('Evening Engine'), findsOneWidget);
-    expect(find.text('No class booked yet'), findsNothing);
   });
 
   testWidgets('Notification settings flow updates preferences', (
@@ -2472,7 +2341,6 @@ void main() {
             displayName: 'Demo Trainer',
             nickname: 'trainer',
           ),
-          wodDescription: 'Fran',
           bookedCount: 1,
           remainingSpots: 11,
           isBooked: false,
@@ -2629,7 +2497,6 @@ void main() {
             displayName: 'Demo Trainer',
             nickname: 'trainer',
           ),
-          wodDescription: '18.1',
           bookedCount: 12,
           remainingSpots: 0,
           waitlistCount: 0,
@@ -2933,7 +2800,7 @@ void main() {
     expect(switchButton, findsOneWidget);
   });
 
-  testWidgets('Trainer home starts with news instead of the role hero', (
+  testWidgets('Trainer without a box is pointed at the directory', (
     WidgetTester tester,
   ) async {
     final repository = RecordingAuthRepository()..isSignedIn = true;
@@ -2964,7 +2831,11 @@ void main() {
       initialLocation: '/home',
     );
 
-    expect(find.text('News'), findsOneWidget);
+    // Without an active box there is no WOD and no booking to show, so home
+    // offers the one action that unblocks everything else.
+    expect(find.text('Find Your Box'), findsOneWidget);
+    expect(find.text('Browse Boxes'), findsOneWidget);
+    expect(find.text('This Week'), findsNothing);
     expect(find.text('Today at a glance'), findsNothing);
     expect(find.text('Role: Trainer'), findsNothing);
   });

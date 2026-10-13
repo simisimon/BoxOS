@@ -180,6 +180,7 @@ class FakeProfileRepository implements ProfileRepository {
         paymentIssues: true,
         wodPosted: true,
         prAchievements: true,
+        announcementActivity: true,
       ),
       activeGym: null,
       memberships: [],

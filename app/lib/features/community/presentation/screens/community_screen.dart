@@ -4,6 +4,7 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/responsive/breakpoints.dart';
+import 'package:app/features/announcements/presentation/widgets/announcement_feed_section.dart';
 import 'package:app/features/community/data/repositories/api_community_repository.dart';
 import 'package:app/features/community/domain/models/chat_message.dart';
 import 'package:app/features/community/domain/models/community_dashboard.dart';
@@ -342,6 +343,13 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             return _CommunityDashboardPanel(dashboard: snapshot.data!);
           },
         ),
+      ),
+      // Box news lives next to box chat: both are "what the box is saying".
+      // Moved here when home was reduced to today's WOD, the next booking and
+      // the weekly stat.
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 18),
+        child: AnnouncementFeedSection(),
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),

@@ -8,11 +8,13 @@ import 'dart:io';
 
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
-import 'package:app/features/calendar/domain/models/schedule_section.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
-import 'package:app/features/calendar/presentation/screens/import_classes_dialog.dart';
+import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
+import 'package:app/features/programming/domain/models/daily_workout.dart';
+import 'package:app/features/programming/domain/repositories/programming_repository.dart';
+import 'package:app/features/programming/presentation/screens/import_workouts_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
@@ -103,12 +105,6 @@ class _FakeScheduleRepository implements ScheduleRepository {
   Future<List<ScheduleTrainer>> fetchTrainers() async => const [_trainer];
 
   @override
-  Future<ScheduleImportResult> importClasses(
-    List<Map<String, dynamic>> rows,
-  ) async =>
-      ScheduleImportResult(createdCount: rows.length, errors: const []);
-
-  @override
   Future<ScheduleClass> createClass({
     required String title,
     required String classType,
@@ -116,8 +112,6 @@ class _FakeScheduleRepository implements ScheduleRepository {
     required int durationMinutes,
     required int capacity,
     required int trainerUserId,
-    required String wodDescription,
-    List<ScheduleSection> sections = const [],
     String recurrenceFrequency = 'none',
     int occurrenceCount = 1,
   }) async => _cls(99, startTime.day, startTime.hour, title);
@@ -131,8 +125,6 @@ class _FakeScheduleRepository implements ScheduleRepository {
     required int durationMinutes,
     required int capacity,
     required int trainerUserId,
-    required String wodDescription,
-    List<ScheduleSection> sections = const [],
   }) async => _cls(id, startTime.day, startTime.hour, title);
 
   @override
@@ -156,6 +148,21 @@ class _FakeScheduleRepository implements ScheduleRepository {
     required int userId,
     required String attendanceStatus,
   }) async => _cls(classId, 1, 6, 'WOD');
+}
+
+/// Offline stub for the bulk WOD import the schedule's upload button opens.
+class _FakeProgrammingRepository implements ProgrammingRepository {
+  @override
+  Future<WorkoutImportResult> importWorkouts(
+    List<Map<String, dynamic>> rows,
+  ) async => WorkoutImportResult(createdCount: rows.length, errors: const []);
+
+  @override
+  Future<List<DailyWorkout>> fetchWorkouts() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
 }
 
 Future<void> _loadRealFont() async {
@@ -189,6 +196,9 @@ void main() {
           currentProfileProvider.overrideWith((ref) async => _profile),
           scheduleRepositoryProvider.overrideWithValue(_FakeScheduleRepository()),
           scheduleListProvider.overrideWith((ref) async => _sampleClasses()),
+          programmingRepositoryProvider.overrideWithValue(
+            _FakeProgrammingRepository(),
+          ),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -248,6 +258,9 @@ void main() {
           currentProfileProvider.overrideWith((ref) async => _profile),
           scheduleRepositoryProvider.overrideWithValue(_FakeScheduleRepository()),
           scheduleListProvider.overrideWith((ref) async => _sampleClasses()),
+          programmingRepositoryProvider.overrideWithValue(
+            _FakeProgrammingRepository(),
+          ),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -262,22 +275,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(ImportClassesDialog), findsNothing);
+    expect(find.byType(ImportWorkoutsDialog), findsNothing);
     await tester.tap(find.byIcon(Icons.upload_file_rounded));
     await tester.pumpAndSettle();
-    expect(find.byType(ImportClassesDialog), findsOneWidget);
+    expect(find.byType(ImportWorkoutsDialog), findsOneWidget);
 
     // Paste valid rows and import — the dialog should close on success.
     await tester.enterText(
       find.byType(TextField),
-      'date,start_time,title,duration_minutes,capacity\n'
-      '2099-06-20,18:00,Alpha,60,12\n'
-      '2099-06-21,07:00,Bravo,45,10',
+      'date,title,section_1_description,section_1_score\n'
+      '2099-06-20,Alpha,"500m row",time\n'
+      '2099-06-21,Bravo,"Back Squat 5x5",weight',
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Import 2 classes'));
+    await tester.tap(find.text('Import 2 WODs'));
     await tester.pumpAndSettle();
-    expect(find.byType(ImportClassesDialog), findsNothing);
+    expect(find.byType(ImportWorkoutsDialog), findsNothing);
   });
 
   testWidgets('Import dialog preview', (tester) async {
@@ -287,14 +300,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    // Two valid rows and one rejected row, so the preview shows both states.
     const pasted =
-        'date,start_time,title,duration_minutes,capacity,trainer_email,repeat,occurrences\n'
-        '2099-06-20,18:00,Evening WOD,60,12,coach@box.app,weekly,4\n'
-        '2099-06-21,07:00,Morning WOD,45,10,,,\n'
-        '2099-06-22,19:00,Bad Row,sixty,10,,,';
+        'date,title,status,section_1_title,section_1_description,section_1_score\n'
+        '2099-06-20,Evening WOD,published,Strength,"Back Squat 5x5 @ 75%",weight\n'
+        '2099-06-21,Morning WOD,draft,Warm Up,"500m row",time\n'
+        '2099-06-22,Bad Row,published,Metcon,"21-15-9",stopwatch';
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          programmingRepositoryProvider.overrideWithValue(
+            _FakeProgrammingRepository(),
+          ),
+        ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
@@ -305,7 +324,7 @@ void main() {
           home: const Scaffold(
             backgroundColor: Color(0xFF0E0E12),
             body: Center(
-              child: ImportClassesDialog(debugInitialText: pasted),
+              child: ImportWorkoutsDialog(debugInitialText: pasted),
             ),
           ),
         ),
@@ -314,8 +333,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await expectLater(
-      find.byType(ImportClassesDialog),
-      matchesGoldenFile('goldens/schedule_import_dialog.png'),
+      find.byType(ImportWorkoutsDialog),
+      matchesGoldenFile('goldens/wod_import_dialog.png'),
     );
   });
 }
