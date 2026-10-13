@@ -358,7 +358,7 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
@@ -431,7 +431,7 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: appSurfaceAlt,
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: appBorder),
                         ),
                         child: Text(
@@ -582,7 +582,7 @@ class _StateCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Row(

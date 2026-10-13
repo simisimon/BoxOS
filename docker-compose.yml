@@ -67,6 +67,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     profiles: ["dev"]
+    restart: unless-stopped
     depends_on:
       db-dev:
         condition: service_healthy
@@ -86,6 +87,7 @@ services:
   frontend-dev:
     image: ghcr.io/cirruslabs/flutter:stable
     profiles: ["dev"]
+    restart: unless-stopped
     depends_on:
       - backend-dev
     working_dir: /workspace/app

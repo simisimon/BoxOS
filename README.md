@@ -122,6 +122,24 @@ Danach erreichbar unter:
 - Frontend Dev Server: `http://localhost:3001`
 - Backend Dev Server: `http://localhost:8081`
 
+#### Demo-Daten (Mock-Box)
+
+Damit Dashboard, Members, Analytics, Schedule, Programming, Tracking und Community
+mit realistischen Zahlen statt leeren Zero-States rendern, gibt es ein Seed-Skript.
+Es legt eine komplette Demo-Box an (ca. 120 Mitglieder, 4 offene Beitrittsanfragen,
+~170 Klassen über 40 Tage inkl. Buchungen/Attendance/Waitlist, veröffentlichte WODs
+mit Whiteboard-Ergebnissen sowie Progress-Daten für den Demo-Athleten):
+
+```bash
+docker compose --profile dev exec backend-dev python -m backend.seed_demo
+```
+
+Das Skript ist idempotent (mehrfaches Ausführen baut die Demo-Box neu auf). Danach
+als Owner einloggen, um auf dem gefüllten Dashboard zu landen:
+
+- E-Mail: `owner@boxos.dev`
+- Passwort: `BoxOS!demo1`
+
 Dev-Setup:
 - `backend-dev` startet Uvicorn mit `--reload`
 - `frontend-dev` startet Flutter Web per `flutter run -d web-server` (offizielles `cirruslabs/flutter:stable` Image)

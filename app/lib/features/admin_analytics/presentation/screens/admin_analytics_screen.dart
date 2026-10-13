@@ -397,14 +397,14 @@ class _MetricCard extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(minWidth: compact ? 150 : 180),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: appSurface.withOpacity(0.84),
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: tone.withOpacity(0.28)),
             ),
             child: Column(
@@ -452,7 +452,7 @@ class _Panel extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0x1FFFFFFF)),
       ),
       child: Column(

@@ -45,9 +45,7 @@ class AppPrimaryButton extends StatelessWidget {
           disabledForegroundColor: appSubtleText,
           minimumSize: expand ? Size.fromHeight(height) : Size(0, height),
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(appRadiusSm),
-          ),
+          shape: appButtonShape(),
         ),
         child: _ButtonContent(label: label, icon: icon, busy: busy),
       ),
@@ -156,9 +154,7 @@ class AppDangerButton extends StatelessWidget {
           disabledForegroundColor: appSubtleText,
           minimumSize: expand ? Size.fromHeight(height) : Size(0, height),
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(appRadiusSm),
-          ),
+          shape: appButtonShape(),
         ),
         child: _ButtonContent(label: label, icon: icon, busy: busy),
       ),

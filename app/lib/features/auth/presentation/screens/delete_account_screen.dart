@@ -206,7 +206,7 @@ class _SecurityHero extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(8),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -333,7 +333,7 @@ class _WarningCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appDanger.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appDanger.withOpacity(0.22)),
       ),
       child: Column(
@@ -384,7 +384,7 @@ class _FieldCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Row(
@@ -456,14 +456,14 @@ class _HeaderIconButton extends StatelessWidget {
     return Tooltip(
       message: 'Back',
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(6),
         onTap: () => Navigator.of(context).maybePop(),
         child: Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
             color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(color: appSurfaceAlt),
           ),
           child: const Icon(Icons.arrow_back_rounded, color: Colors.white),

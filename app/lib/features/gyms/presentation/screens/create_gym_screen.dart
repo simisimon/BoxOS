@@ -222,7 +222,7 @@ class _CreateGymScreenState extends ConsumerState<CreateGymScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: appSurfaceAlt,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: appBorder),
                     ),
                     child: Column(
@@ -239,7 +239,7 @@ class _CreateGymScreenState extends ConsumerState<CreateGymScreen> {
                         const SizedBox(height: 12),
                         if (_selectedLogoBytes != null) ...[
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(4),
                             child: Image.memory(
                               _selectedLogoBytes!,
                               height: 120,

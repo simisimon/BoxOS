@@ -231,9 +231,7 @@ class BoxOsApp extends ConsumerWidget {
             disabledBackgroundColor: appSurfaceAlt,
             disabledForegroundColor: appSubtleText,
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(appRadiusSm),
-            ),
+            shape: appButtonShape(),
             textStyle: const TextStyle(
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
@@ -281,7 +279,7 @@ class BoxOsApp extends ConsumerWidget {
           ),
           side: const BorderSide(color: appBorder),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(appRadiusPill),
+            borderRadius: BorderRadius.circular(appRadiusSm),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         ),

@@ -71,8 +71,7 @@ class AuthenticatedScaffold extends StatelessWidget {
           maxWidth: useRail ? double.infinity : context.contentMaxWidth,
         ),
       ),
-      body: DecoratedBox(
-        decoration: appPageDecoration(),
+      body: AppGridBackground(
         child: SafeArea(
           top: false,
           bottom: false,

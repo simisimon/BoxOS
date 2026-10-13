@@ -807,7 +807,7 @@ class _CommunityStateCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: appBorder),
       ),
       child: Row(
@@ -895,8 +895,8 @@ class _MessageBubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: bubbleColor,
                   borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
+                    topLeft: const Radius.circular(6),
+                    topRight: const Radius.circular(6),
                     bottomLeft: Radius.circular(message.isOwn ? 18 : 4),
                     bottomRight: Radius.circular(message.isOwn ? 4 : 18),
                   ),

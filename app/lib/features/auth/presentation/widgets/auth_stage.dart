@@ -112,19 +112,19 @@ class AuthFieldGroup extends StatelessWidget {
           hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
           floatingLabelStyle: TextStyle(color: accentColor),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: appBorder),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(6),
             borderSide: BorderSide(color: accentColor, width: 1.6),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: Color(0xFFDC2626)),
           ),
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.6),
           ),
         ),
@@ -188,7 +188,7 @@ class AuthNoteCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: appBorder),
       ),
       child: Column(
@@ -227,7 +227,7 @@ class AuthInlineError extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF1F2),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFFFECDD3)),
       ),
       child: Text(
@@ -302,14 +302,14 @@ class _TopBar extends StatelessWidget {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(6),
             onTap: () => Navigator.of(context).maybePop(),
             child: Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 color: appSurface,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: appBorder),
               ),
               child: const Icon(Icons.arrow_back_rounded, color: appText),

@@ -49,7 +49,7 @@ class AppPill extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: _background,
-        borderRadius: BorderRadius.circular(appRadiusPill),
+        borderRadius: BorderRadius.circular(2),
         border: Border.all(color: _border),
       ),
       child: Row(

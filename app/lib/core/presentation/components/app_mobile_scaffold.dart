@@ -68,8 +68,7 @@ class AppMobileScaffold extends StatelessWidget {
               ),
             )
           : null,
-      body: DecoratedBox(
-        decoration: appPageDecoration(),
+      body: AppGridBackground(
         child: SafeArea(
           top: !hasHeader,
           bottom: false,

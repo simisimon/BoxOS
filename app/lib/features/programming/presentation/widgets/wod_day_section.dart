@@ -61,7 +61,7 @@ class _WodErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: appBorder),
       ),
       child: Text(
@@ -98,7 +98,7 @@ class _WodEmptyState extends ConsumerWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Column(
@@ -112,7 +112,7 @@ class _WodEmptyState extends ConsumerWidget {
                 height: 36,
                 decoration: BoxDecoration(
                   color: appPrimary.withOpacity(0.16),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(3),
                 ),
                 child: const Icon(
                   Icons.local_fire_department_outlined,
@@ -269,7 +269,7 @@ class _WorkoutCard extends ConsumerWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Column(
@@ -392,7 +392,7 @@ class _SectionRow extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: appPrimary.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: appPrimary.withValues(alpha: 0.18)),
       ),
       child: Column(
@@ -493,7 +493,7 @@ class _PanelSection extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: appBorder),
       ),
       child: child,
@@ -558,7 +558,7 @@ class _WhiteboardSection extends ConsumerWidget {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: appSurface,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               'My result: ${workout.myWhiteboardResult!.scoreLabel} '
@@ -667,7 +667,7 @@ class _WorkoutLogSection extends ConsumerWidget {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: appSurface,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
               children: [
@@ -1018,7 +1018,7 @@ class _SectionCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
       decoration: BoxDecoration(
         color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: appBorder),
       ),
       child: Column(

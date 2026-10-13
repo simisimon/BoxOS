@@ -78,18 +78,7 @@ class ProfileScreen extends ConsumerWidget {
         ? (profile?.role.label ?? 'Athlete')
         : profile!.displayName;
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            appPageBackground,
-            appPageBackgroundSoft,
-            appPageBackgroundEnd,
-          ],
-        ),
-      ),
+    return AppGridBackground(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         child: Column(
@@ -293,7 +282,7 @@ class _ProfileHero extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(8),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -478,7 +467,7 @@ class _ActionSection extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Column(
@@ -539,7 +528,7 @@ class _PrimaryActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -550,7 +539,7 @@ class _PrimaryActionTile extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(8),
           onTap: enabled ? onTap : null,
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -616,13 +605,13 @@ class _SecondaryActionTile extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(8),
           onTap: enabled ? onTap : null,
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -683,7 +672,7 @@ class _MembershipCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isCurrentGym ? appPrimary.withOpacity(0.26) : appSurfaceAlt,
         ),

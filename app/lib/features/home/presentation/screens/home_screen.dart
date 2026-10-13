@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/core/presentation/responsive/breakpoints.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
@@ -130,7 +131,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: appSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(8),
           side: const BorderSide(color: appBorder),
         ),
         title: const Text(
@@ -301,8 +302,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // Athlete/Trainer workflow (existing behavior)
-    return DecoratedBox(
-      decoration: appPageDecoration(),
+    return AppGridBackground(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           appSpaceLg,
@@ -376,8 +376,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }) {
     if (!hasActiveGym) {
       // Owner without a box - show only "Create your first box"
-      return DecoratedBox(
-        decoration: appPageDecoration(),
+      return AppGridBackground(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
@@ -396,43 +395,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    // Owner with active box - show Dashboard, News, Quick Access
-    return DecoratedBox(
-      decoration: appPageDecoration(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          appSpaceLg,
-          appSpaceLg,
-          appSpaceLg,
-          appSpace3xl,
+    // Owner with an active box lands on the operational dashboard — the
+    // wireframe's "signal, not a news feed" view. Announcements and shortcuts
+    // live in their own tabs/surfaces. The shell renders this branch full-bleed
+    // for owners, so the dashboard spans the width; we cap it at the roomy
+    // dashboard width and center it to match the wireframe's wide layout.
+    return AppGridBackground(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.dashboardMaxWidth),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              appSpace2xl,
+              appSpaceXl,
+              appSpace2xl,
+              appSpace3xl,
+            ),
+            children: const [_OwnerDashboard()],
+          ),
         ),
-        children: [
-          const _SectionHeading(
-            'Box Dashboard',
-            eyebrow: 'Operations',
-          ),
-          const SizedBox(height: appSpaceMd),
-          const _OwnerDashboard(),
-          const SizedBox(height: appSpace2xl),
-          const _SectionHeading('News', eyebrow: 'Announcements'),
-          const SizedBox(height: appSpaceMd),
-          _AnnouncementRail(
-            announcementsFuture: _announcementsFuture,
-            canManageAnnouncements: canManageAnnouncements,
-            hasActiveGym: hasActiveGym,
-            onCreateAnnouncement: _openAnnouncementComposer,
-            onEditAnnouncement: _openAnnouncementEditor,
-            onDeleteAnnouncement: _deleteAnnouncement,
-            onToggleLike: _toggleAnnouncementLike,
-            onCreateComment: _createAnnouncementComment,
-            onEditComment: _editAnnouncementComment,
-            onDeleteComment: _deleteAnnouncementComment,
-          ),
-          const SizedBox(height: appSpace2xl),
-          const _SectionHeading('Quick actions', eyebrow: 'Shortcuts'),
-          const SizedBox(height: appSpaceMd),
-          const _OwnerQuickAccessGrid(),
-        ],
       ),
     );
   }
@@ -1589,7 +1570,7 @@ class _AnnouncementComposerBanner extends StatelessWidget {
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(8),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -1696,7 +1677,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -1712,10 +1693,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
           collapsedIconColor: _homeAccent,
           iconColor: _homeAccent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(8),
           ),
           collapsedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(8),
           ),
           title: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1805,7 +1786,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               : Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(6),
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
                       child: Image.network(
@@ -1920,7 +1901,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
       builder: (context) => AlertDialog(
         backgroundColor: appSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(8),
           side: const BorderSide(color: appBorder),
         ),
         title: const Text('Edit comment', style: TextStyle(color: appText)),
@@ -2046,7 +2027,7 @@ class _AnnouncementCommentComposer extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         color: appSurfaceAlt,
         border: Border.all(color: appBorder),
       ),
@@ -2109,7 +2090,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         color: appSurfaceAlt,
         border: Border.all(color: appBorder),
       ),
@@ -2337,7 +2318,7 @@ class _ActionSpotlight extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(8),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -2552,7 +2533,7 @@ class _AnnouncementComposerDialogState
     return AlertDialog(
       backgroundColor: appSurface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         side: const BorderSide(color: appBorder),
       ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -2594,7 +2575,7 @@ class _AnnouncementComposerDialogState
                       const SizedBox(height: 12),
                       if (_selectedImageBytes != null) ...[
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(6),
                           child: AspectRatio(
                             aspectRatio: 16 / 9,
                             child: Image.memory(
@@ -2734,88 +2715,150 @@ class _OwnerDashboardContent extends ConsumerWidget {
     final utilizationPct = (overview.utilizationRateInWindow * 100).round();
     final noShowPct = (overview.noShowRateInWindow * 100).round();
 
-    return Column(
-      children: [
-        // Review-window selector + jump to full analytics.
-        Row(
+    final tiles = <_KpiData>[
+      _KpiData(
+        label: 'Active members',
+        value: '${overview.activeMembers}',
+        caption: overview.newMembersInWindow > 0
+            ? '+${overview.newMembersInWindow} this window'
+            : 'no new joins',
+        captionColor:
+            overview.newMembersInWindow > 0 ? _perfGreen : appSubtleText,
+        dot: appPrimary,
+      ),
+      _KpiData(
+        label: 'Attendance',
+        value: '$attendancePct%',
+        caption:
+            '${overview.attendedInWindow} / ${overview.bookingsInWindow} booked',
+        dot: _perfGreen,
+      ),
+      _KpiData(
+        label: 'Utilization',
+        value: '$utilizationPct%',
+        caption: 'of seated capacity',
+        dot: _perfAmber,
+      ),
+      _KpiData(
+        label: 'No-show rate',
+        value: '$noShowPct%',
+        caption: '${overview.noShowsInWindow} no-shows',
+        dot: _perfRed,
+      ),
+      _KpiData(
+        label: 'Pending requests',
+        value: '${overview.pendingJoinRequests}',
+        caption:
+            overview.pendingJoinRequests > 0 ? 'needs review' : 'all clear',
+        captionColor:
+            overview.pendingJoinRequests > 0 ? _perfAmber : appSubtleText,
+        dot: _perfAmber,
+        highlight: overview.pendingJoinRequests > 0,
+      ),
+      _KpiData(
+        label: 'Forward load · 7d',
+        value: '${overview.upcomingClassesNext7Days}',
+        caption: 'classes scheduled',
+        dot: appInfo,
+      ),
+    ];
+
+    final timeline = _AttendanceTimelineCard(
+      days: overview.dailyAttendance,
+      windowDays: window,
+    );
+    final pressure = overview.pressureClasses.isEmpty
+        ? null
+        : _PressureClassCard(classes: overview.pressureClasses);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 720;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _WindowSelector(
-              selected: window,
-              onSelected: (value) => ref
+            _WindowBar(
+              selectedWindow: window,
+              onWindowSelected: (value) => ref
                   .read(adminAnalyticsWindowDaysProvider.notifier)
                   .setWindowDays(value),
+              onFullAnalytics: () => context.go('/admin-analytics'),
             ),
-            const Spacer(),
-            _FullAnalyticsButton(
-              onTap: () => context.go('/admin-analytics'),
+            const SizedBox(height: appSpaceXl),
+            _KpiGrid(tiles: tiles, columns: wide ? 3 : 2),
+            const SizedBox(height: appSpaceMd),
+            if (wide && pressure != null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: timeline),
+                  const SizedBox(width: appSpaceMd),
+                  Expanded(flex: 2, child: pressure),
+                ],
+              )
+            else ...[
+              timeline,
+              if (pressure != null) ...[
+                const SizedBox(height: appSpaceMd),
+                pressure,
+              ],
+            ],
+            const SizedBox(height: appSpaceMd),
+            const _JoinRequestsCard(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Dashboard title bar: OPERATIONS eyebrow + "Box Dashboard" display title on
+/// the left, review-window selector + "Full analytics →" on the right. Wraps
+/// the controls beneath the title on narrow widths.
+class _WindowBar extends StatelessWidget {
+  const _WindowBar({
+    required this.selectedWindow,
+    required this.onWindowSelected,
+    required this.onFullAnalytics,
+  });
+
+  final int selectedWindow;
+  final ValueChanged<int> onWindowSelected;
+  final VoidCallback onFullAnalytics;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: appSpaceLg,
+      runSpacing: appSpaceMd,
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('OPERATIONS', style: appMono(fontSize: 10, letterSpacing: 1.6)),
+            const SizedBox(height: 5),
+            Text(
+              'Box Dashboard',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                letterSpacing: -0.4,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: appSpaceLg),
-        // KPI strip — six operational signals, mono-labelled with a status dot.
-        _KpiGrid(
-          tiles: [
-            _KpiData(
-              label: 'Active members',
-              value: '${overview.activeMembers}',
-              caption: overview.newMembersInWindow > 0
-                  ? '+${overview.newMembersInWindow} this window'
-                  : 'no new joins',
-              captionColor: overview.newMembersInWindow > 0
-                  ? _perfGreen
-                  : appSubtleText,
-              dot: appPrimary,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _WindowSelector(
+              selected: selectedWindow,
+              onSelected: onWindowSelected,
             ),
-            _KpiData(
-              label: 'Attendance',
-              value: '$attendancePct%',
-              caption: '${overview.attendedInWindow} / '
-                  '${overview.bookingsInWindow} booked',
-              dot: _perfGreen,
-            ),
-            _KpiData(
-              label: 'Utilization',
-              value: '$utilizationPct%',
-              caption: 'of seated capacity',
-              dot: _perfAmber,
-            ),
-            _KpiData(
-              label: 'No-show rate',
-              value: '$noShowPct%',
-              caption: '${overview.noShowsInWindow} no-shows',
-              dot: _perfRed,
-            ),
-            _KpiData(
-              label: 'Pending requests',
-              value: '${overview.pendingJoinRequests}',
-              caption: overview.pendingJoinRequests > 0
-                  ? 'needs review'
-                  : 'all clear',
-              captionColor: overview.pendingJoinRequests > 0
-                  ? _perfAmber
-                  : appSubtleText,
-              dot: _perfAmber,
-              highlight: overview.pendingJoinRequests > 0,
-            ),
-            _KpiData(
-              label: 'Forward load · 7d',
-              value: '${overview.upcomingClassesNext7Days}',
-              caption: 'classes scheduled',
-              dot: appInfo,
-            ),
+            const SizedBox(width: appSpaceMd),
+            _FullAnalyticsButton(onTap: onFullAnalytics),
           ],
         ),
-        const SizedBox(height: appSpaceMd),
-        _AttendanceTimelineCard(
-          days: overview.dailyAttendance,
-          windowDays: window,
-        ),
-        if (overview.pressureClasses.isNotEmpty) ...[
-          const SizedBox(height: appSpaceMd),
-          _PressureClassCard(classes: overview.pressureClasses),
-        ],
-        const SizedBox(height: appSpaceMd),
-        const _JoinRequestsCard(),
       ],
     );
   }
@@ -2873,37 +2916,42 @@ class _FullAnalyticsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(appRadiusSm),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: appPrimary,
-            borderRadius: BorderRadius.circular(appRadiusSm),
-            boxShadow: [
-              BoxShadow(
-                color: appPrimary.withValues(alpha: 0.35),
-                blurRadius: 16,
-              ),
-            ],
+    // Cut-corner CTA (angled bottom-right) with a cyan glow — the wireframe's
+    // primary dashboard button silhouette.
+    final shape = appButtonShape(cut: 13);
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        shape: shape,
+        shadows: [
+          BoxShadow(
+            color: appPrimary.withValues(alpha: 0.45),
+            blurRadius: 20,
           ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Full analytics',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
+        ],
+      ),
+      child: Material(
+        color: appPrimary,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Full analytics',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
                 ),
-              ),
-              SizedBox(width: 6),
-              Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
-            ],
+                SizedBox(width: 7),
+                Icon(Icons.arrow_forward_rounded, size: 15, color: Colors.white),
+              ],
+            ),
           ),
         ),
       ),
@@ -2929,29 +2977,39 @@ class _KpiData {
   final bool highlight;
 }
 
-/// Two-column KPI grid that reflows the six dashboard signals into stacked
-/// pairs, sized to whatever width the dashboard column provides.
+/// KPI strip that reflows the six dashboard signals into rows of [columns]
+/// (3 on the wireframe's desktop layout, 2 on narrow), sized to whatever width
+/// the dashboard column provides.
 class _KpiGrid extends StatelessWidget {
-  const _KpiGrid({required this.tiles});
+  const _KpiGrid({required this.tiles, this.columns = 2});
 
   final List<_KpiData> tiles;
+  final int columns;
 
   @override
   Widget build(BuildContext context) {
     final rows = <Widget>[];
-    for (var i = 0; i < tiles.length; i += 2) {
+    for (var i = 0; i < tiles.length; i += columns) {
       if (i > 0) rows.add(const SizedBox(height: appSpaceMd));
+      final cells = <Widget>[];
+      for (var c = 0; c < columns; c++) {
+        if (c > 0) cells.add(const SizedBox(width: appSpaceMd));
+        final index = i + c;
+        cells.add(
+          index < tiles.length
+              ? Expanded(child: _KpiTile(data: tiles[index]))
+              : const Spacer(),
+        );
+      }
+      // IntrinsicHeight gives the Row a bounded cross-axis extent so
+      // `stretch` can equalize tile heights inside the vertical scroll view
+      // (a bare stretch Row here forces an infinite-height layout error).
       rows.add(
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: _KpiTile(data: tiles[i])),
-            const SizedBox(width: appSpaceMd),
-            if (i + 1 < tiles.length)
-              Expanded(child: _KpiTile(data: tiles[i + 1]))
-            else
-              const Spacer(),
-          ],
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: cells,
+          ),
         ),
       );
     }
@@ -3045,15 +3103,57 @@ class _AttendanceTimelineCard extends StatelessWidget {
       1,
       (max, d) => d.attended > max ? d.attended : max,
     );
+    // Trend: mean attendance of the recent half vs the earlier half.
+    double? trendPct;
+    if (ordered.length >= 4) {
+      final half = ordered.length ~/ 2;
+      final earlierMean =
+          ordered.take(half).fold<int>(0, (a, d) => a + d.attended) / half;
+      final recentMean =
+          ordered.skip(ordered.length - half).fold<int>(
+                0,
+                (a, d) => a + d.attended,
+              ) /
+              half;
+      if (earlierMean > 0) {
+        trendPct = (recentMean - earlierMean) / earlierMean * 100;
+      }
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: appPanelDecoration(radius: appRadiusMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'DAILY ATTENDANCE · ${windowDays}D',
-            style: appMono(fontSize: 10, letterSpacing: 1.4),
+          Row(
+            children: [
+              Text(
+                'DAILY ATTENDANCE · ${windowDays}D',
+                style: appMono(fontSize: 10, letterSpacing: 1.4),
+              ),
+              const Spacer(),
+              if (trendPct != null && trendPct.abs() >= 1)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      trendPct >= 0
+                          ? Icons.arrow_drop_up_rounded
+                          : Icons.arrow_drop_down_rounded,
+                      size: 16,
+                      color: trendPct >= 0 ? _perfGreen : _perfRed,
+                    ),
+                    Text(
+                      '${trendPct.abs().round()}%',
+                      style: appMono(
+                        fontSize: 11,
+                        letterSpacing: 0,
+                        color: trendPct >= 0 ? _perfGreen : _perfRed,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
           const SizedBox(height: appSpaceLg),
           if (ordered.isEmpty)
@@ -3411,25 +3511,3 @@ class _RequestActionButton extends StatelessWidget {
   }
 }
 
-// Owner Quick Access Grid. Members, Schedule and Programming are now
-// first-class tabs, so this surface only carries actions that don't have a
-// dedicated tab (deep analytics, audit log).
-class _OwnerQuickAccessGrid extends StatelessWidget {
-  const _OwnerQuickAccessGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _ActionTile(
-          action: const _HomeAction(
-            icon: Icons.analytics_outlined,
-            title: 'View Full Analytics',
-            route: '/admin-analytics',
-            accentColor: _homeAccent,
-          ),
-        ),
-      ],
-    );
-  }
-}

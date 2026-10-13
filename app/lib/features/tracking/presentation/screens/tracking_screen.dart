@@ -116,18 +116,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            appPageBackground,
-            appPageBackgroundSoft,
-            appPageBackgroundEnd,
-          ],
-        ),
-      ),
+    return AppGridBackground(
       child: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<_PickerData>(

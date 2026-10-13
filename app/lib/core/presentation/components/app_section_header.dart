@@ -35,11 +35,10 @@ class AppSectionHeader extends StatelessWidget {
                 if (eyebrow != null) ...[
                   Text(
                     eyebrow!.toUpperCase(),
-                    style: const TextStyle(
-                      color: appPrimary,
+                    style: appMono(
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
                       letterSpacing: 1.6,
+                      color: appPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),

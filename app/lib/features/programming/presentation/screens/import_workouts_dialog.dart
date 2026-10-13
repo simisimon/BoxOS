@@ -322,7 +322,7 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
       scrollable: true,
       backgroundColor: appSurface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         side: const BorderSide(color: appBorder),
       ),
       titlePadding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
@@ -481,7 +481,7 @@ class _RowTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: appBorder),
       ),
       child: Row(
@@ -538,7 +538,7 @@ class _MessageCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color),
       ),
       child: Row(

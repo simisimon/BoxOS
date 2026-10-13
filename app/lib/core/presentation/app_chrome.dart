@@ -45,13 +45,62 @@ const appWarning = Color(0xFFFFB454);
 const appInfo = Color(0xFF5BC0FF);
 
 // --- Radii ------------------------------------------------------------------
-// Tightened scale; the previous range (16–28) read pillowy. These match Linear
-// and Stripe dashboard surfaces — confident, precise, never childish.
-const double appRadiusSm = 10; // inputs, chips, small pills
-const double appRadiusMd = 14; // small cards, popovers
-const double appRadiusLg = 18; // standard cards
-const double appRadiusXl = 22; // hero cards, sheets
+// Sharp, angular scale to match the BoxOS wireframes — near-square corners with
+// just enough softening to avoid a hard pixel edge. The previous pillowy range
+// (10–22) read consumer-app; these read like an operations console.
+const double appRadiusSm = 3; // inputs, chips, buttons
+const double appRadiusMd = 4; // small cards, popovers
+const double appRadiusLg = 6; // standard cards
+const double appRadiusXl = 8; // hero cards, sheets
 const double appRadiusPill = 999;
+
+// --- Chamfer ----------------------------------------------------------------
+// The BoxOS CTA silhouette from the wireframes: a single angled cut on the
+// bottom-right corner (a `clip-path` polygon), the other three corners square.
+// Expressed as a real OutlinedBorder so buttons keep ink, focus and border
+// behavior. Applied to filled buttons; outlined/ghost stay square.
+const double appButtonCut = 12;
+BoxCutBorder appButtonShape({double cut = appButtonCut}) => BoxCutBorder(cut: cut);
+
+/// Rectangle with the bottom-right corner sliced off at 45°. [cut] is the
+/// length (in px) trimmed along each edge at that corner.
+class BoxCutBorder extends OutlinedBorder {
+  const BoxCutBorder({this.cut = appButtonCut, super.side = BorderSide.none});
+
+  final double cut;
+
+  @override
+  BoxCutBorder copyWith({BorderSide? side, double? cut}) =>
+      BoxCutBorder(cut: cut ?? this.cut, side: side ?? this.side);
+
+  Path _path(Rect rect) {
+    final c = cut.clamp(0, rect.shortestSide);
+    return Path()
+      ..moveTo(rect.left, rect.top)
+      ..lineTo(rect.right, rect.top)
+      ..lineTo(rect.right, rect.bottom - c)
+      ..lineTo(rect.right - c, rect.bottom)
+      ..lineTo(rect.left, rect.bottom)
+      ..close();
+  }
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      _path(rect.deflate(side.width));
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => _path(rect);
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    if (side.style == BorderStyle.none) return;
+    canvas.drawPath(getOuterPath(rect), side.toPaint());
+  }
+
+  @override
+  ShapeBorder scale(double t) =>
+      BoxCutBorder(cut: cut * t, side: side.scale(t));
+}
 
 // --- Spacing ---------------------------------------------------------------
 // Centralized so every screen breathes the same way. Use these for vertical
@@ -110,6 +159,48 @@ BoxDecoration appPageDecoration() => const BoxDecoration(
     colors: [appPageBackground, appPageBackgroundSoft, appPageBackgroundEnd],
   ),
 );
+
+/// Page background with the wireframe's faint cyan blueprint grid painted over
+/// the base gradient. Drop-in replacement for `DecoratedBox(decoration:
+/// appPageDecoration())` — the grid sits behind content, above the gradient.
+class AppGridBackground extends StatelessWidget {
+  const AppGridBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: appPageDecoration(),
+      child: CustomPaint(
+        painter: _GridPainter(),
+        isComplex: false,
+        willChange: false,
+        child: child,
+      ),
+    );
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  static const double _step = 48;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = appPrimary.withValues(alpha: 0.035)
+      ..strokeWidth = 1;
+    for (double x = 0; x <= size.width; x += _step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y <= size.height; y += _step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GridPainter oldDelegate) => false;
+}
 
 BoxDecoration appPanelDecoration({double radius = appRadiusLg}) =>
     BoxDecoration(
@@ -186,11 +277,7 @@ class AppStatTile extends StatelessWidget {
                   label.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: appSubtleText,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: appMono(fontSize: 10, letterSpacing: 1.4),
                 ),
               ),
               if (icon != null) Icon(icon, size: 16, color: accentColor),

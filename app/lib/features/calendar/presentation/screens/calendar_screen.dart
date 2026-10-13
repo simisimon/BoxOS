@@ -208,18 +208,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
     final scheduleAsync = ref.watch(scheduleListProvider);
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            appPageBackground,
-            appPageBackgroundSoft,
-            appPageBackgroundEnd,
-          ],
-        ),
-      ),
+    return AppGridBackground(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: profile?.activeGym == null
@@ -338,7 +327,7 @@ class _CalendarStateCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Row(
@@ -440,7 +429,7 @@ class _MonthCalendar extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Column(
@@ -577,7 +566,7 @@ class _MonthDayCell extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(4),
           onTap: () => onTap(day),
           child: Container(
             clipBehavior: Clip.hardEdge,
@@ -586,7 +575,7 @@ class _MonthDayCell extends StatelessWidget {
               color: isSelected
                   ? appPrimarySoft
                   : (inMonth ? appSurfaceAlt : Colors.transparent),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: isSelected || isToday ? appPrimary : appBorder,
                 width: isSelected || isToday ? 1.4 : 1,
@@ -688,14 +677,14 @@ class _CalendarIconButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(3),
           onTap: onTap,
           child: Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
               color: appSurfaceAlt,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(3),
               border: Border.all(color: appBorder),
             ),
             child: Icon(icon, color: appText, size: 22),
@@ -717,7 +706,7 @@ class _CalendarHeaderButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(3),
         onTap: onTap,
         child: Container(
           height: 38,
@@ -725,7 +714,7 @@ class _CalendarHeaderButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(3),
             border: Border.all(color: appBorder),
           ),
           child: Text(
@@ -821,7 +810,7 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
       ),
       child: Column(
@@ -903,7 +892,7 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: appSurfaceAlt,
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: appBorder),
                           ),
                           child: Row(
@@ -1024,7 +1013,7 @@ class _ScheduleClassCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: appSurface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: appBorder),
         boxShadow: [
           BoxShadow(
@@ -1319,7 +1308,7 @@ class _MetricTile extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: accentColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: accentColor.withOpacity(0.24)),
       ),
       child: Column(
@@ -1390,7 +1379,7 @@ class _ContentPanel extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: accentColor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: accentColor.withOpacity(0.2)),
       ),
       child: Column(

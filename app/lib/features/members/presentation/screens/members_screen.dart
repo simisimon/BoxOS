@@ -165,8 +165,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       Future.microtask(_load);
     }
 
-    return DecoratedBox(
-      decoration: appPageDecoration(),
+    return AppGridBackground(
       child: _buildBody(profileAsync, hasAccess),
     );
   }
