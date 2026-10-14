@@ -138,25 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: isLoading ? null : () => _quickLogin('demo@boxos.app', 'BoxOS123!'),
-              icon: const Icon(Icons.person_outline, size: 18),
-              label: const Text('Demo Athlete'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.blue,
-              ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: isLoading ? null : () => _quickLogin('trainer@boxos.app', 'BoxOS123!'),
-              icon: const Icon(Icons.fitness_center_outlined, size: 18),
-              label: const Text('Demo Trainer'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.orange,
-              ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: isLoading ? null : () => _quickLogin('admin@boxos.app', 'BoxOS123!'),
+              onPressed: isLoading ? null : () => _quickLogin('owner@boxos.dev', 'BoxOS!demo1'),
               icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
               label: const Text('Demo Owner'),
               style: OutlinedButton.styleFrom(

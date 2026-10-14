@@ -1,3 +1,4 @@
+
 # BoxOS Roadmap
 
 > Diese Datei ist die zentrale Produkt-, Delivery- und Readiness-Übersicht für BoxOS. Sie fasst die bisher auf mehrere Markdown-Dateien verteilten Kerninformationen zusammen, damit `ROADMAP.md` neben der Standard-`README.md` als primäres Projektdokument bestehen kann.
