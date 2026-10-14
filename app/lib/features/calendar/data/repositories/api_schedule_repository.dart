@@ -1,6 +1,8 @@
 import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
+import 'package:app/features/calendar/domain/models/class_template.dart';
+import 'package:app/features/calendar/domain/models/class_type.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
@@ -19,6 +21,13 @@ final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
 /// every watcher (grid + open sheet) refreshes.
 final scheduleListProvider = FutureProvider.autoDispose<List<ScheduleClass>>(
   (ref) => ref.watch(scheduleRepositoryProvider).fetchSchedule(),
+);
+
+/// The gym's weekly class plan (managers only). Saving a template changes the
+/// generated sessions too, so mutations invalidate both this and
+/// [scheduleListProvider].
+final classTemplatesProvider = FutureProvider.autoDispose<List<ClassTemplate>>(
+  (ref) => ref.watch(scheduleRepositoryProvider).fetchTemplates(),
 );
 
 class ApiScheduleRepository implements ScheduleRepository {
@@ -121,6 +130,53 @@ class ApiScheduleRepository implements ScheduleRepository {
   }
 
   @override
+  Future<List<ClassTemplate>> fetchTemplates() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/schedule/templates',
+      options: Options(headers: await _authHeaders()),
+    );
+    final items = response.data?['templates'] as List<dynamic>? ?? const [];
+    return items
+        .map((item) => _templateFromJson(item as Map<String, dynamic>?))
+        .toList();
+  }
+
+  @override
+  Future<ClassTemplate> createTemplate(ClassTemplateDraft draft) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/schedule/templates',
+      data: _templateBody(draft),
+      options: Options(headers: await _authHeaders()),
+    );
+    return _templateFromJson(
+      response.data?['template'] as Map<String, dynamic>?,
+    );
+  }
+
+  @override
+  Future<int> updateTemplate({
+    required int id,
+    required ClassTemplateDraft draft,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/schedule/templates',
+      data: {'id': id, ..._templateBody(draft)},
+      options: Options(headers: await _authHeaders()),
+    );
+    return response.data?['kept_booked_sessions'] as int? ?? 0;
+  }
+
+  @override
+  Future<int> deleteTemplate({required int id}) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/schedule/templates',
+      data: {'id': id},
+      options: Options(headers: await _authHeaders()),
+    );
+    return response.data?['kept_booked_sessions'] as int? ?? 0;
+  }
+
+  @override
   Future<void> bookClass({required int classId}) async {
     await _dio.post<void>(
       '/schedule/bookings',
@@ -194,6 +250,7 @@ class ApiScheduleRepository implements ScheduleRepository {
       startTime: DateTime.parse(data['start_time'] as String? ?? '').toLocal(),
       durationMinutes: data['duration_minutes'] as int? ?? 60,
       capacity: data['capacity'] as int? ?? 0,
+      classTemplateId: data['class_template_id'] as int?,
       assignedTrainer: _nullableTrainerFromJson(
         data['assigned_trainer'] as Map<String, dynamic>?,
       ),
@@ -206,6 +263,41 @@ class ApiScheduleRepository implements ScheduleRepository {
       bookings: ((data['bookings'] as List<dynamic>?) ?? const [])
           .map((item) => _bookingFromJson(item as Map<String, dynamic>?))
           .toList(),
+    );
+  }
+
+  Map<String, dynamic> _templateBody(ClassTemplateDraft draft) {
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+    return {
+      'title': draft.title,
+      'class_type': draft.classType,
+      'weekdays': draft.weekdays,
+      'start_time': '${twoDigits(draft.hour)}:${twoDigits(draft.minute)}',
+      'duration_minutes': draft.durationMinutes,
+      'capacity': draft.capacity,
+      'trainer_user_id': draft.trainerUserId,
+    };
+  }
+
+  ClassTemplate _templateFromJson(Map<String, dynamic>? data) {
+    if (data == null) {
+      throw Exception('Missing class data.');
+    }
+    final start = (data['start_time'] as String? ?? '00:00').split(':');
+    return ClassTemplate(
+      id: data['id'] as int? ?? 0,
+      title: data['title'] as String? ?? '',
+      classType: ClassType.fromWire(data['class_type'] as String? ?? ''),
+      weekdays: ((data['weekdays'] as List<dynamic>?) ?? const [])
+          .map((item) => item as int)
+          .toList(),
+      hour: int.tryParse(start.first) ?? 0,
+      minute: start.length > 1 ? int.tryParse(start[1]) ?? 0 : 0,
+      durationMinutes: data['duration_minutes'] as int? ?? 60,
+      capacity: data['capacity'] as int? ?? 0,
+      assignedTrainer: _nullableTrainerFromJson(
+        data['assigned_trainer'] as Map<String, dynamic>?,
+      ),
     );
   }
 

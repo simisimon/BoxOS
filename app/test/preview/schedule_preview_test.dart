@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
+import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
@@ -138,6 +139,22 @@ class _FakeScheduleRepository implements ScheduleRepository {
 
   @override
   Future<void> joinWaitlist({required int classId}) async {}
+
+  @override
+  Future<List<ClassTemplate>> fetchTemplates() async => const [];
+
+  @override
+  Future<ClassTemplate> createTemplate(ClassTemplateDraft draft) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<int> updateTemplate({
+    required int id,
+    required ClassTemplateDraft draft,
+  }) async => 0;
+
+  @override
+  Future<int> deleteTemplate({required int id}) async => 0;
 
   @override
   Future<void> leaveWaitlist({required int classId}) async {}

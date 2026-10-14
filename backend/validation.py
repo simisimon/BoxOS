@@ -330,13 +330,41 @@ def require_schedule_title(value: Any) -> str:
 
 def require_class_type(value: Any) -> str:
     class_type = str(value or "").strip()
-    allowed_types = {"WOD", "Open Gym", "Specialty", "PT"}
+    allowed_types = {"WOD", "Open Gym", "Skill", "PT"}
     if class_type not in allowed_types:
         raise ApiError(
             HTTPStatus.BAD_REQUEST,
-            "Class type must be WOD, Open Gym, Specialty, or PT.",
+            "Class type must be WOD, Open Gym, Skill, or PT.",
         )
     return class_type
+
+
+def require_weekdays(value: Any) -> list[int]:
+    """ISO weekdays (1 = Monday … 7 = Sunday), deduplicated and sorted."""
+    if not isinstance(value, list) or not value:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Select at least one weekday.")
+    weekdays: set[int] = set()
+    for item in value:
+        try:
+            weekday = int(item)
+        except (TypeError, ValueError):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Weekdays must be numbers from 1 to 7.")
+        if weekday < 1 or weekday > 7:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Weekdays must be numbers from 1 to 7.")
+        weekdays.add(weekday)
+    return sorted(weekdays)
+
+
+def require_local_time(value: Any) -> str:
+    """Wall-clock time in the gym's timezone, normalised to HH:MM."""
+    text = str(value or "").strip()
+    parts = text.split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Start time must use the HH:MM format.")
+    hour, minute = int(parts[0]), int(parts[1])
+    if hour > 23 or minute > 59:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Start time must use the HH:MM format.")
+    return f"{hour:02d}:{minute:02d}"
 
 
 def require_capacity(value: Any) -> int:

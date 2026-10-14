@@ -147,6 +147,20 @@ class UpdateScheduleClassRequest(ScheduleClassRequest):
     id: int
 
 
+class ClassTemplateRequest(BaseModel):
+    title: str
+    class_type: str
+    weekdays: list[int]
+    start_time: str
+    duration_minutes: int
+    capacity: int
+    trainer_user_id: int | None = None
+
+
+class UpdateClassTemplateRequest(ClassTemplateRequest):
+    id: int
+
+
 class ClassIdRequest(BaseModel):
     class_id: int
 
@@ -1647,6 +1661,12 @@ def list_schedule_classes(
     connection = db.get_connection()
     try:
         include_bookings = session["role"] in {"admin", "trainer"}
+        with connection:
+            schedule_service.materialize_gym_sessions(
+                connection,
+                gym_id=session["active_gym_id"],
+                gym_timezone=_gym_timezone(connection, session["active_gym_id"]),
+            )
         rows = connection.execute(
             """
             select
@@ -1659,6 +1679,7 @@ def list_schedule_classes(
               class_schedules.duration_minutes,
               class_schedules.capacity,
               class_schedules.assigned_trainer_user_id,
+              class_schedules.class_template_id,
               trainer.display_name as assigned_trainer_display_name,
               trainer.nickname as assigned_trainer_nickname
             from class_schedules
@@ -1679,6 +1700,220 @@ def list_schedule_classes(
                 for row in rows
             ]
         }
+    finally:
+        connection.close()
+
+
+def _gym_timezone(connection: Any, gym_id: int) -> str:
+    gym_row = connection.execute("select timezone from gyms where id = ?", (gym_id,)).fetchone()
+    if gym_row is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Active gym not found.")
+    return str(gym_row["timezone"])
+
+
+def _require_gym_trainer(connection: Any, gym_id: int, trainer_user_id: int | None) -> None:
+    if trainer_user_id is None:
+        return
+    assigned_trainer = connection.execute(
+        """
+        select users.id
+        from gym_memberships
+        join users on users.id = gym_memberships.user_id
+        where gym_memberships.gym_id = ?
+          and gym_memberships.user_id = ?
+          and gym_memberships.status = 'active'
+          and gym_memberships.active_role = 'trainer'
+          and users.deleted_at is null
+        """,
+        (gym_id, trainer_user_id),
+    ).fetchone()
+    if assigned_trainer is None:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Selected trainer is not active in this gym.")
+
+
+def _class_template_fields(body: ClassTemplateRequest) -> dict[str, Any]:
+    return {
+        "title": validation.require_schedule_title(body.title),
+        "class_type": validation.require_class_type(body.class_type),
+        "weekdays": validation.require_weekdays(body.weekdays),
+        "start_local_time": validation.require_local_time(body.start_time),
+        "duration_minutes": validation.require_duration_minutes(body.duration_minutes),
+        "capacity": validation.require_capacity(body.capacity),
+        "trainer_user_id": validation.require_optional_user_id(body.trainer_user_id),
+    }
+
+
+def _class_template_audit_details(fields: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "title": fields["title"],
+        "class_type": fields["class_type"],
+        "weekdays": fields["weekdays"],
+        "start_time": fields["start_local_time"],
+        "duration_minutes": fields["duration_minutes"],
+        "capacity": fields["capacity"],
+        "trainer_user_id": fields["trainer_user_id"],
+    }
+
+
+@app.get("/schedule/templates")
+def list_class_templates(
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, list[dict[str, Any]]]:
+    connection = db.get_connection()
+    try:
+        rows = schedule_service.list_class_template_rows(connection, session["active_gym_id"])
+        return {"templates": [schedule_service.class_template_payload(row) for row in rows]}
+    finally:
+        connection.close()
+
+
+@app.post("/schedule/templates", status_code=HTTPStatus.CREATED.value)
+def create_class_template(
+    body: ClassTemplateRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    fields = _class_template_fields(body)
+    connection = db.get_connection()
+    try:
+        gym_timezone = _gym_timezone(connection, session["active_gym_id"])
+        _require_gym_trainer(connection, session["active_gym_id"], fields["trainer_user_id"])
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            template_id = int(
+                connection.execute(
+                    """
+                    insert into class_templates (
+                      gym_id, title, class_type, weekdays, start_local_time, duration_minutes, capacity,
+                      assigned_trainer_user_id, created_by_user_id, updated_by_user_id, created_at, updated_at
+                    )
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    returning id
+                    """,
+                    (
+                        session["active_gym_id"],
+                        fields["title"],
+                        fields["class_type"],
+                        schedule_service.encode_weekdays(fields["weekdays"]),
+                        fields["start_local_time"],
+                        fields["duration_minutes"],
+                        fields["capacity"],
+                        fields["trainer_user_id"],
+                        session["user_id"],
+                        session["user_id"],
+                        timestamp,
+                        timestamp,
+                    ),
+                ).fetchone()["id"]
+            )
+            row = schedule_service.get_class_template_row(connection, template_id)
+            if row is None:
+                raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Class creation failed.")
+            schedule_service.materialize_template_sessions(connection, row, gym_timezone=gym_timezone)
+            audit.write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="class_template_created",
+                entity_type="class_template",
+                entity_id=template_id,
+                details=_class_template_audit_details(fields),
+            )
+        return {"template": schedule_service.class_template_payload(row)}
+    finally:
+        connection.close()
+
+
+@app.patch("/schedule/templates")
+def update_class_template(
+    body: UpdateClassTemplateRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    template_id = validation.require_user_id(body.id)
+    fields = _class_template_fields(body)
+    connection = db.get_connection()
+    try:
+        existing = connection.execute(
+            "select id from class_templates where id = ? and gym_id = ?",
+            (template_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class not found.")
+        gym_timezone = _gym_timezone(connection, session["active_gym_id"])
+        _require_gym_trainer(connection, session["active_gym_id"], fields["trainer_user_id"])
+        with connection:
+            connection.execute(
+                """
+                update class_templates
+                set title = ?, class_type = ?, weekdays = ?, start_local_time = ?, duration_minutes = ?,
+                    capacity = ?, assigned_trainer_user_id = ?, updated_by_user_id = ?, updated_at = ?
+                where id = ?
+                """,
+                (
+                    fields["title"],
+                    fields["class_type"],
+                    schedule_service.encode_weekdays(fields["weekdays"]),
+                    fields["start_local_time"],
+                    fields["duration_minutes"],
+                    fields["capacity"],
+                    fields["trainer_user_id"],
+                    session["user_id"],
+                    security.isoformat(security.now_utc()),
+                    template_id,
+                ),
+            )
+            row = schedule_service.get_class_template_row(connection, template_id)
+            if row is None:
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class not found.")
+            detached_count = schedule_service.resync_template_sessions(
+                connection,
+                row,
+                gym_timezone=gym_timezone,
+                actor_user_id=session["user_id"],
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="class_template_updated",
+                entity_type="class_template",
+                entity_id=template_id,
+                details={**_class_template_audit_details(fields), "detached_booked_sessions": detached_count},
+            )
+        return {
+            "template": schedule_service.class_template_payload(row),
+            "kept_booked_sessions": detached_count,
+        }
+    finally:
+        connection.close()
+
+
+@app.delete("/schedule/templates")
+def delete_class_template(
+    body: EntityIdRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    template_id = body.id
+    connection = db.get_connection()
+    try:
+        existing = connection.execute(
+            "select id, title from class_templates where id = ? and gym_id = ?",
+            (template_id, session["active_gym_id"]),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class not found.")
+        with connection:
+            kept_count = schedule_service.remove_template_sessions(connection, template_id)
+            connection.execute("delete from class_templates where id = ?", (template_id,))
+            audit.write_audit_log(
+                connection,
+                gym_id=session["active_gym_id"],
+                actor_user_id=session["user_id"],
+                action="class_template_deleted",
+                entity_type="class_template",
+                entity_id=template_id,
+                details={"title": existing["title"], "kept_booked_sessions": kept_count},
+            )
+        return {"deleted": True, "kept_booked_sessions": kept_count}
     finally:
         connection.close()
 
@@ -1753,22 +1988,7 @@ def create_schedule_class(
                         status_code=HTTPStatus.BAD_REQUEST.value,
                         detail="Recurring classes must all be scheduled in the future.",
                     )
-        if trainer_user_id is not None:
-            assigned_trainer = connection.execute(
-                """
-                select users.id
-                from gym_memberships
-                join users on users.id = gym_memberships.user_id
-                where gym_memberships.gym_id = ?
-                  and gym_memberships.user_id = ?
-                  and gym_memberships.status = 'active'
-                  and gym_memberships.active_role = 'trainer'
-                  and users.deleted_at is null
-                """,
-                (session["active_gym_id"], trainer_user_id),
-            ).fetchone()
-            if assigned_trainer is None:
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Selected trainer is not active in this gym.")
+        _require_gym_trainer(connection, session["active_gym_id"], trainer_user_id)
         timestamp = security.isoformat(security.now_utc())
         with connection:
             schedule_ids: list[int] = []
@@ -1867,22 +2087,7 @@ def update_schedule_class(
         booked_count = int(booked_count_row["booked_count"]) if booked_count_row is not None else 0
         if capacity < booked_count:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Capacity cannot be lower than the current booking count.")
-        if trainer_user_id is not None:
-            assigned_trainer = connection.execute(
-                """
-                select users.id
-                from gym_memberships
-                join users on users.id = gym_memberships.user_id
-                where gym_memberships.gym_id = ?
-                  and gym_memberships.user_id = ?
-                  and gym_memberships.status = 'active'
-                  and gym_memberships.active_role = 'trainer'
-                  and users.deleted_at is null
-                """,
-                (session["active_gym_id"], trainer_user_id),
-            ).fetchone()
-            if assigned_trainer is None:
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Selected trainer is not active in this gym.")
+        _require_gym_trainer(connection, session["active_gym_id"], trainer_user_id)
         affected_user_rows = connection.execute(
             """
             select user_id from class_bookings where class_schedule_id = ?

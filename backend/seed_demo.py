@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 from backend import db, settings
 from backend.membership_service import slugify
+from backend.schedule_service import utc_for_local
 from backend.security import hash_password, isoformat, now_utc
 from backend.validation import encode_roles, normalize_roles
 
@@ -53,16 +54,18 @@ _LAST_NAMES = [
 ]
 
 _CLASS_WEEKDAY = [
-    ("06:00", "Olympic Lifting", "Olympic Lifting", 14),
-    ("09:00", "Metcon", "Metcon", 20),
+    ("06:00", "Olympic Lifting", "Skill", 14),
+    ("09:00", "CrossFit", "WOD", 20),
     ("12:00", "Open Gym", "Open Gym", 24),
-    ("17:30", "Metcon", "Metcon", 20),
-    ("18:30", "Endurance", "Endurance", 18),
+    ("17:30", "CrossFit", "WOD", 20),
+    ("18:30", "Endurance", "Skill", 18),
 ]
 _CLASS_WEEKEND = [
-    ("10:00", "Community WOD", "Metcon", 24),
+    ("10:00", "Community WOD", "WOD", 24),
     ("11:00", "Open Gym", "Open Gym", 24),
 ]
+_WEEKDAYS = "1,2,3,4,5"
+_WEEKEND_DAYS = "6,7"
 
 _PAST_DAYS = 34  # classes reach back far enough for the 30-day window
 _FUTURE_DAYS = 6  # forward load / pressure classes
@@ -202,23 +205,53 @@ def _add_membership(conn, user_id, gym_id, active_role, roles, *, created_at):
     )
 
 
+def _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today):
+    """One weekly class per slot, as the owner would set up in the week plan.
+
+    `generated_until` marks the explicitly seeded window as done, so the API's
+    lazy generation only extends the plan beyond it.
+    """
+    generated_until = (today + timedelta(days=_FUTURE_DAYS)).isoformat()
+    template_ids = {}
+    for weekdays, slots in ((_WEEKDAYS, _CLASS_WEEKDAY), (_WEEKEND_DAYS, _CLASS_WEEKEND)):
+        for time_str, title, class_type, capacity in slots:
+            template_ids[(weekdays, time_str)] = int(conn.execute(
+                """
+                insert into class_templates (gym_id, title, class_type, weekdays, start_local_time,
+                  duration_minutes, capacity, assigned_trainer_user_id, generated_until,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at)
+                values (?, ?, ?, ?, ?, 60, ?, ?, ?, ?, ?, ?, ?) returning id
+                """,
+                (gym_id, title, class_type, weekdays, time_str, capacity, rng.choice(trainer_ids),
+                 generated_until, owner_id, owner_id, _ts(), _ts()),
+            ).fetchone()["id"])
+    return template_ids
+
+
 def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today):
+    template_ids = _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today)
     for offset in range(-_PAST_DAYS, _FUTURE_DAYS + 1):
         day = today + timedelta(days=offset)
-        templates = _CLASS_WEEKEND if day.weekday() >= 5 else _CLASS_WEEKDAY
+        is_weekend = day.weekday() >= 5
+        templates = _CLASS_WEEKEND if is_weekend else _CLASS_WEEKDAY
         for time_str, title, class_type, capacity in templates:
-            start = f"{day.isoformat()}T{time_str}:00"
-            end_hour = int(time_str[:2]) + 1
-            end = f"{day.isoformat()}T{end_hour:02d}:{time_str[3:]}:00"
+            template_id = template_ids[(_WEEKEND_DAYS if is_weekend else _WEEKDAYS, time_str)]
+            # Store UTC like the API does, so template re-planning can match
+            # seeded sessions against the class's local wall-clock time.
+            local_start = datetime.combine(day, datetime.strptime(time_str, "%H:%M").time())
+            start_utc = utc_for_local(local_start, GYM_TIMEZONE)
+            start = isoformat(start_utc)
+            end = isoformat(start_utc + timedelta(minutes=60))
             trainer = rng.choice(trainer_ids)
             class_id = int(conn.execute(
                 """
                 insert into class_schedules (gym_id, title, class_type, start_time, end_time,
-                  duration_minutes, capacity, assigned_trainer_user_id, created_by_user_id,
-                  updated_by_user_id, created_at, updated_at)
-                values (?, ?, ?, ?, ?, 60, ?, ?, ?, ?, ?, ?) returning id
+                  duration_minutes, capacity, assigned_trainer_user_id, class_template_id,
+                  created_by_user_id, updated_by_user_id, created_at, updated_at)
+                values (?, ?, ?, ?, ?, 60, ?, ?, ?, ?, ?, ?, ?) returning id
                 """,
-                (gym_id, title, class_type, start, end, capacity, trainer, owner_id, owner_id, _ts(), _ts()),
+                (gym_id, title, class_type, start, end, capacity, trainer, template_id,
+                 owner_id, owner_id, _ts(), _ts()),
             ).fetchone()["id"])
 
             is_past = offset < 0

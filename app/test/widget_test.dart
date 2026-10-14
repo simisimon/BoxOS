@@ -22,6 +22,7 @@ import 'package:app/features/programming/domain/repositories/programming_reposit
 import 'package:app/features/auth/presentation/screens/change_password_screen.dart';
 import 'package:app/features/auth/presentation/screens/delete_account_screen.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
+import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
@@ -500,8 +501,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
     ),
   ];
   ScheduleClass? lastCreatedClass;
-  String? lastRecurrenceFrequency;
-  int? lastOccurrenceCount;
   ScheduleClass? lastUpdatedClass;
   int? lastDeletedClassId;
   int? lastBookedClassId;
@@ -543,8 +542,6 @@ class RecordingScheduleRepository implements ScheduleRepository {
     );
     classes = [...classes, created];
     lastCreatedClass = created;
-    lastRecurrenceFrequency = recurrenceFrequency;
-    lastOccurrenceCount = occurrenceCount;
     return created;
   }
 
@@ -556,6 +553,22 @@ class RecordingScheduleRepository implements ScheduleRepository {
 
   @override
   Future<List<ScheduleTrainer>> fetchTrainers() async => trainers;
+
+  @override
+  Future<List<ClassTemplate>> fetchTemplates() async => const [];
+
+  @override
+  Future<ClassTemplate> createTemplate(ClassTemplateDraft draft) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<int> updateTemplate({
+    required int id,
+    required ClassTemplateDraft draft,
+  }) async => 0;
+
+  @override
+  Future<int> deleteTemplate({required int id}) async => 0;
 
   @override
   Future<void> bookClass({required int classId}) async {
@@ -2092,197 +2105,6 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Add New Class'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Edit'), findsOneWidget);
   });
-
-  testWidgets('Trainer can create a recurring class from schedule screen', (
-    WidgetTester tester,
-  ) async {
-    final profileRepository = RecordingProfileRepository()
-      ..profile = const UserProfile(
-        email: 'trainer@boxos.app',
-        accountType: AccountType.athlete,
-        role: UserRole.trainer,
-        availableRoles: [UserRole.athlete, UserRole.trainer],
-        displayName: 'Demo Trainer',
-        nickname: 'trainer',
-        notificationPreferences: NotificationPreferences(
-          bookingConfirmations: true,
-          waitlistPromotions: true,
-          paymentIssues: true,
-          wodPosted: true,
-          prAchievements: true,
-          announcementActivity: true,
-        ),
-        activeGym: GymSummary(
-          id: 1,
-          name: 'CrossFit Mitte',
-          slug: 'crossfit-mitte',
-          logoUrl: 'https://example.com/m.png',
-          timezone: 'Europe/Berlin',
-        ),
-        memberships: [
-          GymMembership(
-            gym: GymSummary(
-              id: 1,
-              name: 'CrossFit Mitte',
-              slug: 'crossfit-mitte',
-              logoUrl: 'https://example.com/m.png',
-              timezone: 'Europe/Berlin',
-            ),
-            role: UserRole.trainer,
-            availableRoles: [UserRole.athlete, UserRole.trainer],
-            status: 'active',
-          ),
-        ],
-      );
-    final scheduleRepository = RecordingScheduleRepository();
-    await _configureTestViewport(tester);
-    final container = ProviderContainer(
-      overrides: [
-        profileRepositoryProvider.overrideWith((ref) => profileRepository),
-        scheduleRepositoryProvider.overrideWith((ref) => scheduleRepository),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: MyBoxScreen())),
-      ),
-    );
-    await _settleApp(tester);
-
-    await tester.ensureVisible(find.text('Add New Class'));
-    await _settleApp(tester);
-    await tester.tap(find.text('Add New Class'));
-    await _settleApp(tester);
-
-    await tester.tap(find.byType(DropdownButtonFormField<int>).first);
-    await _settleApp(tester);
-    await tester.tap(find.text('Demo Trainer').last);
-    await _settleApp(tester);
-
-    await tester.ensureVisible(find.text('Repeat'));
-    await _settleApp(tester);
-    expect(find.text('Repeat'), findsOneWidget);
-    expect(find.text('Does not repeat'), findsOneWidget);
-
-    await tester.tap(find.text('Does not repeat'));
-    await _settleApp(tester);
-    await tester.tap(find.text('Weekly').last);
-    await _settleApp(tester);
-
-    expect(find.text('Occurrences'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Occurrences'));
-    await _settleApp(tester);
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Occurrences'),
-      '4',
-    );
-    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save Class'));
-    await _settleApp(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Save Class'));
-    await _settleApp(tester);
-
-    expect(scheduleRepository.lastRecurrenceFrequency, 'weekly');
-    expect(scheduleRepository.lastOccurrenceCount, 4);
-  });
-
-  testWidgets(
-    'Recurring class form rejects occurrence counts beyond weekly UI horizon',
-    (WidgetTester tester) async {
-      final profileRepository = RecordingProfileRepository()
-        ..profile = const UserProfile(
-          email: 'trainer@boxos.app',
-          accountType: AccountType.athlete,
-          role: UserRole.trainer,
-          availableRoles: [UserRole.athlete, UserRole.trainer],
-          displayName: 'Demo Trainer',
-          nickname: 'trainer',
-          notificationPreferences: NotificationPreferences(
-            bookingConfirmations: true,
-            waitlistPromotions: true,
-            paymentIssues: true,
-            wodPosted: true,
-            prAchievements: true,
-            announcementActivity: true,
-          ),
-          activeGym: GymSummary(
-            id: 1,
-            name: 'CrossFit Mitte',
-            slug: 'crossfit-mitte',
-            logoUrl: 'https://example.com/m.png',
-            timezone: 'Europe/Berlin',
-          ),
-          memberships: [
-            GymMembership(
-              gym: GymSummary(
-                id: 1,
-                name: 'CrossFit Mitte',
-                slug: 'crossfit-mitte',
-                logoUrl: 'https://example.com/m.png',
-                timezone: 'Europe/Berlin',
-              ),
-              role: UserRole.trainer,
-              availableRoles: [UserRole.athlete, UserRole.trainer],
-              status: 'active',
-            ),
-          ],
-        );
-      final scheduleRepository = RecordingScheduleRepository();
-      await _configureTestViewport(tester);
-      final container = ProviderContainer(
-        overrides: [
-          profileRepositoryProvider.overrideWith((ref) => profileRepository),
-          scheduleRepositoryProvider.overrideWith((ref) => scheduleRepository),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: MyBoxScreen())),
-        ),
-      );
-      await _settleApp(tester);
-
-      await tester.ensureVisible(find.text('Add New Class'));
-      await _settleApp(tester);
-      await tester.tap(find.text('Add New Class'));
-      await _settleApp(tester);
-
-      await tester.tap(find.byType(DropdownButtonFormField<int>).first);
-      await _settleApp(tester);
-      await tester.tap(find.text('Demo Trainer').last);
-      await _settleApp(tester);
-
-      await tester.ensureVisible(find.text('Does not repeat'));
-      await _settleApp(tester);
-      await tester.tap(find.text('Does not repeat'));
-      await _settleApp(tester);
-      await tester.tap(find.text('Weekly').last);
-      await _settleApp(tester);
-
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Occurrences'),
-        '54',
-      );
-      await tester.ensureVisible(
-        find.widgetWithText(FilledButton, 'Save Class'),
-      );
-      await _settleApp(tester);
-      await tester.tap(find.widgetWithText(FilledButton, 'Save Class'));
-      await _settleApp(tester);
-
-      expect(
-        find.text('Enter 53 or fewer occurrences for weekly repeats'),
-        findsOneWidget,
-      );
-      expect(scheduleRepository.lastCreatedClass, isNull);
-    },
-  );
 
   testWidgets('Trainer can record attendance from schedule screen', (
     WidgetTester tester,

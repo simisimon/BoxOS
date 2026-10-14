@@ -546,6 +546,9 @@ class _WhiteboardSection extends ConsumerWidget {
                 }
               },
               icon: const Icon(Icons.emoji_events_outlined),
+              // Theme buttons are full-width; next to the title in a Row
+              // they need a finite minimum width.
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
               label: Text(
                 workout.myWhiteboardResult == null ? 'Submit' : 'Update',
               ),
@@ -652,6 +655,9 @@ class _WorkoutLogSection extends ConsumerWidget {
                 }
               },
               icon: const Icon(Icons.edit_note_outlined),
+              // Theme buttons are full-width; next to the title in a Row
+              // they need a finite minimum width.
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
               label: Text(workout.myWorkoutLog == null ? 'Log' : 'Update'),
             ),
           ],

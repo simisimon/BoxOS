@@ -1,9 +1,15 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
+import 'package:app/features/calendar/domain/models/class_type.dart';
+import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
+import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
+import 'package:app/features/calendar/presentation/widgets/class_template_dialog.dart';
+import 'package:app/features/calendar/presentation/widgets/wod_week_view.dart';
+import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/presentation/screens/import_workouts_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -21,6 +27,9 @@ class MyBoxScreen extends ConsumerStatefulWidget {
 class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
   /// First day of the month currently shown in the grid.
   late DateTime _visibleMonth;
+
+  /// Managers flip between the calendar (classes) and the week view (WODs).
+  bool _showWeek = false;
 
   @override
   void initState() {
@@ -84,6 +93,19 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     if (!canManage) {
       return;
     }
+    if (item.classTemplateId != null) {
+      final scope = await _askSeriesScope(context, action: 'Delete');
+      if (scope == null) {
+        return;
+      }
+      if (scope == _SeriesScope.series) {
+        await _deleteSeries(item);
+        return;
+      }
+    }
+    if (!mounted) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -111,6 +133,32 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
         return;
       }
       _showSnackBar('Class deleted.');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar(
+        errorMessageFrom(error, fallback: 'Failed to delete class'),
+      );
+    }
+  }
+
+  Future<void> _deleteSeries(ScheduleClass item) async {
+    try {
+      final kept = await ref
+          .read(scheduleRepositoryProvider)
+          .deleteTemplate(id: item.classTemplateId!);
+      ref.invalidate(classTemplatesProvider);
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar(
+        kept == 0
+            ? '${item.title} removed from all upcoming dates.'
+            : '${item.title} removed. $kept booked '
+                  '${kept == 1 ? 'date stays' : 'dates stay'} on the calendar.',
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -222,8 +270,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                 ),
               )
             : scheduleAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => Center(
                   child: _CalendarStateCard(
                     icon: Icons.error_outline,
@@ -235,7 +282,40 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                     accentColor: appPrimary,
                   ),
                 ),
-                data: (items) => _buildScheduleBody(context, items, canManage),
+                data: (items) => canManage
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: SegmentedButton<bool>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: false,
+                                  icon: Icon(Icons.calendar_month_outlined),
+                                  label: Text('Calendar'),
+                                ),
+                                ButtonSegment(
+                                  value: true,
+                                  icon: Icon(Icons.view_week_outlined),
+                                  label: Text('Week'),
+                                ),
+                              ],
+                              selected: {_showWeek},
+                              showSelectedIcon: false,
+                              onSelectionChanged: (selection) =>
+                                  setState(() => _showWeek = selection.first),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: _showWeek
+                                ? const WodWeekView()
+                                : _buildScheduleBody(context, items, canManage),
+                          ),
+                        ],
+                      )
+                    : _buildScheduleBody(context, items, canManage),
               ),
       ),
     );
@@ -246,9 +326,20 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     List<ScheduleClass> items,
     bool canManage,
   ) {
+    // Days that already have a WOD programmed; WOD-type classes on other days
+    // get flagged for managers.
+    final wodDays = ref
+        .watch(programmingListProvider)
+        .maybeWhen(
+          data: (workouts) => {
+            for (final workout in workouts) _dateOnly(workout.scheduledDate),
+          },
+          orElse: () => null,
+        );
     final calendar = _MonthCalendar(
       month: _visibleMonth,
       items: items,
+      wodDays: wodDays,
       today: _dateOnly(DateTime.now()),
       selectedDay: _selectedDay,
       canManage: canManage,
@@ -370,6 +461,7 @@ class _MonthCalendar extends StatelessWidget {
   const _MonthCalendar({
     required this.month,
     required this.items,
+    required this.wodDays,
     required this.today,
     required this.selectedDay,
     required this.canManage,
@@ -384,6 +476,10 @@ class _MonthCalendar extends StatelessWidget {
   /// First day of the displayed month.
   final DateTime month;
   final List<ScheduleClass> items;
+
+  /// Days with a programmed WOD, or null while programming is still loading
+  /// (no "missing" flags are shown until it is known).
+  final Set<DateTime>? wodDays;
   final DateTime today;
   final DateTime? selectedDay;
   final bool canManage;
@@ -412,8 +508,9 @@ class _MonthCalendar extends StatelessWidget {
     final monthLabel = MaterialLocalizations.of(context).formatMonthYear(month);
     final firstOfMonth = DateTime(month.year, month.month, 1);
     // Grid starts on the Monday on or before the 1st of the month.
-    final gridStart =
-        firstOfMonth.subtract(Duration(days: firstOfMonth.weekday - 1));
+    final gridStart = firstOfMonth.subtract(
+      Duration(days: firstOfMonth.weekday - 1),
+    );
 
     // Bucket classes by their local calendar day for quick per-cell lookup.
     final eventsByDay = <DateTime, List<ScheduleClass>>{};
@@ -512,13 +609,24 @@ class _MonthCalendar extends StatelessWidget {
                               );
                               return Expanded(
                                 child: _MonthDayCell(
+                                  key: ValueKey(day),
                                   day: day,
                                   inMonth: day.month == month.month,
                                   isToday: _isSameDay(day, today),
-                                  isSelected: selectedDay != null &&
+                                  isSelected:
+                                      selectedDay != null &&
                                       _isSameDay(day, selectedDay!),
-                                  events: eventsByDay[day] ??
+                                  events:
+                                      eventsByDay[day] ??
                                       const <ScheduleClass>[],
+                                  wodMissing:
+                                      canManage &&
+                                      wodDays != null &&
+                                      !day.isBefore(today) &&
+                                      !wodDays!.contains(day) &&
+                                      (eventsByDay[day] ?? const []).any(
+                                        (event) => event.type.showsWod,
+                                      ),
                                   onTap: onSelectDay,
                                 ),
                               );
@@ -538,11 +646,13 @@ class _MonthCalendar extends StatelessWidget {
 
 class _MonthDayCell extends StatelessWidget {
   const _MonthDayCell({
+    super.key,
     required this.day,
     required this.inMonth,
     required this.isToday,
     required this.isSelected,
     required this.events,
+    required this.wodMissing,
     required this.onTap,
   });
 
@@ -551,6 +661,9 @@ class _MonthDayCell extends StatelessWidget {
   final bool isToday;
   final bool isSelected;
   final List<ScheduleClass> events;
+
+  /// WOD classes are scheduled but nothing is programmed for the day yet.
+  final bool wodMissing;
   final ValueChanged<DateTime> onTap;
 
   static const _maxBars = 2;
@@ -584,28 +697,39 @@ class _MonthDayCell extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    decoration: isToday
-                        ? const BoxDecoration(
-                            color: appPrimary,
-                            shape: BoxShape.circle,
-                          )
-                        : null,
-                    child: Text(
-                      '${day.day}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isToday
-                            ? Colors.white
-                            : (inMonth ? appText : appSubtleText),
-                        fontWeight: FontWeight.w700,
+                Row(
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      alignment: Alignment.center,
+                      decoration: isToday
+                          ? const BoxDecoration(
+                              color: appPrimary,
+                              shape: BoxShape.circle,
+                            )
+                          : null,
+                      child: Text(
+                        '${day.day}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: isToday
+                              ? Colors.white
+                              : (inMonth ? appText : appSubtleText),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
+                    const Spacer(),
+                    if (wodMissing)
+                      const Tooltip(
+                        message: 'No WOD programmed',
+                        child: Icon(
+                          Icons.error_outline_rounded,
+                          size: 12,
+                          color: appWarning,
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Expanded(
@@ -620,7 +744,7 @@ class _MonthDayCell extends StatelessWidget {
                             vertical: 1,
                           ),
                           decoration: BoxDecoration(
-                            color: appPrimary,
+                            color: classTypeColor(event.type),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -629,7 +753,7 @@ class _MonthDayCell extends StatelessWidget {
                             overflow: TextOverflow.clip,
                             softWrap: false,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: appInverseText,
                               fontSize: 8,
                               height: 1.2,
                               fontWeight: FontWeight.w600,
@@ -719,10 +843,7 @@ class _CalendarHeaderButton extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: const TextStyle(
-              color: appText,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -757,7 +878,8 @@ class _DayPanel extends ConsumerStatefulWidget {
     ScheduleClass item,
     ScheduleBooking booking,
     String attendanceStatus,
-  ) onUpdateAttendance;
+  )
+  onUpdateAttendance;
   final void Function(ScheduleClass item) onDelete;
 
   @override
@@ -779,7 +901,26 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
     });
   }
 
-  void _openEdit(ScheduleClass item) {
+  Future<void> _openEdit(ScheduleClass item) async {
+    if (item.classTemplateId != null) {
+      final scope = await _askSeriesScope(context, action: 'Edit');
+      if (scope == null || !mounted) {
+        return;
+      }
+      if (scope == _SeriesScope.series) {
+        final templates = await ref.read(classTemplatesProvider.future);
+        if (!mounted) {
+          return;
+        }
+        final template = templates
+            .where((candidate) => candidate.id == item.classTemplateId)
+            .firstOrNull;
+        if (template != null) {
+          await showClassTemplateDialog(context, ref, existing: template);
+          return;
+        }
+      }
+    }
     setState(() {
       _editing = item;
       _showForm = true;
@@ -796,15 +937,35 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateLabel =
-        MaterialLocalizations.of(context).formatFullDate(widget.date);
+    final dateLabel = MaterialLocalizations.of(
+      context,
+    ).formatFullDate(widget.date);
     final scheduleAsync = ref.watch(scheduleListProvider);
     final dayItems = scheduleAsync.maybeWhen(
       data: (items) =>
-          items.where((item) => _isSameDay(item.startTime, widget.date)).toList()
+          items
+              .where((item) => _isSameDay(item.startTime, widget.date))
+              .toList()
             ..sort((a, b) => a.startTime.compareTo(b.startTime)),
       orElse: () => const <ScheduleClass>[],
     );
+    final hasWodClasses = dayItems.any((item) => item.type.showsWod);
+    final programmingAsync = ref.watch(programmingListProvider);
+    String? wodTitle;
+    for (final workout in programmingAsync.value ?? const []) {
+      if (_isSameDay(workout.scheduledDate, widget.date)) {
+        wodTitle = workout.title;
+        break;
+      }
+    }
+    final wodMissing =
+        widget.canManage &&
+        hasWodClasses &&
+        !_isPastDay &&
+        programmingAsync.hasValue &&
+        wodTitle == null;
+    // Managers program WODs in the week view; here they only see the hint.
+    final showWod = !widget.canManage && hasWodClasses;
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -866,11 +1027,15 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                 : ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      WodDaySection(
-                        date: widget.date,
-                        canManage: widget.canManage,
-                      ),
-                      const SizedBox(height: 18),
+                      if (wodMissing) ...[
+                        const _WodMissingHint(),
+                        const SizedBox(height: 18),
+                      ],
+                      // Open Gym / Skill / PT days have no WOD to show.
+                      if (showWod) ...[
+                        WodDaySection(date: widget.date, canManage: false),
+                        const SizedBox(height: 18),
+                      ],
                       _SectionLabel(
                         icon: Icons.event_outlined,
                         label: 'Classes',
@@ -882,7 +1047,7 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                           child: FilledButton.icon(
                             onPressed: _openAdd,
                             icon: const Icon(Icons.add),
-                            label: const Text('Add Class'),
+                            label: const Text('Add class'),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -907,8 +1072,9 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                                 child: Text(
                                   'This day is in the past — new classes can '
                                   'only be added from today onward.',
-                                  style: theme.textTheme.bodySmall
-                                      ?.copyWith(color: appSubtleText),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: appSubtleText,
+                                  ),
                                 ),
                               ),
                             ],
@@ -923,7 +1089,9 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                               : Icons.event_busy_outlined,
                           title: 'No classes scheduled',
                           message: widget.canManage
-                              ? 'Nothing is scheduled on this day yet. Use "Add Class" to open the day.'
+                              ? 'Nothing is scheduled on this day yet. Use '
+                                    '"Add class" — switch on "Repeats weekly" for '
+                                    'a class that runs every week.'
                               : 'No classes are scheduled on this date.',
                           accentColor: appPrimary,
                         )
@@ -931,12 +1099,13 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                         for (final item in dayItems) ...[
                           _ScheduleClassCard(
                             item: item,
+                            wodTitle: wodTitle,
                             canManage: widget.canManage,
                             onToggleBooking: () => widget.onToggleBooking(item),
                             onToggleWaitlist: () =>
                                 widget.onToggleWaitlist(item),
-                            onUpdateAttendance: (booking, status) =>
-                                widget.onUpdateAttendance(item, booking, status),
+                            onUpdateAttendance: (booking, status) => widget
+                                .onUpdateAttendance(item, booking, status),
                             onEdit: () => _openEdit(item),
                             onDelete: () => widget.onDelete(item),
                           ),
@@ -944,6 +1113,37 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                         ],
                     ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WodMissingHint extends StatelessWidget {
+  const _WodMissingHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: appWarning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: appWarning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 18, color: appWarning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'WOD classes are scheduled but no WOD is programmed yet — '
+              'add it in the Week view.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: appText),
+            ),
           ),
         ],
       ),
@@ -980,6 +1180,7 @@ class _SectionLabel extends StatelessWidget {
 class _ScheduleClassCard extends StatelessWidget {
   const _ScheduleClassCard({
     required this.item,
+    required this.wodTitle,
     required this.canManage,
     required this.onToggleBooking,
     required this.onToggleWaitlist,
@@ -989,6 +1190,9 @@ class _ScheduleClassCard extends StatelessWidget {
   });
 
   final ScheduleClass item;
+
+  /// Title of the day's programmed WOD; only shown on WOD-type classes.
+  final String? wodTitle;
   final bool canManage;
   final VoidCallback onToggleBooking;
   final VoidCallback onToggleWaitlist;
@@ -1045,7 +1249,7 @@ class _ScheduleClassCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _HeroPill(label: item.classType, color: appPrimary),
+                        ClassTypeBadge(type: item.type),
                         _HeroPill(label: startTime, color: appPrimary),
                         _HeroPill(
                           label: '${item.durationMinutes} min',
@@ -1098,9 +1302,20 @@ class _ScheduleClassCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (item.type.showsWod) ...[
+            const SizedBox(height: 14),
+            _DetailLine(label: 'WOD', value: wodTitle ?? 'Not programmed yet'),
+          ],
           if (item.assignedTrainer != null) ...[
             const SizedBox(height: 14),
             _DetailLine(label: 'Trainer', value: item.assignedTrainer!.label),
+          ],
+          if (item.classTemplateId != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Part of the weekly plan',
+              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+            ),
           ],
           if (item.attendanceStatus != null || item.isWaitlisted) ...[
             const SizedBox(height: 14),
@@ -1222,8 +1437,7 @@ class _CapacityBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fraction =
-        capacity <= 0 ? 0.0 : (booked / capacity).clamp(0.0, 1.0);
+    final fraction = capacity <= 0 ? 0.0 : (booked / capacity).clamp(0.0, 1.0);
     final isFull = capacity > 0 && booked >= capacity;
     final Color fill;
     final String status;
@@ -1245,18 +1459,11 @@ class _CapacityBar extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              'CAPACITY',
-              style: appMono(fontSize: 9.5, letterSpacing: 1.3),
-            ),
+            Text('CAPACITY', style: appMono(fontSize: 9.5, letterSpacing: 1.3)),
             const Spacer(),
             Text(
               '$booked/$capacity · $status',
-              style: appMono(
-                fontSize: 10.5,
-                letterSpacing: 0,
-                color: fill,
-              ),
+              style: appMono(fontSize: 10.5, letterSpacing: 0, color: fill),
             ),
           ],
         ),
@@ -1524,33 +1731,24 @@ class _ClassForm extends ConsumerStatefulWidget {
 class _ClassFormState extends ConsumerState<_ClassForm> {
   static const _durationOptions = [30, 45, 60, 75, 90];
   static const _minuteOptions = [0, 15, 30, 45];
-  static const _recurrenceOptions = {
-    'none': 'Does not repeat',
-    'daily': 'Daily',
-    'weekly': 'Weekly',
-    'monthly': 'Monthly (every 4 weeks)',
-  };
-  static const _recurrenceOccurrenceCaps = {
-    'daily': 365,
-    'weekly': 53,
-    'monthly': 14,
-  };
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _capacityController;
-  late final TextEditingController _occurrenceCountController;
   late Future<List<ScheduleTrainer>> _trainersFuture;
   late int _selectedHour;
   late int _selectedMinute;
   int? _selectedTrainerId;
   late int _selectedDuration;
-  String _recurrenceFrequency = 'none';
+  late ClassType _type;
+  bool _repeatsWeekly = false;
+  late Set<int> _weekdays;
   bool _isSaving = false;
 
   bool get _isCreating => widget.existing == null;
 
-  DateTime get _baseDate => _dateOnly(widget.existing?.startTime ?? widget.date);
+  DateTime get _baseDate =>
+      _dateOnly(widget.existing?.startTime ?? widget.date);
 
   @override
   void initState() {
@@ -1559,21 +1757,35 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
     final base = widget.existing?.startTime;
     _selectedHour = base?.hour ?? ((now.hour + 1) % 24);
     _selectedMinute = _nearestMinuteStep(base?.minute ?? now.minute);
-    _selectedDuration = _normalizeDuration(widget.existing?.durationMinutes ?? 60);
+    _selectedDuration = _normalizeDuration(
+      widget.existing?.durationMinutes ?? 60,
+    );
     _selectedTrainerId = widget.existing?.assignedTrainer?.id;
     _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
-    _titleController =
-        TextEditingController(text: widget.existing?.title ?? 'WOD');
-    _capacityController =
-        TextEditingController(text: '${widget.existing?.capacity ?? 12}');
-    _occurrenceCountController = TextEditingController(text: '4');
+    _type = widget.existing?.type ?? ClassType.wod;
+    _weekdays = {_baseDate.weekday};
+    _titleController = TextEditingController(
+      text: widget.existing?.title ?? _type.defaultTitle,
+    );
+    _capacityController = TextEditingController(
+      text: '${widget.existing?.capacity ?? 12}',
+    );
+  }
+
+  void _selectType(ClassType type) {
+    setState(() {
+      // Follow the type with the title until the user has typed their own.
+      if (_titleController.text.trim() == _type.defaultTitle) {
+        _titleController.text = type.defaultTitle;
+      }
+      _type = type;
+    });
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _capacityController.dispose();
-    _occurrenceCountController.dispose();
     super.dispose();
   }
 
@@ -1590,12 +1802,6 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
       if (value <= option) return option;
     }
     return _durationOptions.last;
-  }
-
-  String? _occurrenceValidationMessage(String recurrenceFrequency, int parsed) {
-    final cap = _recurrenceOccurrenceCaps[recurrenceFrequency];
-    if (cap == null || parsed <= cap) return null;
-    return 'Enter $cap or fewer occurrences for $recurrenceFrequency repeats';
   }
 
   Future<void> _submit() async {
@@ -1620,27 +1826,43 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
       _selectedHour,
       _selectedMinute,
     );
+    if (_isCreating && _repeatsWeekly && _weekdays.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Select at least one weekday.')),
+      );
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       final repository = ref.read(scheduleRepositoryProvider);
-      if (_isCreating) {
+      if (_isCreating && _repeatsWeekly) {
+        await repository.createTemplate(
+          ClassTemplateDraft(
+            title: _titleController.text.trim(),
+            classType: _type.wireValue,
+            weekdays: _weekdays.toList()..sort(),
+            hour: _selectedHour,
+            minute: _selectedMinute,
+            durationMinutes: _selectedDuration,
+            capacity: capacity,
+            trainerUserId: _selectedTrainerId,
+          ),
+        );
+        ref.invalidate(classTemplatesProvider);
+      } else if (_isCreating) {
         await repository.createClass(
           title: _titleController.text.trim(),
-          classType: 'WOD',
+          classType: _type.wireValue,
           startTime: startTime,
           durationMinutes: _selectedDuration,
           capacity: capacity,
           trainerUserId: _selectedTrainerId ?? 0,
-          recurrenceFrequency: _recurrenceFrequency,
-          occurrenceCount: _recurrenceFrequency == 'none'
-              ? 1
-              : int.parse(_occurrenceCountController.text.trim()),
         );
       } else {
         await repository.updateClass(
           id: widget.existing!.id,
           title: _titleController.text.trim(),
-          classType: widget.existing!.classType,
+          classType: _type.wireValue,
           startTime: startTime,
           durationMinutes: _selectedDuration,
           capacity: capacity,
@@ -1651,7 +1873,13 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-          content: Text(_isCreating ? 'Class created.' : 'Class updated.'),
+          content: Text(
+            !_isCreating
+                ? 'Class updated.'
+                : _repeatsWeekly
+                ? 'Weekly class created.'
+                : 'Class created.',
+          ),
         ),
       );
       widget.onSaved();
@@ -1659,7 +1887,9 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-          content: Text(errorMessageFrom(error, fallback: 'Failed to save class')),
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to save class'),
+          ),
         ),
       );
     } finally {
@@ -1688,7 +1918,28 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
             localizations.formatFullDate(_baseDate),
             style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 6),
+          if (widget.existing?.classTemplateId != null) ...[
+            Text(
+              'Changes apply to this date only.',
+              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+            ),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final type in ClassType.values)
+                ChoiceChip(
+                  label: Text(type.label),
+                  selected: _type == type,
+                  onSelected: (_) => _selectType(type),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _titleController,
             decoration: const InputDecoration(labelText: 'Title'),
@@ -1718,7 +1969,8 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
                     ),
                 ],
                 validator: (value) => value == null ? 'Select a trainer' : null,
-                onChanged: (value) => setState(() => _selectedTrainerId = value),
+                onChanged: (value) =>
+                    setState(() => _selectedTrainerId = value),
               );
             },
           ),
@@ -1786,42 +2038,55 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
             },
           ),
           if (_isCreating) ...[
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _recurrenceFrequency,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Repeat'),
-              items: [
-                for (final entry in _recurrenceOptions.entries)
-                  DropdownMenuItem<String>(
-                    value: entry.key,
-                    child: Text(entry.value),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Repeats weekly',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: appText,
+                        ),
+                      ),
+                      Text(
+                        _repeatsWeekly
+                            ? 'Runs every week on the selected days, '
+                                  'starting this week.'
+                            : 'Happens once on this date.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: appSubtleText,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                Switch(
+                  value: _repeatsWeekly,
+                  onChanged: (value) => setState(() => _repeatsWeekly = value),
+                ),
               ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _recurrenceFrequency = value);
-                }
-              },
             ),
-            if (_recurrenceFrequency != 'none') ...[
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _occurrenceCountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Occurrences'),
-                validator: (value) {
-                  final parsed = int.tryParse((value ?? '').trim());
-                  if (parsed == null || parsed <= 0) {
-                    return 'Enter a valid occurrence count';
-                  }
-                  return _occurrenceValidationMessage(
-                    _recurrenceFrequency,
-                    parsed,
-                  );
-                },
+            const SizedBox(height: 8),
+            if (_repeatsWeekly)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (var day = 1; day <= 7; day++)
+                    FilterChip(
+                      label: Text(_weekdayShortLabels[day - 1]),
+                      selected: _weekdays.contains(day),
+                      onSelected: (selected) => setState(
+                        () => selected
+                            ? _weekdays.add(day)
+                            : _weekdays.remove(day),
+                      ),
+                    ),
+                ],
               ),
-            ],
           ],
           const SizedBox(height: 18),
           Row(
@@ -1855,3 +2120,31 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
 
 /// Mutable draft of a single class section, used by the form. Owns its own
 /// controllers so the parent only has to dispose the draft when removing it.
+
+const _weekdayShortLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+enum _SeriesScope { single, series }
+
+/// For a session generated from a weekly class: apply [action] to just this
+/// date or to the whole series. Null when cancelled.
+Future<_SeriesScope?> _askSeriesScope(
+  BuildContext context, {
+  required String action,
+}) {
+  return showDialog<_SeriesScope>(
+    context: context,
+    builder: (dialogContext) => SimpleDialog(
+      title: Text('$action weekly class'),
+      children: [
+        SimpleDialogOption(
+          onPressed: () => Navigator.of(dialogContext).pop(_SeriesScope.single),
+          child: const Text('Only this date'),
+        ),
+        SimpleDialogOption(
+          onPressed: () => Navigator.of(dialogContext).pop(_SeriesScope.series),
+          child: const Text('All upcoming dates'),
+        ),
+      ],
+    ),
+  );
+}

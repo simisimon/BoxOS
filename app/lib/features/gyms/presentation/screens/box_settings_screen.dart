@@ -44,9 +44,10 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
   bool _notifyLowFill = false;
 
   List<_ClassType> _classTypes = const [
-    _ClassType('Metcon', 20),
-    _ClassType('Olympic Lifting', 14),
+    _ClassType('WOD', 20),
     _ClassType('Open Gym', 24),
+    _ClassType('Skill', 14),
+    _ClassType('PT', 2),
   ];
 
   void _save(String sectionLabel) {
