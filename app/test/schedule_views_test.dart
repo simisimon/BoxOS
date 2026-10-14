@@ -245,6 +245,9 @@ void main() {
       await tester.tap(find.text('Add class'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
+      // The form is a dialog on top of the day panel, not a replacement.
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('New class'), findsOneWidget);
 
       await tester.ensureVisible(find.byType(Switch));
       await tester.tap(find.byType(Switch));
@@ -262,6 +265,7 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
 
+      expect(find.byType(Dialog), findsNothing);
       final draft = repository.lastCreatedTemplate;
       expect(draft, isNotNull);
       expect(draft!.weekdays, [_tomorrowAt(0).weekday]);
@@ -274,7 +278,17 @@ void main() {
       await _pumpSchedule(tester, size);
       await _openTomorrow(tester);
 
-      await tester.tap(find.byTooltip('Edit'));
+      // Classes start collapsed: details and actions appear on tap.
+      expect(find.text('Booked Members'), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+      // On wide screens the month grid repeats the title; the panel is first.
+      await tester.tap(find.text('CrossFit').first);
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+
+      await tester.ensureVisible(find.text('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
       expect(find.text('Only this date'), findsOneWidget);
 

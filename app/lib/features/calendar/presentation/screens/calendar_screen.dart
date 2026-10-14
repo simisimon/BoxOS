@@ -887,19 +887,45 @@ class _DayPanel extends ConsumerStatefulWidget {
 }
 
 class _DayPanelState extends ConsumerState<_DayPanel> {
-  bool _showForm = false;
-  ScheduleClass? _editing;
+  /// Classes start collapsed so a busy day stays scannable.
+  final Set<int> _expanded = {};
+
+  void _toggleExpanded(ScheduleClass item) {
+    setState(() {
+      if (!_expanded.remove(item.id)) {
+        _expanded.add(item.id);
+      }
+    });
+  }
 
   /// Classes can only be created from today onward.
   bool get _isPastDay =>
       _dateOnly(widget.date).isBefore(_dateOnly(DateTime.now()));
 
-  void _openAdd() {
-    setState(() {
-      _editing = null;
-      _showForm = true;
-    });
+  /// Create/edit opens on top of the panel so the class list stays put.
+  Future<void> _showClassForm({ScheduleClass? existing}) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: appSurface,
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: _ClassForm(
+              date: widget.date,
+              existing: existing,
+              onSaved: () => Navigator.of(dialogContext).pop(),
+              onCancel: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
+        ),
+      ),
+    );
   }
+
+  void _openAdd() => _showClassForm();
 
   Future<void> _openEdit(ScheduleClass item) async {
     if (item.classTemplateId != null) {
@@ -921,17 +947,10 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
         }
       }
     }
-    setState(() {
-      _editing = item;
-      _showForm = true;
-    });
-  }
-
-  void _closeForm() {
-    setState(() {
-      _editing = null;
-      _showForm = false;
-    });
+    if (!mounted) {
+      return;
+    }
+    await _showClassForm(existing: item);
   }
 
   @override
@@ -1005,114 +1024,102 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                   ),
                 ),
                 IconButton(
-                  onPressed: _showForm ? _closeForm : widget.onClose,
+                  onPressed: widget.onClose,
                   icon: const Icon(Icons.close_rounded, color: appText),
-                  tooltip: _showForm ? 'Back' : 'Close',
+                  tooltip: 'Close',
                 ),
               ],
             ),
           ),
           const Divider(height: 1, color: appBorder),
           Expanded(
-            child: _showForm
-                ? SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _ClassForm(
-                      date: widget.date,
-                      existing: _editing,
-                      onSaved: _closeForm,
-                      onCancel: _closeForm,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (wodMissing) ...[
+                  const _WodMissingHint(),
+                  const SizedBox(height: 18),
+                ],
+                // Open Gym / Skill / PT days have no WOD to show.
+                if (showWod) ...[
+                  WodDaySection(date: widget.date, canManage: false),
+                  const SizedBox(height: 18),
+                ],
+                _SectionLabel(icon: Icons.event_outlined, label: 'Classes'),
+                const SizedBox(height: 10),
+                if (widget.canManage && !_isPastDay) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _openAdd,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add class'),
                     ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (wodMissing) ...[
-                        const _WodMissingHint(),
-                        const SizedBox(height: 18),
-                      ],
-                      // Open Gym / Skill / PT days have no WOD to show.
-                      if (showWod) ...[
-                        WodDaySection(date: widget.date, canManage: false),
-                        const SizedBox(height: 18),
-                      ],
-                      _SectionLabel(
-                        icon: Icons.event_outlined,
-                        label: 'Classes',
-                      ),
-                      const SizedBox(height: 10),
-                      if (widget.canManage && !_isPastDay) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _openAdd,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add class'),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                      ] else if (widget.canManage && _isPastDay) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: appSurfaceAlt,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: appBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.history_rounded,
-                                size: 18,
-                                color: appSubtleText,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'This day is in the past — new classes can '
-                                  'only be added from today onward.',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: appSubtleText,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                      if (dayItems.isEmpty)
-                        _CalendarStateCard(
-                          icon: widget.canManage
-                              ? Icons.edit_calendar_outlined
-                              : Icons.event_busy_outlined,
-                          title: 'No classes scheduled',
-                          message: widget.canManage
-                              ? 'Nothing is scheduled on this day yet. Use '
-                                    '"Add class" — switch on "Repeats weekly" for '
-                                    'a class that runs every week.'
-                              : 'No classes are scheduled on this date.',
-                          accentColor: appPrimary,
-                        )
-                      else
-                        for (final item in dayItems) ...[
-                          _ScheduleClassCard(
-                            item: item,
-                            wodTitle: wodTitle,
-                            canManage: widget.canManage,
-                            onToggleBooking: () => widget.onToggleBooking(item),
-                            onToggleWaitlist: () =>
-                                widget.onToggleWaitlist(item),
-                            onUpdateAttendance: (booking, status) => widget
-                                .onUpdateAttendance(item, booking, status),
-                            onEdit: () => _openEdit(item),
-                            onDelete: () => widget.onDelete(item),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                    ],
                   ),
+                  const SizedBox(height: 14),
+                ] else if (widget.canManage && _isPastDay) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: appSurfaceAlt,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: appBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.history_rounded,
+                          size: 18,
+                          color: appSubtleText,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'This day is in the past — new classes can '
+                            'only be added from today onward.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: appSubtleText,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if (dayItems.isEmpty)
+                  _CalendarStateCard(
+                    icon: widget.canManage
+                        ? Icons.edit_calendar_outlined
+                        : Icons.event_busy_outlined,
+                    title: 'No classes scheduled',
+                    message: widget.canManage
+                        ? 'Nothing is scheduled on this day yet. Use '
+                              '"Add class" — switch on "Repeats weekly" for '
+                              'a class that runs every week.'
+                        : 'No classes are scheduled on this date.',
+                    accentColor: appPrimary,
+                  )
+                else
+                  for (final item in dayItems) ...[
+                    _ScheduleClassCard(
+                      item: item,
+                      wodTitle: wodTitle,
+                      expanded: _expanded.contains(item.id),
+                      onToggleExpanded: () => _toggleExpanded(item),
+                      canManage: widget.canManage,
+                      onToggleBooking: () => widget.onToggleBooking(item),
+                      onToggleWaitlist: () => widget.onToggleWaitlist(item),
+                      onUpdateAttendance: (booking, status) =>
+                          widget.onUpdateAttendance(item, booking, status),
+                      onEdit: () => _openEdit(item),
+                      onDelete: () => widget.onDelete(item),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+              ],
+            ),
           ),
         ],
       ),
@@ -1181,6 +1188,8 @@ class _ScheduleClassCard extends StatelessWidget {
   const _ScheduleClassCard({
     required this.item,
     required this.wodTitle,
+    required this.expanded,
+    required this.onToggleExpanded,
     required this.canManage,
     required this.onToggleBooking,
     required this.onToggleWaitlist,
@@ -1193,6 +1202,10 @@ class _ScheduleClassCard extends StatelessWidget {
 
   /// Title of the day's programmed WOD; only shown on WOD-type classes.
   final String? wodTitle;
+
+  /// Collapsed cards show only [_ClassCardHeader]; tapping it expands them.
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
   final bool canManage;
   final VoidCallback onToggleBooking;
   final VoidCallback onToggleWaitlist;
@@ -1204,197 +1217,163 @@ class _ScheduleClassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final date = MaterialLocalizations.of(
-      context,
-    ).formatFullDate(item.startTime);
-    final startTime = MaterialLocalizations.of(
-      context,
-    ).formatTimeOfDay(TimeOfDay.fromDateTime(item.startTime));
     final isFuture = item.startTime.isAfter(DateTime.now());
     final canManageAttendance = canManage && !isFuture;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: appSurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: appBorder),
-        boxShadow: [
-          BoxShadow(
-            color: appPrimary.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 16),
-          ),
-        ],
+        border: Border.all(color: expanded ? appBorderStrong : appBorder),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+          _ClassCardHeader(
+            item: item,
+            wodTitle: wodTitle,
+            expanded: expanded,
+            onTap: onToggleExpanded,
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _CapacityBar(
+                    booked: item.bookedCount,
+                    capacity: item.capacity,
+                    waitlist: item.waitlistCount,
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _MetricTile(
+                        label: 'Bookings',
+                        value: '${item.bookedCount}/${item.capacity}',
+                        accentColor: appPrimary,
+                      ),
+                      _MetricTile(
+                        label: 'Open spots',
+                        value: '${item.remainingSpots}',
+                        accentColor: appPrimary,
+                      ),
+                      if (item.waitlistCount > 0)
+                        _MetricTile(
+                          label: 'Waitlist',
+                          value: '${item.waitlistCount}',
+                          accentColor: appPrimary,
+                        ),
+                    ],
+                  ),
+                  if (item.type.showsWod) ...[
+                    const SizedBox(height: 14),
+                    _DetailLine(
+                      label: 'WOD',
+                      value: wodTitle ?? 'Not programmed yet',
+                    ),
+                  ],
+                  if (item.classTemplateId != null) ...[
+                    const SizedBox(height: 6),
                     Text(
-                      item.title,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: appText,
-                        fontWeight: FontWeight.w800,
+                      'Part of the weekly plan',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: appSubtleText,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                  ],
+                  if (item.attendanceStatus != null || item.isWaitlisted) ...[
+                    const SizedBox(height: 14),
+                    _ContentPanel(
+                      label: 'Your Status',
+                      accentColor: appPrimary,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (item.attendanceStatus != null)
+                            Text(
+                              'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: appText,
+                              ),
+                            ),
+                          if (item.isWaitlisted)
+                            Text(
+                              'Waitlist: Active',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: appText,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (isFuture) ...[
+                    const SizedBox(height: 14),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        ClassTypeBadge(type: item.type),
-                        _HeroPill(label: startTime, color: appPrimary),
-                        _HeroPill(
-                          label: '${item.durationMinutes} min',
-                          color: appPrimary,
-                        ),
+                        if (item.isBooked)
+                          OutlinedButton(
+                            onPressed: onToggleBooking,
+                            child: const Text('Cancel Booking'),
+                          )
+                        else if (item.isWaitlisted)
+                          OutlinedButton(
+                            onPressed: onToggleWaitlist,
+                            child: const Text('Leave Waitlist'),
+                          )
+                        else
+                          FilledButton(
+                            onPressed: item.isFull
+                                ? onToggleWaitlist
+                                : onToggleBooking,
+                            child: Text(
+                              item.isFull ? 'Join Waitlist' : 'Book Class',
+                            ),
+                          ),
+                        if (canManage) ...[
+                          OutlinedButton(
+                            onPressed: onEdit,
+                            child: const Text('Edit'),
+                          ),
+                          OutlinedButton(
+                            onPressed: onDelete,
+                            child: const Text('Delete'),
+                          ),
+                        ],
                       ],
                     ),
                   ],
-                ),
-              ),
-              if (canManage && isFuture)
-                IconButton.filledTonal(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                  tooltip: 'Edit',
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            date,
-            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
-          ),
-          const SizedBox(height: 16),
-          _CapacityBar(
-            booked: item.bookedCount,
-            capacity: item.capacity,
-            waitlist: item.waitlistCount,
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _MetricTile(
-                label: 'Bookings',
-                value: '${item.bookedCount}/${item.capacity}',
-                accentColor: appPrimary,
-              ),
-              _MetricTile(
-                label: 'Open spots',
-                value: '${item.remainingSpots}',
-                accentColor: appPrimary,
-              ),
-              if (item.waitlistCount > 0)
-                _MetricTile(
-                  label: 'Waitlist',
-                  value: '${item.waitlistCount}',
-                  accentColor: appPrimary,
-                ),
-            ],
-          ),
-          if (item.type.showsWod) ...[
-            const SizedBox(height: 14),
-            _DetailLine(label: 'WOD', value: wodTitle ?? 'Not programmed yet'),
-          ],
-          if (item.assignedTrainer != null) ...[
-            const SizedBox(height: 14),
-            _DetailLine(label: 'Trainer', value: item.assignedTrainer!.label),
-          ],
-          if (item.classTemplateId != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Part of the weekly plan',
-              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-            ),
-          ],
-          if (item.attendanceStatus != null || item.isWaitlisted) ...[
-            const SizedBox(height: 14),
-            _ContentPanel(
-              label: 'Your Status',
-              accentColor: appPrimary,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (item.attendanceStatus != null)
+                  if (item.bookings.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Divider(color: appBorder),
+                    const SizedBox(height: 12),
                     Text(
-                      'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      'Booked Members',
+                      style: theme.textTheme.titleMedium?.copyWith(
                         color: appText,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  if (item.isWaitlisted)
-                    Text(
-                      'Waitlist: Active',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: appText,
+                    const SizedBox(height: 10),
+                    for (final booking in item.bookings) ...[
+                      _AttendanceRow(
+                        booking: booking,
+                        canManageAttendance: canManageAttendance,
+                        onUpdateAttendance: onUpdateAttendance,
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
                 ],
               ),
             ),
-          ],
-          if (isFuture) ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (item.isBooked)
-                  OutlinedButton(
-                    onPressed: onToggleBooking,
-                    child: const Text('Cancel Booking'),
-                  )
-                else if (item.isWaitlisted)
-                  OutlinedButton(
-                    onPressed: onToggleWaitlist,
-                    child: const Text('Leave Waitlist'),
-                  )
-                else
-                  FilledButton(
-                    onPressed: item.isFull ? onToggleWaitlist : onToggleBooking,
-                    child: Text(item.isFull ? 'Join Waitlist' : 'Book Class'),
-                  ),
-                if (canManage) ...[
-                  OutlinedButton(onPressed: onEdit, child: const Text('Edit')),
-                  OutlinedButton(
-                    onPressed: onDelete,
-                    child: const Text('Delete'),
-                  ),
-                ],
-              ],
-            ),
-          ],
-          if (item.bookings.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            const Divider(color: appBorder),
-            const SizedBox(height: 12),
-            Text(
-              'Booked Members',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: appText,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            for (final booking in item.bookings) ...[
-              _AttendanceRow(
-                booking: booking,
-                canManageAttendance: canManageAttendance,
-                onUpdateAttendance: onUpdateAttendance,
-              ),
-              const SizedBox(height: 10),
-            ],
-          ],
         ],
       ),
     );
@@ -1409,6 +1388,123 @@ class _ScheduleClassCard extends StatelessWidget {
       default:
         return 'Booked';
     }
+  }
+}
+
+/// Collapsed summary of a class: time, title, type, fill — tap to expand.
+class _ClassCardHeader extends StatelessWidget {
+  const _ClassCardHeader({
+    required this.item,
+    required this.wodTitle,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final ScheduleClass item;
+  final String? wodTitle;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final startTime = MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(TimeOfDay.fromDateTime(item.startTime));
+    final fillColor = item.waitlistCount > 0 || item.isFull
+        ? appDanger
+        : appMutedText;
+    final subtitle = [
+      '${item.durationMinutes} min',
+      if (item.assignedTrainer != null) item.assignedTrainer!.label,
+      if (item.type.showsWod) 'WOD: ${wodTitle ?? '—'}',
+    ].join(' · ');
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 62,
+                child: Text(
+                  startTime,
+                  style: appMono(
+                    fontSize: 12,
+                    color: appText,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: appText,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ClassTypeBadge(type: item.type, dense: true),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: appSubtleText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (item.isBooked || item.isWaitlisted) ...[
+                Tooltip(
+                  message: item.isBooked ? 'You are booked' : 'On the waitlist',
+                  child: Icon(
+                    item.isBooked
+                        ? Icons.check_circle_rounded
+                        : Icons.hourglass_top_rounded,
+                    size: 16,
+                    color: item.isBooked ? appSuccess : appWarning,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                '${item.bookedCount}/${item.capacity}',
+                style: appMono(
+                  fontSize: 11,
+                  color: fillColor,
+                  letterSpacing: 0,
+                ),
+              ),
+              Icon(
+                expanded
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                color: appSubtleText,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1603,32 +1699,6 @@ class _ContentPanel extends StatelessWidget {
           const SizedBox(height: 8),
           child,
         ],
-      ),
-    );
-  }
-}
-
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: appText,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
