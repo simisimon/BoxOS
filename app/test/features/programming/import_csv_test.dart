@@ -48,7 +48,8 @@ void main() {
     });
 
     test('reports a missing required column', () {
-      const csv = 'date,title,section_1_description\n'
+      const csv =
+          'date,title,section_1_description\n'
           '2099-06-20,WOD,"500m row"';
       final outcome = parseWorkoutsCsv(csv);
       expect(outcome.headerError, contains('section_1_score'));
@@ -56,7 +57,8 @@ void main() {
     });
 
     test('rejects an unknown score type', () {
-      const csv = 'date,title,section_1_description,section_1_score\n'
+      const csv =
+          'date,title,section_1_description,section_1_score\n'
           '2099-06-20,WOD,"21-15-9",stopwatch';
       final outcome = parseWorkoutsCsv(csv);
 
@@ -71,7 +73,8 @@ void main() {
     });
 
     test('rejects an unparseable date and a missing title', () {
-      const csv = 'date,title,section_1_description,section_1_score\n'
+      const csv =
+          'date,title,section_1_description,section_1_score\n'
           '20-06-2099,WOD,"500m row",time\n'
           '2099-06-21,,"500m row",time';
       final outcome = parseWorkoutsCsv(csv);
@@ -82,19 +85,18 @@ void main() {
     });
 
     test('rejects a row whose sections are all blank', () {
-      const csv = 'date,title,section_1_description,section_1_score\n'
+      const csv =
+          'date,title,section_1_description,section_1_score\n'
           '2099-06-20,WOD,,';
       final outcome = parseWorkoutsCsv(csv);
 
       expect(outcome.invalidCount, 1);
-      expect(
-        outcome.rows.first.error,
-        contains('at least one filled section'),
-      );
+      expect(outcome.rows.first.error, contains('at least one filled section'));
     });
 
     test('requires description and score to be set together', () {
-      const csv = 'date,title,section_1_description,section_1_score\n'
+      const csv =
+          'date,title,section_1_description,section_1_score\n'
           '2099-06-20,WOD,,time';
       final outcome = parseWorkoutsCsv(csv);
 
@@ -106,7 +108,8 @@ void main() {
     });
 
     test('accepts tab-separated rows pasted from a spreadsheet', () {
-      const tsv = 'date\ttitle\tsection_1_description\tsection_1_score\n'
+      const tsv =
+          'date\ttitle\tsection_1_description\tsection_1_score\n'
           '2099-06-20\tEvening WOD\t500m row\ttime';
       final outcome = parseWorkoutsCsv(tsv);
 

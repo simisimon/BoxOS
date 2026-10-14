@@ -16,10 +16,13 @@ void main() {
 
     test('the athlete tab set fits the five-tab bottom-nav budget', () {
       expect(athlete().length, 5);
-      expect(
-        athlete().map((d) => d.label),
-        ['Home', 'My Box', 'Community', 'Logbook', 'Profile'],
-      );
+      expect(athlete().map((d) => d.label), [
+        'Home',
+        'My Box',
+        'Community',
+        'Logbook',
+        'Profile',
+      ]);
     });
 
     test('the owner tab set is still one over budget', () {
@@ -27,10 +30,14 @@ void main() {
       // goes when the logbook rebuild moves athlete history into the member
       // detail, where a coach actually needs it. Tighten this to 5 then.
       expect(owner().length, 6);
-      expect(
-        owner().map((d) => d.label),
-        ['Dashboard', 'Schedule', 'Members', 'Community', 'Logbook', 'Profile'],
-      );
+      expect(owner().map((d) => d.label), [
+        'Dashboard',
+        'Schedule',
+        'Members',
+        'Community',
+        'Logbook',
+        'Profile',
+      ]);
     });
 
     test('Tracking has no tab of its own', () {
@@ -56,10 +63,7 @@ void main() {
         accountType: AccountType.athlete,
         role: UserRole.trainer,
       );
-      expect(
-        trainer.map((d) => d.label),
-        athlete().map((d) => d.label),
-      );
+      expect(trainer.map((d) => d.label), athlete().map((d) => d.label));
     });
 
     test('every destination points at a distinct branch', () {

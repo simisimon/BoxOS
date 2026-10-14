@@ -62,7 +62,11 @@ const _profile = UserProfile(
   ],
 );
 
-const _trainer = ScheduleTrainer(id: 7, displayName: 'Coach Alex', nickname: 'alex');
+const _trainer = ScheduleTrainer(
+  id: 7,
+  displayName: 'Coach Alex',
+  nickname: 'alex',
+);
 
 ScheduleClass _cls(int id, int day, int hour, String title) {
   final now = DateTime.now();
@@ -81,20 +85,20 @@ ScheduleClass _cls(int id, int day, int hour, String title) {
 }
 
 List<ScheduleClass> _sampleClasses() => [
-      _cls(1, 3, 6, 'Morning WOD'),
-      _cls(2, 3, 18, 'Evening WOD'),
-      _cls(3, 5, 9, 'Olympic Lifting'),
-      _cls(4, 10, 7, 'Morning WOD'),
-      _cls(5, 10, 12, 'Open Gym'),
-      _cls(6, 10, 18, 'Evening WOD'),
-      _cls(7, 12, 17, 'Gymnastics'),
-      _cls(8, 16, 6, 'Morning WOD'),
-      _cls(12, 16, 12, 'Open Gym'),
-      _cls(13, 16, 18, 'Evening WOD'),
-      _cls(9, 18, 19, 'Endurance'),
-      _cls(10, 22, 10, 'Partner WOD'),
-      _cls(11, 24, 18, 'Evening WOD'),
-    ];
+  _cls(1, 3, 6, 'Morning WOD'),
+  _cls(2, 3, 18, 'Evening WOD'),
+  _cls(3, 5, 9, 'Olympic Lifting'),
+  _cls(4, 10, 7, 'Morning WOD'),
+  _cls(5, 10, 12, 'Open Gym'),
+  _cls(6, 10, 18, 'Evening WOD'),
+  _cls(7, 12, 17, 'Gymnastics'),
+  _cls(8, 16, 6, 'Morning WOD'),
+  _cls(12, 16, 12, 'Open Gym'),
+  _cls(13, 16, 18, 'Evening WOD'),
+  _cls(9, 18, 19, 'Endurance'),
+  _cls(10, 22, 10, 'Partner WOD'),
+  _cls(11, 24, 18, 'Evening WOD'),
+];
 
 /// Offline stub so the inline form's trainer dropdown resolves instantly
 /// instead of hitting the network (which would hang pumpAndSettle).
@@ -211,7 +215,9 @@ void main() {
       ProviderScope(
         overrides: [
           currentProfileProvider.overrideWith((ref) async => _profile),
-          scheduleRepositoryProvider.overrideWithValue(_FakeScheduleRepository()),
+          scheduleRepositoryProvider.overrideWithValue(
+            _FakeScheduleRepository(),
+          ),
           scheduleListProvider.overrideWith((ref) async => _sampleClasses()),
           programmingRepositoryProvider.overrideWithValue(
             _FakeProgrammingRepository(),
@@ -273,7 +279,9 @@ void main() {
       ProviderScope(
         overrides: [
           currentProfileProvider.overrideWith((ref) async => _profile),
-          scheduleRepositoryProvider.overrideWithValue(_FakeScheduleRepository()),
+          scheduleRepositoryProvider.overrideWithValue(
+            _FakeScheduleRepository(),
+          ),
           scheduleListProvider.overrideWith((ref) async => _sampleClasses()),
           programmingRepositoryProvider.overrideWithValue(
             _FakeProgrammingRepository(),
@@ -340,9 +348,7 @@ void main() {
           ),
           home: const Scaffold(
             backgroundColor: Color(0xFF0E0E12),
-            body: Center(
-              child: ImportWorkoutsDialog(debugInitialText: pasted),
-            ),
+            body: Center(child: ImportWorkoutsDialog(debugInitialText: pasted)),
           ),
         ),
       ),

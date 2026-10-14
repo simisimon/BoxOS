@@ -271,7 +271,9 @@ void main() {
           deviceRegistrationServiceProvider.overrideWith(
             (ref) => fakeDeviceService,
           ),
-          profileRepositoryProvider.overrideWith((ref) => fakeProfileRepository),
+          profileRepositoryProvider.overrideWith(
+            (ref) => fakeProfileRepository,
+          ),
         ],
       );
       addTearDown(container.dispose);

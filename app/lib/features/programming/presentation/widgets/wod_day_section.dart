@@ -49,6 +49,48 @@ class WodDaySection extends ConsumerWidget {
   }
 }
 
+/// Opens the WOD editor for [date] (or for [existing]) and refreshes the
+/// programming list on save. Returns true when something was saved.
+Future<bool> showWodEditorDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  required DateTime date,
+  DailyWorkout? existing,
+}) async {
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (_) => _WorkoutEditorDialog(existing: existing, prefillDate: date),
+  );
+  if (saved == true) {
+    ref.invalidate(programmingListProvider);
+    return true;
+  }
+  return false;
+}
+
+/// The full WOD card for [date] (sections, publish/duplicate menu,
+/// whiteboard) in a dialog, for views that only show a summary.
+Future<void> showWodDetailsDialog(
+  BuildContext context, {
+  required DateTime date,
+  required bool canManage,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      backgroundColor: appSurface,
+      insetPadding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: WodDaySection(date: date, canManage: canManage),
+        ),
+      ),
+    ),
+  );
+}
+
 class _WodErrorCard extends StatelessWidget {
   const _WodErrorCard({required this.error});
   final Object error;

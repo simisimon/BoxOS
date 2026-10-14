@@ -214,7 +214,16 @@ void main() {
       await tester.tap(find.text('Week'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.text('WODs for the week'), findsOneWidget);
+      // Today's WOD shows on its day slip; tapping it opens the full card.
+      expect(find.text('Fran'), findsOneWidget);
+      await tester.tap(find.text('Fran'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('Whiteboard'), findsOneWidget);
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
       expect(find.text('This week'), findsNothing);
 
       await tester.tap(find.byTooltip('Next week'));

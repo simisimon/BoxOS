@@ -508,9 +508,7 @@ class _MonthCalendar extends StatelessWidget {
     final monthLabel = MaterialLocalizations.of(context).formatMonthYear(month);
     final firstOfMonth = DateTime(month.year, month.month, 1);
     // Grid starts on the Monday on or before the 1st of the month.
-    final gridStart = firstOfMonth.subtract(
-      Duration(days: firstOfMonth.weekday - 1),
-    );
+    final gridStart = _addDays(firstOfMonth, 1 - firstOfMonth.weekday);
 
     // Bucket classes by their local calendar day for quick per-cell lookup.
     final eventsByDay = <DateTime, List<ScheduleClass>>{};
@@ -605,7 +603,7 @@ class _MonthCalendar extends StatelessWidget {
                           Builder(
                             builder: (context) {
                               final day = _dateOnly(
-                                gridStart.add(Duration(days: week * 7 + dow)),
+                                _addDays(gridStart, week * 7 + dow),
                               );
                               return Expanded(
                                 child: _MonthDayCell(
@@ -1507,6 +1505,11 @@ class _ClassCardHeader extends StatelessWidget {
     );
   }
 }
+
+/// Calendar-day arithmetic. Adding a `Duration` of whole days steps in 24h,
+/// which lands on the wrong day across a DST switch (Oct 25 showed twice).
+DateTime _addDays(DateTime day, int days) =>
+    DateTime(day.year, day.month, day.day + days);
 
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
