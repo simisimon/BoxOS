@@ -181,13 +181,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'notification-settings',
         builder: (context, state) => const NotificationSettingsScreen(),
       ),
-      // Legacy alias. The Members surface now lives at /members (sidebar tab);
-      // any in-app links or bookmarks to /role-management land on the same
-      // page without a 404.
-      GoRoute(
-        path: '/role-management',
-        redirect: (context, state) => '/members',
-      ),
       GoRoute(
         path: '/admin-analytics',
         name: 'admin-analytics',
@@ -249,11 +242,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/gyms',
         name: 'gyms',
         builder: (context, state) => const GymDirectoryScreen(),
-      ),
-      // Legacy alias. Join requests now live at the top of /members.
-      GoRoute(
-        path: '/gym-requests',
-        redirect: (context, state) => '/members',
       ),
     ],
   );

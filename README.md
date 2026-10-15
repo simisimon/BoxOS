@@ -1,197 +1,125 @@
 # BoxOS
 
-Production-oriented platform for running a CrossFit box and supporting athlete training.
+Plattform für den Betrieb einer CrossFit-Box: Klassenplanung und Buchung, WOD-Programmierung,
+Workout-Logging, Community und Mitgliederverwaltung. Mobile-first für Athleten, mit
+Admin-Funktionen für Owner und Trainer.
 
-## Product direction
-- Single-gym first
-- Athlete-first mobile experience built with Flutter
-- Admin-focused backoffice surface for operations and configuration
-- Admin workflows remain accessible in the mobile app for on-the-go management
-- Additional modules can be added in phases after the production core platform is in place
+- **App:** Flutter (`app/`), läuft als Web-App und mobil
+- **Backend:** FastAPI mit PostgreSQL (`backend/`), Aufbau siehe [`backend/ARCHITECTURE.md`](backend/ARCHITECTURE.md)
+- **Produktplanung:** [`ROADMAP.md`](ROADMAP.md)
 
-## Current development stack
-- Frontend: Flutter client in `app/`
-- Backend runtime: FastAPI in `backend/fastapi_app.py`
-- Shared backend logic lives in focused modules under `backend/` (for example `db.py`, `validation.py`, `security.py`, and service modules)
+## Schnellstart mit Docker
 
-## Backend structure
-
-### Runtime
-- `backend/fastapi_app.py` — FastAPI entrypoint and route layer
-
-### Core infrastructure
-- `backend/settings.py` — shared constants, paths, seed file locations, limits, runtime settings
-- `backend/security.py` — password hashing, token hashing/creation, timestamp helpers
-- `backend/db.py` — PostgreSQL connection wrapper, schema init, seed/bootstrap logic
-- `backend/session_auth.py` — session creation/deletion and verification/reset token issuance
-- `backend/validation.py` — request/domain validation and normalization helpers
-- `backend/notifications_core.py` — notification creation and shared notification/schedule helper logic
-- `backend/audit.py` — audit-log payload shaping and audit-log writes
-
-### Domain services
-- `backend/auth_service.py` — auth/session-related reusable service helpers
-- `backend/membership_service.py` — gyms, memberships, active-gym/user-context helpers
-- `backend/schedule_service.py` — scheduling and waitlist-related helper logic
-- `backend/announcement_service.py` — announcements/comments/announcement notifications
-- `backend/workout_service.py` — workout/logbook/whiteboard payload and PR helper logic
-- `backend/programming_service.py` — programming/admin-analytics-related helpers and workout-service composition
-
-### Tests
-- `backend/test_fastapi_app.py` — FastAPI backend tests
-
-### Removed legacy layer
-- The old HTTP transport (`server.py`, `legacy_http.py`) has been removed.
-- FastAPI is now the only backend runtime.
-
-## Local backend
-The backend uses PostgreSQL. The simplest way to get a database is via Compose:
+Die komplette Entwicklungsumgebung startet aus dem Projekt-Root:
 
 ```bash
-docker compose up -d db
+docker compose up -d --build
 ```
 
-This exposes Postgres on `localhost:5432` with user/password/db `boxos` — matching the
-default `BOXOS_DATABASE_URL`. Then start the FastAPI backend:
+| Dienst | Adresse |
+|---|---|
+| App (Flutter-Web-Dev-Server) | http://localhost:3001 |
+| Backend (FastAPI mit Auto-Reload) | http://localhost:8081 |
+| PostgreSQL | `localhost:5432`, User/Passwort/DB `boxos` |
+
+- Backend-Code (`./backend`) und App-Code (`./app`) sind eingebunden. Backend-Änderungen
+  greifen sofort, nach App-Änderungen `docker compose restart frontend-dev`.
+- Stoppen mit `docker compose stop`. Datenbank und Uploads bleiben in den Volumes
+  `backend_dev_db` und `backend_dev_uploads` erhalten.
+- `frontend-dev` führt beim Start `flutter pub get` aus und überschreibt dabei
+  `app/.dart_tool`. Lokale Flutter-Befehle danach mit `flutter pub get` wieder lauffähig machen.
+
+### Demo-Daten
+
+Ein Seed-Skript legt eine vollständige Demo-Box an: rund 120 Mitglieder, offene
+Beitrittsanfragen, ein Wochenplan mit Classes inkl. Buchungen, Attendance und Warteliste,
+veröffentlichte WODs mit Whiteboard-Ergebnissen sowie Community-Inhalte.
+
+```bash
+docker compose exec backend-dev python -m backend.seed_demo
+```
+
+Jeder Lauf löscht die Demo-Box „Iron Forge CrossFit“ und baut sie neu auf. Danach als Owner
+anmelden (in der App auch per „Quick Login“):
+
+- E-Mail: `owner@boxos.dev`
+- Passwort: `BoxOS!demo1`
+
+Zusätzlich legt das Backend bei jedem Start diese Accounts ohne Box an, die vor allem die
+Tests nutzen: `demo@boxos.app`, `trainer@boxos.app` und `admin@boxos.app`, jeweils mit
+Passwort `BoxOS123!`.
+
+## Ohne Docker entwickeln
+
+Die Datenbank kommt weiterhin aus Compose:
+
+```bash
+docker compose up -d db-dev
+```
+
+Backend (startet auf http://127.0.0.1:8080 und legt Schema und Standard-Accounts beim
+ersten Start an):
 
 ```bash
 python3 -m pip install -r backend/requirements-fastapi.txt
-sh backend/run-fastapi-dev.sh
+sh backend/run-fastapi-dev.sh        # Windows: .\backend\run-dev.ps1
 ```
 
-The backend starts on `http://127.0.0.1:8080` and creates its schema and seed users on
-first launch. Point it at a different database with `BOXOS_DATABASE_URL`.
+App (Windows/PowerShell):
 
-Permanent dev logins:
-- Athlete: `demo@boxos.app` / `BoxOS123!`
-- Admin: `admin@boxos.app` / `BoxOS123!`
-
-## Local app
 ```powershell
-cd C:\GitHub\BoxOS\app
+cd app
 copy env\dev.example.json env\dev.json
 .\run-dev.ps1
 ```
 
-`env/dev.json` should contain:
+`env/dev.json` setzt `ENV`, `API_BASE_URL` (Standard `http://127.0.0.1:8080`) und
+`AUTH_REDIRECT_URL`.
 
-```json
-{
-  "ENV": "dev",
-  "API_BASE_URL": "http://127.0.0.1:8080",
-  "AUTH_REDIRECT_URL": "http://localhost:3000/auth/callback"
-}
-```
+## Tests
 
-## Validation
+Backend: Die Tests starten per testcontainers eine eigene PostgreSQL-Instanz, ein laufender
+Docker-Daemon ist also nötig. Ohne Docker werden die Suites übersprungen.
 
-Flutter app:
-```powershell
-cd C:\GitHub\BoxOS\app
-dart analyze
-flutter test
-```
-
-Backend (tests spin up a throwaway PostgreSQL container via testcontainers, so a running
-Docker daemon is required; suites skip automatically when it is unavailable):
 ```bash
 python3 -m pip install -r backend/requirements-dev.txt
 python3 -m unittest discover -s backend -p "test_*.py"
 ```
 
-## Docker
-
-Frontend und Backend lassen sich zusammen per Docker Compose starten (aus dem Projekt-Root):
+App:
 
 ```bash
-docker compose up --build
+cd app
+flutter analyze
+flutter test
 ```
 
-Danach erreichbar unter:
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8080`
+Die Golden-Tests in `app/test/preview/` wurden unter Windows erzeugt und schlagen auf
+macOS wegen abweichender Schriften fehl.
 
-### Development-Umgebung
+## Konfiguration
 
-Für die Weiterentwicklung gibt es zusätzliche Compose-Services mit dem Profil `dev`:
+Backend-Umgebungsvariablen:
 
-```bash
-docker compose --profile dev up --build backend-dev frontend-dev
-```
+| Variable | Bedeutung | Standard |
+|---|---|---|
+| `BOXOS_DATABASE_URL` | PostgreSQL-Verbindung | `postgresql://boxos:boxos@localhost:5432/boxos` |
+| `BOXOS_HOST`, `BOXOS_PORT` | Bind-Adresse des Servers | `127.0.0.1`, `8080` |
+| `BOXOS_UPLOADS_ROOT` | Ablage für Uploads | `backend/uploads` |
+| `BOXOS_ANNOUNCEMENT_UPLOADS_DIR` | Ablage für Announcement-Bilder | `<UPLOADS_ROOT>/announcements` |
+| `BOXOS_GYM_LOGOS_DIR`, `BOXOS_AVATARS_DIR` | Ablage für Box-Logos und Profilbilder | `<UPLOADS_ROOT>/gym_logos`, `<UPLOADS_ROOT>/avatars` |
+| `BOXOS_CORS_ALLOW_ORIGINS` | Erlaubte Origins, kommasepariert | `http://localhost:3000,http://localhost:3001` |
+| `BOXOS_LOG_DELIVERY_TOKENS` | `1` schreibt Verifizierungs- und Reset-Tokens ins Backend-Log | `1` |
+| `BOXOS_RATE_LIMIT_ENABLED` | `1` aktiviert das Rate-Limiting der Auth-Endpunkte | `1` |
 
-Danach erreichbar unter:
-- Frontend Dev Server: `http://localhost:3001`
-- Backend Dev Server: `http://localhost:8081`
+Verifizierungs- und Passwort-Reset-Links werden noch nicht per E-Mail verschickt. Die Tokens
+stehen im Backend-Log (`docker compose logs backend-dev`).
 
-#### Demo-Daten (Mock-Box)
+Die App bekommt `ENV`, `API_BASE_URL` und `AUTH_REDIRECT_URL` per `--dart-define`, in
+Docker über den Befehl von `frontend-dev` in `docker-compose.yml`.
 
-Damit Dashboard, Members, Analytics, Schedule, Programming, Tracking und Community
-mit realistischen Zahlen statt leeren Zero-States rendern, gibt es ein Seed-Skript.
-Es legt eine komplette Demo-Box an (ca. 120 Mitglieder, 4 offene Beitrittsanfragen,
-~170 Klassen über 40 Tage inkl. Buchungen/Attendance/Waitlist, veröffentlichte WODs
-mit Whiteboard-Ergebnissen sowie Progress-Daten für den Demo-Athleten):
+## Weitere Dateien
 
-```bash
-docker compose --profile dev exec backend-dev python -m backend.seed_demo
-```
-
-Das Skript ist idempotent (mehrfaches Ausführen baut die Demo-Box neu auf). Danach
-als Owner einloggen, um auf dem gefüllten Dashboard zu landen:
-
-- E-Mail: `owner@boxos.dev`
-- Passwort: `BoxOS!demo1`
-
-Dev-Setup:
-- `backend-dev` startet Uvicorn mit `--reload`
-- `frontend-dev` startet Flutter Web per `flutter run -d web-server` (offizielles `cirruslabs/flutter:stable` Image)
-- Der Quellcode wird per Bind-Mount direkt aus `./backend` und `./app` eingebunden
-- Dev-Daten und Uploads landen in separaten Volumes, damit Prod/Dev getrennt bleiben
-- Der Flutter-Pub-Cache wird im Volume `flutter_pub_cache` gehalten, um wiederholte `pub get`-Läufe zu beschleunigen
-
-Enthalten:
-- `backend/Dockerfile` für FastAPI/Uvicorn
-- `app/Dockerfile` für Flutter Web Build + Nginx Serving
-- `app/nginx.conf` mit SPA-Fallback für `go_router`
-- `docker-compose.yml` für Prod + Dev
-
-Die Datenbank läuft als eigener `db`-Service (`postgres:16-alpine`); der Dev-Stack nutzt
-einen getrennten `db-dev`-Service. Persistente Backend-Daten liegen in Docker-Volumes:
-- `backend_db` für die PostgreSQL-Datenbank (Prod)
-- `backend_uploads` für Upload-Dateien (Prod)
-- `backend_dev_db` für die PostgreSQL-Datenbank (Dev)
-- `backend_dev_uploads` für Upload-Dateien (Dev)
-
-Wichtige Build-Args für das Frontend in `docker-compose.yml`:
-- `APP_ENV`
-- `API_BASE_URL`
-- `AUTH_REDIRECT_URL`
-
-Wichtige Backend-Umgebungsvariablen:
-- `BOXOS_HOST`
-- `BOXOS_PORT`
-- `BOXOS_DATABASE_URL` – PostgreSQL-Verbindung (Default: `postgresql://boxos:boxos@localhost:5432/boxos`)
-- `BOXOS_UPLOADS_ROOT`
-- `BOXOS_ANNOUNCEMENT_UPLOADS_DIR`
-- `BOXOS_CORS_ALLOW_ORIGINS` – kommaseparierte erlaubte Origins (Default: `http://localhost:3000,http://localhost:3001`)
-- `BOXOS_LOG_DELIVERY_TOKENS` – `1` (Default) loggt Verifizierungs-/Reset-Tokens; in Produktion auf `0` setzen
-- `BOXOS_RATE_LIMIT_ENABLED` – `1` (Default) aktiviert das Rate-Limiting der Auth-Endpunkte; `0` deaktiviert es
-
-## Migration von SQLite zu PostgreSQL
-
-Frühere Versionen nutzten SQLite. Eine vorhandene SQLite-Datenbank lässt sich mit dem
-mitgelieferten Skript nach PostgreSQL übertragen (aus dem Projekt-Root, Ziel sollte leer
-sein):
-
-```bash
-python scripts/migrate_sqlite_to_postgres.py \
-  --sqlite backend/boxos_dev.db \
-  --postgres postgresql://boxos:boxos@localhost:5432/boxos
-```
-
-Das Skript legt das Schema an, kopiert alle Tabellen (Eltern vor Kindern) und setzt die
-Identity-Sequenzen zurück, sodass neue Einträge hinter den kopierten IDs weiterzählen.
-
-## Notes
-- Supabase is no longer the active backend path for the app.
-- The legacy `supabase/` project files have been removed from this repository.
-- Signup, login, logout, password reset, change password, and account deletion now target the local REST backend.
-- Signup verification and password reset tokens are printed in the backend terminal for local development flows.
+- `docs/wod-import.md` und `docs/sample-wods.csv`: Format für den CSV-Import von WODs
+- `app/Dockerfile` und `app/nginx.conf`: Release-Build der Web-App mit Nginx. Derzeit nicht
+  in Compose eingebunden, Grundlage für ein späteres Deployment.

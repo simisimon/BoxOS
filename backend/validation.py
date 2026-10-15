@@ -3,15 +3,17 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-import sqlite3
 from datetime import date, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend import settings
 from backend.security import now_utc, parse_iso
+
+if TYPE_CHECKING:
+    from backend.db import Row
 
 class ApiError(Exception):
     def __init__(self, status: HTTPStatus, message: str):
@@ -105,7 +107,7 @@ def require_notification_preferences(body: dict[str, Any]) -> dict[str, bool]:
     return preferences
 
 
-def role_user_payload(row: sqlite3.Row) -> dict[str, Any]:
+def role_user_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "email": row["email"],
@@ -116,7 +118,7 @@ def role_user_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
+def role_managed_member_payload(row: Row) -> dict[str, Any]:
     role = row["active_role"]
     available_roles = decode_roles(row["roles_json"])
     can_edit_role = role != "admin"
@@ -150,7 +152,7 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def profile_payload(row: sqlite3.Row) -> dict[str, Any]:
+def profile_payload(row: Row) -> dict[str, Any]:
     connection = get_connection()
     active_membership = get_active_membership(connection, row["id"]) if "id" in row.keys() else None
     memberships = (

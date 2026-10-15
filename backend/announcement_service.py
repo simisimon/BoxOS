@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import sqlite3
 from http import HTTPStatus
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from backend.notifications_core import create_notification
 from backend.validation import ApiError
 
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection, Row
 
-def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
+
+def notification_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "type": row["type"],
@@ -22,7 +24,7 @@ def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def preferred_user_name(
-    row: sqlite3.Row,
+    row: Row,
     *,
     display_name_key: str = "display_name",
     nickname_key: str = "nickname",
@@ -31,7 +33,7 @@ def preferred_user_name(
     return str(row[display_name_key] or "").strip() or str(row[nickname_key] or "").strip() or str(row[email_key] or "").strip()
 
 
-def announcement_comment_payload(row: sqlite3.Row, *, current_user_id: int, session_role: str) -> dict[str, Any]:
+def announcement_comment_payload(row: Row, *, current_user_id: int, session_role: str) -> dict[str, Any]:
     author_name = preferred_user_name(
         row,
         display_name_key="author_display_name",
@@ -49,7 +51,7 @@ def announcement_comment_payload(row: sqlite3.Row, *, current_user_id: int, sess
     }
 
 
-def list_announcement_comments(connection: sqlite3.Connection, *, announcement_id: int, current_user_id: int, session_role: str) -> list[dict[str, Any]]:
+def list_announcement_comments(connection: ManagedConnection, *, announcement_id: int, current_user_id: int, session_role: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
         select announcement_comments.id, announcement_comments.announcement_id, announcement_comments.user_id,
@@ -65,7 +67,7 @@ def list_announcement_comments(connection: sqlite3.Connection, *, announcement_i
     return [announcement_comment_payload(row, current_user_id=current_user_id, session_role=session_role) for row in rows]
 
 
-def announcement_payload(connection: sqlite3.Connection, row: sqlite3.Row, *, current_user_id: int, session_role: str) -> dict[str, Any]:
+def announcement_payload(connection: ManagedConnection, row: Row, *, current_user_id: int, session_role: str) -> dict[str, Any]:
     author_name = preferred_user_name(
         row,
         display_name_key="author_display_name",
@@ -95,7 +97,7 @@ def announcement_payload(connection: sqlite3.Connection, row: sqlite3.Row, *, cu
     }
 
 
-def get_announcement_row(connection: sqlite3.Connection, *, announcement_id: int, gym_id: int) -> sqlite3.Row | None:
+def get_announcement_row(connection: ManagedConnection, *, announcement_id: int, gym_id: int) -> Row | None:
     return connection.execute(
         """
         select announcements.id, announcements.gym_id, announcements.title, announcements.description,
@@ -109,7 +111,7 @@ def get_announcement_row(connection: sqlite3.Connection, *, announcement_id: int
     ).fetchone()
 
 
-def get_announcement_comment_row(connection: sqlite3.Connection, comment_id: int) -> sqlite3.Row | None:
+def get_announcement_comment_row(connection: ManagedConnection, comment_id: int) -> Row | None:
     return connection.execute(
         """
         select announcement_comments.id, announcement_comments.announcement_id, announcement_comments.gym_id,
@@ -124,7 +126,7 @@ def get_announcement_comment_row(connection: sqlite3.Connection, comment_id: int
     ).fetchone()
 
 
-def ensure_announcement_manage_permission(announcement: sqlite3.Row, session: sqlite3.Row | dict[str, Any]) -> None:
+def ensure_announcement_manage_permission(announcement: Row, session: Row) -> None:
     if session["role"] == "admin":
         return
     if int(announcement["created_by_user_id"]) == int(session["user_id"]):
@@ -132,7 +134,7 @@ def ensure_announcement_manage_permission(announcement: sqlite3.Row, session: sq
     raise ApiError(HTTPStatus.FORBIDDEN, "Only the announcement author or an owner can modify this announcement.")
 
 
-def ensure_announcement_comment_manage_permission(comment: sqlite3.Row, session: sqlite3.Row | dict[str, Any]) -> None:
+def ensure_announcement_comment_manage_permission(comment: Row, session: Row) -> None:
     if session["role"] == "admin":
         return
     if int(comment["user_id"]) == int(session["user_id"]):
@@ -140,7 +142,7 @@ def ensure_announcement_comment_manage_permission(comment: sqlite3.Row, session:
     raise ApiError(HTTPStatus.FORBIDDEN, "Only the comment author or an owner can modify this comment.")
 
 
-def create_announcement_like_notification(connection: sqlite3.Connection, *, recipient_user_id: int, actor_user_id: int, gym_id: int, announcement_id: int, announcement_title: str) -> None:
+def create_announcement_like_notification(connection: ManagedConnection, *, recipient_user_id: int, actor_user_id: int, gym_id: int, announcement_id: int, announcement_title: str) -> None:
     if recipient_user_id == actor_user_id:
         return
     recipient = connection.execute("select notify_announcement_activity from users where id = ? and deleted_at is null", (recipient_user_id,)).fetchone()
@@ -151,7 +153,7 @@ def create_announcement_like_notification(connection: sqlite3.Connection, *, rec
     create_notification(connection, user_id=recipient_user_id, gym_id=gym_id, type="announcement_liked", title="New like on your announcement", body=f'{actor_name} liked "{announcement_title}".', entity_type="announcement", entity_id=announcement_id)
 
 
-def create_announcement_comment_notification(connection: sqlite3.Connection, *, recipient_user_id: int, actor_user_id: int, gym_id: int, announcement_id: int, announcement_title: str, comment_body: str) -> None:
+def create_announcement_comment_notification(connection: ManagedConnection, *, recipient_user_id: int, actor_user_id: int, gym_id: int, announcement_id: int, announcement_title: str, comment_body: str) -> None:
     if recipient_user_id == actor_user_id:
         return
     recipient = connection.execute("select notify_announcement_activity from users where id = ? and deleted_at is null", (recipient_user_id,)).fetchone()

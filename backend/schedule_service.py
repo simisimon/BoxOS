@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import UTC, date, datetime, time, timedelta
 from http import HTTPStatus
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend import settings
@@ -11,8 +10,11 @@ from backend.notifications_core import class_schedule_summary, create_notificati
 from backend.security import isoformat, now_utc, parse_iso
 from backend.validation import ApiError, recurrence_delta_for
 
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection, Row
 
-def schedule_booking_payload(row: sqlite3.Row, *, current_user_id: int) -> dict[str, Any]:
+
+def schedule_booking_payload(row: Row, *, current_user_id: int) -> dict[str, Any]:
     return {
         "user_id": row["user_id"],
         "display_name": row["display_name"],
@@ -23,8 +25,8 @@ def schedule_booking_payload(row: sqlite3.Row, *, current_user_id: int) -> dict[
 
 
 def schedule_class_payload(
-    connection: sqlite3.Connection,
-    row: sqlite3.Row,
+    connection: ManagedConnection,
+    row: Row,
     *,
     current_user_id: int,
     include_bookings: bool,
@@ -97,7 +99,7 @@ def schedule_class_payload(
 
 
 def create_booking_confirmation_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int,
@@ -123,7 +125,7 @@ def create_booking_confirmation_notification(
 
 
 def promote_next_waitlisted_user(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     class_schedule_id: int,
 ) -> int | None:
@@ -153,7 +155,7 @@ def promote_next_waitlisted_user(
 
 
 def create_waitlist_promotion_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int,
@@ -179,7 +181,7 @@ def create_waitlist_promotion_notification(
 
 
 def create_schedule_update_notifications(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     gym_id: int,
     class_schedule_id: int,
@@ -306,7 +308,7 @@ def last_weekday_of_month(year: int, month: int, weekday: int) -> date:
     return current
 
 
-def get_schedule_class_row(connection: sqlite3.Connection, schedule_id: int) -> sqlite3.Row | None:
+def get_schedule_class_row(connection: ManagedConnection, schedule_id: int) -> Row | None:
     return connection.execute(
         """
         select
@@ -364,7 +366,7 @@ def decode_weekdays(value: str) -> list[int]:
     return [int(part) for part in str(value or "").split(",") if part.strip()]
 
 
-def class_template_payload(row: sqlite3.Row) -> dict[str, Any]:
+def class_template_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "gym_id": row["gym_id"],
@@ -386,7 +388,7 @@ def class_template_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def get_class_template_row(connection: sqlite3.Connection, template_id: int) -> sqlite3.Row | None:
+def get_class_template_row(connection: ManagedConnection, template_id: int) -> Row | None:
     return connection.execute(
         f"""
         select {CLASS_TEMPLATE_COLUMNS}
@@ -398,7 +400,7 @@ def get_class_template_row(connection: sqlite3.Connection, template_id: int) -> 
     ).fetchone()
 
 
-def list_class_template_rows(connection: sqlite3.Connection, gym_id: int) -> list[sqlite3.Row]:
+def list_class_template_rows(connection: ManagedConnection, gym_id: int) -> list[Row]:
     return connection.execute(
         f"""
         select {CLASS_TEMPLATE_COLUMNS}
@@ -432,14 +434,14 @@ def local_for_utc(utc_datetime: datetime, gym_timezone: str) -> datetime:
     return manual_local_datetime_for_utc(utc_datetime, gym_timezone)
 
 
-def _template_local_time(row: sqlite3.Row) -> time:
+def _template_local_time(row: Row) -> time:
     hour, minute = (int(part) for part in str(row["start_local_time"]).split(":"))
     return time(hour, minute)
 
 
 def materialize_template_sessions(
-    connection: sqlite3.Connection,
-    template: sqlite3.Row,
+    connection: ManagedConnection,
+    template: Row,
     *,
     gym_timezone: str,
 ) -> None:
@@ -502,7 +504,7 @@ def materialize_template_sessions(
 
 
 def materialize_gym_sessions(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     gym_id: int,
     gym_timezone: str,
@@ -514,7 +516,7 @@ def materialize_gym_sessions(
         materialize_template_sessions(connection, template, gym_timezone=gym_timezone)
 
 
-def _future_template_sessions(connection: sqlite3.Connection, template_id: int) -> list[sqlite3.Row]:
+def _future_template_sessions(connection: ManagedConnection, template_id: int) -> list[Row]:
     return connection.execute(
         """
         select
@@ -537,8 +539,8 @@ def _future_template_sessions(connection: sqlite3.Connection, template_id: int) 
 
 
 def resync_template_sessions(
-    connection: sqlite3.Connection,
-    template: sqlite3.Row,
+    connection: ManagedConnection,
+    template: Row,
     *,
     gym_timezone: str,
     actor_user_id: int,
@@ -594,7 +596,7 @@ def resync_template_sessions(
     return detached
 
 
-def remove_template_sessions(connection: sqlite3.Connection, template_id: int) -> int:
+def remove_template_sessions(connection: ManagedConnection, template_id: int) -> int:
     """Drop the template's unbooked future sessions; booked ones stay as one-offs.
 
     Returns how many booked sessions were kept (they are detached when the

@@ -1,53 +1,6 @@
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: boxos
-      POSTGRES_PASSWORD: boxos
-      POSTGRES_DB: boxos
-    volumes:
-      - backend_db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U boxos -d boxos"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    ports:
-      - "5432:5432"
-
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    environment:
-      BOXOS_HOST: 0.0.0.0
-      BOXOS_PORT: 8080
-      BOXOS_DATABASE_URL: postgresql://boxos:boxos@db:5432/boxos
-      BOXOS_UPLOADS_ROOT: /app/uploads
-    volumes:
-      - backend_uploads:/app/uploads
-
-  frontend:
-    build:
-      context: .
-      dockerfile: app/Dockerfile
-      args:
-        APP_ENV: production
-        API_BASE_URL: http://localhost:8080
-        AUTH_REDIRECT_URL: http://localhost:3000/auth/callback
-    depends_on:
-      - backend
-    ports:
-      - "3000:80"
-
   db-dev:
     image: postgres:16-alpine
-    profiles: ["dev"]
     environment:
       POSTGRES_USER: boxos
       POSTGRES_PASSWORD: boxos
@@ -60,13 +13,12 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "5433:5432"
+      - "5432:5432"
 
   backend-dev:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    profiles: ["dev"]
     restart: unless-stopped
     depends_on:
       db-dev:
@@ -86,7 +38,6 @@ services:
 
   frontend-dev:
     image: ghcr.io/cirruslabs/flutter:stable
-    profiles: ["dev"]
     restart: unless-stopped
     depends_on:
       - backend-dev
@@ -102,7 +53,7 @@ services:
         --web-port 3000
         --dart-define=ENV=dev
         --dart-define=API_BASE_URL=http://localhost:8081
-        --dart-define=AUTH_REDIRECT_URL=http://localhost:3000/auth/callback
+        --dart-define=AUTH_REDIRECT_URL=http://localhost:3001/auth/callback
     ports:
       - "3001:3000"
     volumes:
@@ -110,8 +61,6 @@ services:
       - flutter_pub_cache:/sdks/flutter/.pub-cache
 
 volumes:
-  backend_db:
-  backend_uploads:
   backend_dev_db:
   backend_dev_uploads:
   flutter_pub_cache:

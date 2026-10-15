@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import sqlite3
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from backend.db import get_connection
 from backend.security import isoformat, now_utc
 from backend.validation import decode_roles
+
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection, Row
 
 
 def slugify(value: str) -> str:
@@ -16,7 +18,7 @@ def slugify(value: str) -> str:
     return slug.strip("-") or "gym"
 
 
-def unique_gym_slug(connection: sqlite3.Connection, name: str) -> str:
+def unique_gym_slug(connection: ManagedConnection, name: str) -> str:
     base_slug = slugify(name)
     slug = base_slug
     counter = 2
@@ -26,7 +28,7 @@ def unique_gym_slug(connection: sqlite3.Connection, name: str) -> str:
     return slug
 
 
-def list_user_memberships(connection: sqlite3.Connection, user_id: int, *, status: str = "active") -> list[sqlite3.Row]:
+def list_user_memberships(connection: ManagedConnection, user_id: int, *, status: str = "active") -> list[Row]:
     return connection.execute(
         """
         select gym_memberships.id, gym_memberships.user_id, gym_memberships.gym_id, gym_memberships.active_role,
@@ -41,7 +43,7 @@ def list_user_memberships(connection: sqlite3.Connection, user_id: int, *, statu
     ).fetchall()
 
 
-def get_active_membership(connection: sqlite3.Connection, user_id: int) -> sqlite3.Row | None:
+def get_active_membership(connection: ManagedConnection, user_id: int) -> Row | None:
     user = connection.execute("select account_type, active_gym_id from users where id = ?", (user_id,)).fetchone()
     if user is None:
         return None
@@ -64,7 +66,7 @@ def get_active_membership(connection: sqlite3.Connection, user_id: int) -> sqlit
     return memberships[0] if memberships else None
 
 
-def membership_payload(row: sqlite3.Row) -> dict[str, Any]:
+def membership_payload(row: Row) -> dict[str, Any]:
     return {
         "gym_id": row["gym_id"],
         "gym_name": row["gym_name"],
@@ -77,7 +79,7 @@ def membership_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def active_gym_payload(row: sqlite3.Row | None) -> dict[str, Any] | None:
+def active_gym_payload(row: Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     return {
@@ -89,7 +91,7 @@ def active_gym_payload(row: sqlite3.Row | None) -> dict[str, Any] | None:
     }
 
 
-def sync_user_context(connection: sqlite3.Connection, user_id: int) -> None:
+def sync_user_context(connection: ManagedConnection, user_id: int) -> None:
     user = connection.execute(
         "select account_type, role, roles_json from users where id = ? and deleted_at is null",
         (user_id,),
@@ -117,7 +119,7 @@ def sync_user_context(connection: sqlite3.Connection, user_id: int) -> None:
     )
 
 
-def role_user_payload(row: sqlite3.Row) -> dict[str, Any]:
+def role_user_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "email": row["email"],
@@ -128,7 +130,7 @@ def role_user_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
+def role_managed_member_payload(row: Row) -> dict[str, Any]:
     role = row["active_role"]
     available_roles = decode_roles(row["roles_json"])
     can_edit_role = role != "admin"
@@ -162,7 +164,7 @@ def role_managed_member_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def profile_payload(row: sqlite3.Row) -> dict[str, Any]:
+def profile_payload(row: Row) -> dict[str, Any]:
     connection = get_connection()
     active_membership = get_active_membership(connection, row["id"]) if "id" in row.keys() else None
     memberships = list_user_memberships(connection, row["id"]) if "id" in row.keys() else []

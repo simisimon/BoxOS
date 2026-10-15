@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from backend.security import isoformat, now_utc
 
-def audit_log_payload(row: sqlite3.Row) -> dict[str, Any]:
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection, Row
+
+def audit_log_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "action": row["action"],
@@ -28,7 +30,7 @@ def audit_log_payload(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def write_audit_log(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     gym_id: int | None,
     actor_user_id: int,

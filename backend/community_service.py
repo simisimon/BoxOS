@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import sqlite3
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.db import Row
 
 
 def chat_message_payload(
-    row: sqlite3.Row, *, current_user_id: int
+    row: Row, *, current_user_id: int
 ) -> dict[str, Any]:
     """Shape a chat_messages join row into the JSON returned by the API.
 

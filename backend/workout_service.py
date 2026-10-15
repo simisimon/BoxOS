@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection, Row
 
 
-def workout_log_payload(row: sqlite3.Row) -> dict[str, Any]:
+def workout_log_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "daily_workout_id": row["daily_workout_id"],
@@ -33,7 +35,7 @@ SUPPORTED_REACTIONS = {"fire", "clap", "strong"}
 
 
 def list_reaction_summary(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     workout_log_ids: list[int],
     viewer_user_id: int,
@@ -95,7 +97,7 @@ def attach_reaction_summary(
     return payloads
 
 
-def get_workout_log_for_user(connection: sqlite3.Connection, workout_id: int, user_id: int) -> dict[str, Any] | None:
+def get_workout_log_for_user(connection: ManagedConnection, workout_id: int, user_id: int) -> dict[str, Any] | None:
     row = connection.execute(
         """
         select workout_logs.id, workout_logs.daily_workout_id, workout_logs.class_schedule_id, workout_logs.score_type,
@@ -116,7 +118,7 @@ def get_workout_log_for_user(connection: sqlite3.Connection, workout_id: int, us
 
 
 def refresh_pr_flags_for_workout_title(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int,
@@ -155,7 +157,7 @@ def refresh_pr_flags_for_workout_title(
     )
 
 
-def list_whiteboard_results(connection: sqlite3.Connection, workout_id: int) -> list[dict[str, Any]]:
+def list_whiteboard_results(connection: ManagedConnection, workout_id: int) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
         select whiteboard_results.id, whiteboard_results.user_id, whiteboard_results.score_type,
@@ -187,7 +189,7 @@ def list_whiteboard_results(connection: sqlite3.Connection, workout_id: int) -> 
     ]
 
 
-def get_whiteboard_result_for_user(connection: sqlite3.Connection, workout_id: int, user_id: int) -> dict[str, Any] | None:
+def get_whiteboard_result_for_user(connection: ManagedConnection, workout_id: int, user_id: int) -> dict[str, Any] | None:
     row = connection.execute(
         "select id, user_id, score_type, score_value, score_label, notes_text from whiteboard_results where daily_workout_id = ? and user_id = ?",
         (workout_id, user_id),
@@ -204,7 +206,7 @@ def get_whiteboard_result_for_user(connection: sqlite3.Connection, workout_id: i
     }
 
 
-def workout_section_payload(row: sqlite3.Row) -> dict[str, Any]:
+def workout_section_payload(row: Row) -> dict[str, Any]:
     return {
         "title": row["title"],
         "description": row["description"],
@@ -213,7 +215,7 @@ def workout_section_payload(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def fetch_workout_sections(
-    connection: sqlite3.Connection, daily_workout_id: int
+    connection: ManagedConnection, daily_workout_id: int
 ) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
@@ -228,7 +230,7 @@ def fetch_workout_sections(
 
 
 def replace_workout_sections(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     daily_workout_id: int,
     sections: list[dict[str, Any]],
@@ -256,7 +258,7 @@ def replace_workout_sections(
         )
 
 
-def daily_workout_payload(connection: sqlite3.Connection, row: sqlite3.Row, *, current_user_id: int, can_edit: bool) -> dict[str, Any]:
+def daily_workout_payload(connection: ManagedConnection, row: Row, *, current_user_id: int, can_edit: bool) -> dict[str, Any]:
     return {
         "id": row["id"],
         "gym_id": row["gym_id"],
@@ -279,7 +281,7 @@ DAILY_WORKOUT_COLUMNS = (
 )
 
 
-def exercise_payload(row: sqlite3.Row) -> dict[str, Any]:
+def exercise_payload(row: Row) -> dict[str, Any]:
     def _list(value: Any) -> list[Any]:
         try:
             return json.loads(value or "[]")
@@ -296,7 +298,7 @@ def exercise_payload(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def benchmark_workout_payload(row: sqlite3.Row) -> dict[str, Any]:
+def benchmark_workout_payload(row: Row) -> dict[str, Any]:
     try:
         structure = json.loads(row["structure_json"] or "{}")
     except (TypeError, ValueError):
@@ -304,7 +306,7 @@ def benchmark_workout_payload(row: sqlite3.Row) -> dict[str, Any]:
     return {"id": row["id"], "name": row["name"], "category": row["category"], "structure": structure}
 
 
-def personal_workout_payload(row: sqlite3.Row) -> dict[str, Any]:
+def personal_workout_payload(row: Row) -> dict[str, Any]:
     try:
         structure = json.loads(row["structure_json"] or "{}")
     except (TypeError, ValueError):

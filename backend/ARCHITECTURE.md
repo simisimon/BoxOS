@@ -2,22 +2,19 @@
 
 ## Overview
 
-The BoxOS backend is now fully FastAPI-based.
+The BoxOS backend is a FastAPI application on PostgreSQL. It is organized into three layers:
 
-There is no legacy HTTP runtime layer anymore.
-The backend is organized into three layers:
-
-1. **Route/runtime layer**
-2. **Core infrastructure layer**
-3. **Domain service layer**
+1. **Route layer** — `fastapi_app.py`
+2. **Core infrastructure layer** — settings, security, database, validation, notifications, audit
+3. **Domain service layer** — one module per feature area
 
 ---
 
-## 1. Route/runtime layer
+## 1. Route layer
 
 ### `fastapi_app.py`
 
-This is the only HTTP entrypoint.
+The only HTTP entrypoint.
 
 Responsibilities:
 - define FastAPI routes
@@ -35,11 +32,11 @@ These modules provide shared backend building blocks.
 They should stay generic and reusable across domain areas.
 
 ### `settings.py`
-Shared constants and runtime configuration values.
+Runtime configuration (mostly from `BOXOS_*` environment variables) and constants.
 
 Examples:
-- database path
-- uploads path
+- database URL
+- uploads paths
 - seed file paths
 - token TTLs
 - size limits
@@ -54,14 +51,18 @@ Responsibilities:
 - UTC timestamp helpers
 
 ### `db.py`
-Database bootstrap and persistence infrastructure.
+Database access and bootstrap.
 
 Responsibilities:
-- SQLite connection creation
-- schema initialization
-- migrations/column checks
-- seed/bootstrap logic
-- default/demo user seeding
+- `ManagedConnection`, a thin psycopg wrapper: `?` placeholders, `with connection:` as a
+  transaction, rows as dicts (the `Row` type)
+- schema creation (`SCHEMA_SQL`, applied idempotently on every start)
+- seeding exercises, benchmark workouts and the default test accounts
+- purging accounts whose deletion grace period has passed
+
+There is no migration tool yet. The schema only uses `create table/index if not exists`,
+so a new column on an existing table needs an explicit `alter table` until a migration tool
+(e.g. Alembic) is introduced.
 
 ### `session_auth.py`
 Session/token persistence helpers.
@@ -105,19 +106,28 @@ These modules contain business/domain logic grouped by feature area.
 Reusable auth/session-related service helpers.
 
 ### `membership_service.py`
-Gym membership and active-context logic.
+Gyms, memberships, roles and the active-gym context.
 
 ### `schedule_service.py`
-Schedule, bookings, waitlist, recurrence, and schedule-notification helpers.
+Classes, bookings, waitlist and schedule notifications.
+
+Weekly classes are stored as templates in `class_templates`. Their bookable sessions are
+generated into `class_schedules` (linked via `class_template_id`) when the schedule is
+fetched, for a rolling horizon of `TEMPLATE_HORIZON_DAYS`. `generated_until` records how far
+a template has been generated, so a session deleted by an owner is not re-created. One-off
+sessions have no template.
 
 ### `announcement_service.py`
 Announcements, comments, permissions, and announcement-activity notifications.
+
+### `community_service.py`
+Community chat message payloads.
 
 ### `workout_service.py`
 Workout/logbook/whiteboard payload shaping and PR-related workout helpers.
 
 ### `programming_service.py`
-Programming/admin-analytics helpers and composition over workout-related helpers.
+Daily WODs (one per gym and day), programming and admin-analytics helpers.
 
 ---
 
@@ -129,6 +139,9 @@ Preferred dependency direction:
 - domain services -> core modules
 - core modules -> other small core modules only when necessary
 
+Domain services and `validation.py` import `ManagedConnection` and `Row` from `db.py` for
+type hints only (under `TYPE_CHECKING`), because `db.py` itself imports `validation.py`.
+
 Avoid:
 - domain services depending on FastAPI
 - core modules depending on FastAPI
@@ -136,28 +149,31 @@ Avoid:
 
 ---
 
-## Removed legacy pieces
+## Demo data
 
-The following legacy runtime files are gone:
-- `server.py`
-- `core.py`
-- `legacy_http.py`
+`seed_demo.py` builds a complete demo box (members, weekly classes with bookings, WODs,
+whiteboard results, community content) for local development:
 
-FastAPI is the only supported backend runtime.
+```bash
+docker compose exec backend-dev python -m backend.seed_demo
+```
 
 ---
 
 ## Testing
 
-### `test_fastapi_app.py`
-Covers FastAPI flows for:
-- auth/session flows
-- profile updates
-- gyms/memberships/roles
-- scheduling/bookings/waitlist
-- announcements/notifications
-- programming/logbook/personal workouts
-- audit logs and admin analytics
+Tests run against a throwaway PostgreSQL container started via testcontainers
+(`tests/pg.py`). Every test starts from an empty schema.
+
+- `tests/` — tests per feature area (`test_auth.py`, `test_schedule.py`, …), sharing the
+  `FastApiTestCase` base and helpers in `tests/support.py`
+- `test_fastapi_app.py` — longer end-to-end flows across several features
+
+Run all of them with:
+
+```bash
+python3 -m unittest discover -s backend -p "test_*.py"
+```
 
 ---
 
@@ -169,6 +185,6 @@ When adding new backend features:
 2. add shared infra logic only to the relevant core module
 3. add feature logic to the appropriate service module
 4. keep `fastapi_app.py` thin
-5. add/update FastAPI tests
+5. add/update tests in `tests/`
 
 If a new feature grows large, prefer a new focused service module over expanding unrelated modules.

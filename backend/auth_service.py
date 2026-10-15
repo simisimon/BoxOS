@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from backend import settings
 from backend.security import create_token, hash_token, isoformat, now_utc
 
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection
 
-def create_session(connection: sqlite3.Connection, user_id: int) -> dict[str, str]:
+
+def create_session(connection: ManagedConnection, user_id: int) -> dict[str, str]:
     access_token = create_token("access")
     refresh_token = create_token("refresh")
     now = now_utc()
@@ -39,7 +42,7 @@ def create_session(connection: sqlite3.Connection, user_id: int) -> dict[str, st
 
 
 def delete_sessions(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     user_id: int,
     *,
     except_access_token_hash: str | None = None,
@@ -54,7 +57,7 @@ def delete_sessions(
     )
 
 
-def issue_verification_token(connection: sqlite3.Connection, user_id: int) -> str:
+def issue_verification_token(connection: ManagedConnection, user_id: int) -> str:
     token = create_token("verify")
     connection.execute("delete from verification_tokens where user_id = ?", (user_id,))
     connection.execute(
@@ -72,7 +75,7 @@ def issue_verification_token(connection: sqlite3.Connection, user_id: int) -> st
     return token
 
 
-def issue_password_reset_token(connection: sqlite3.Connection, user_id: int) -> str:
+def issue_password_reset_token(connection: ManagedConnection, user_id: int) -> str:
     token = create_token("reset")
     connection.execute("delete from password_reset_tokens where user_id = ?", (user_id,))
     connection.execute(

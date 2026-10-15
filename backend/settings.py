@@ -17,9 +17,6 @@ BACKEND_ROOT = Path(__file__).resolve().parent
 # PostgreSQL connection string used by the backend. Format:
 # postgresql://user:password@host:port/database
 DATABASE_URL = os.getenv("BOXOS_DATABASE_URL", "postgresql://boxos:boxos@localhost:5432/boxos")
-# Legacy SQLite path, retained only as the default source for the SQLite -> Postgres
-# migration script (scripts/migrate_sqlite_to_postgres.py).
-DB_PATH = Path(os.getenv("BOXOS_DB_PATH", str(BACKEND_ROOT / "boxos_dev.db")))
 UPLOADS_ROOT = Path(os.getenv("BOXOS_UPLOADS_ROOT", str(BACKEND_ROOT / "uploads")))
 ANNOUNCEMENT_UPLOADS_DIR = Path(
     os.getenv("BOXOS_ANNOUNCEMENT_UPLOADS_DIR", str(UPLOADS_ROOT / "announcements"))

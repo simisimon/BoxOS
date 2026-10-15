@@ -45,11 +45,6 @@ typedef _RoleFilter = UserRole?;
 /// Members table with search, role filter, sort menu, and inline-expand rows
 /// for full editing. Pure view widget: the parent provides the users list and
 /// receives a [MemberDraft] on every save.
-///
-/// Why a shared widget: the Owner-facing sidebar tab and the legacy
-/// "Manage Gym Members" route in Profile both need the same surface. Keeping
-/// the implementation in one place means filter behavior, sort defaults, and
-/// expand UX never drift between the two entry points.
 class MemberRoster extends StatefulWidget {
   const MemberRoster({
     super.key,

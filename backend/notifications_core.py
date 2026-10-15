@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import sqlite3
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from backend.security import isoformat, now_utc
 
-def notification_preferences_payload(row: sqlite3.Row) -> dict[str, bool]:
+if TYPE_CHECKING:
+    from backend.db import ManagedConnection, Row
+
+def notification_preferences_payload(row: Row) -> dict[str, bool]:
     return {
         "booking_confirmations": bool(row["notify_booking_confirmations"]),
         "waitlist_promotions": bool(row["notify_waitlist_promotions"]),
@@ -16,7 +18,7 @@ def notification_preferences_payload(row: sqlite3.Row) -> dict[str, bool]:
     }
 
 
-def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
+def notification_payload(row: Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "type": row["type"],
@@ -30,7 +32,7 @@ def notification_payload(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def preferred_user_name(
-    row: sqlite3.Row,
+    row: Row,
     *,
     display_name_key: str = "display_name",
     nickname_key: str = "nickname",
@@ -44,7 +46,7 @@ def preferred_user_name(
 
 
 def announcement_comment_payload(
-    row: sqlite3.Row,
+    row: Row,
     *,
     current_user_id: int,
     session_role: str,
@@ -67,7 +69,7 @@ def announcement_comment_payload(
 
 
 def list_announcement_comments(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     announcement_id: int,
     current_user_id: int,
@@ -103,8 +105,8 @@ def list_announcement_comments(
 
 
 def announcement_payload(
-    connection: sqlite3.Connection,
-    row: sqlite3.Row,
+    connection: ManagedConnection,
+    row: Row,
     *,
     current_user_id: int,
     session_role: str,
@@ -149,11 +151,11 @@ def announcement_payload(
 
 
 def get_announcement_row(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     announcement_id: int,
     gym_id: int,
-) -> sqlite3.Row | None:
+) -> Row | None:
     return connection.execute(
         """
         select
@@ -177,9 +179,9 @@ def get_announcement_row(
 
 
 def get_announcement_comment_row(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     comment_id: int,
-) -> sqlite3.Row | None:
+) -> Row | None:
     return connection.execute(
         """
         select
@@ -202,8 +204,8 @@ def get_announcement_comment_row(
 
 
 def ensure_announcement_manage_permission(
-    announcement: sqlite3.Row,
-    session: sqlite3.Row,
+    announcement: Row,
+    session: Row,
 ) -> None:
     if session["role"] == "admin":
         return
@@ -216,8 +218,8 @@ def ensure_announcement_manage_permission(
 
 
 def ensure_announcement_comment_manage_permission(
-    comment: sqlite3.Row,
-    session: sqlite3.Row,
+    comment: Row,
+    session: Row,
 ) -> None:
     if session["role"] == "admin":
         return
@@ -230,7 +232,7 @@ def ensure_announcement_comment_manage_permission(
 
 
 def create_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int | None,
@@ -251,10 +253,10 @@ def create_notification(
 
 
 def class_schedule_summary(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     class_schedule_id: int,
-) -> sqlite3.Row | None:
+) -> Row | None:
     return connection.execute(
         """
         select id, gym_id, title, start_time
@@ -266,7 +268,7 @@ def class_schedule_summary(
 
 
 def create_booking_confirmation_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int,
@@ -295,7 +297,7 @@ def create_booking_confirmation_notification(
 
 
 def promote_next_waitlisted_user(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     class_schedule_id: int,
 ) -> int | None:
@@ -332,7 +334,7 @@ def promote_next_waitlisted_user(
 
 
 def create_waitlist_promotion_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int,
@@ -361,7 +363,7 @@ def create_waitlist_promotion_notification(
 
 
 def create_schedule_update_notifications(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     gym_id: int,
     class_schedule_id: int,
@@ -397,7 +399,7 @@ def create_schedule_update_notifications(
 
 
 def create_wod_notifications(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     gym_id: int,
     workout_id: int,
@@ -434,7 +436,7 @@ def create_wod_notifications(
 
 
 def create_pr_achievement_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     user_id: int,
     gym_id: int,
@@ -461,7 +463,7 @@ def create_pr_achievement_notification(
 
 
 def create_announcement_like_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     recipient_user_id: int,
     actor_user_id: int,
@@ -495,7 +497,7 @@ def create_announcement_like_notification(
 
 
 def create_announcement_comment_notification(
-    connection: sqlite3.Connection,
+    connection: ManagedConnection,
     *,
     recipient_user_id: int,
     actor_user_id: int,
