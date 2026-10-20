@@ -51,15 +51,13 @@ class ApiProgrammingRepository implements ProgrammingRepository {
       ),
     );
     final data = response.data ?? const <String, dynamic>{};
-    final errors = ((data['errors'] as List<dynamic>?) ?? const [])
-        .map((item) {
-          final map = item as Map<String, dynamic>;
-          return WorkoutImportError(
-            row: map['row'] as int? ?? 0,
-            message: map['message'] as String? ?? 'Invalid row',
-          );
-        })
-        .toList();
+    final errors = ((data['errors'] as List<dynamic>?) ?? const []).map((item) {
+      final map = item as Map<String, dynamic>;
+      return WorkoutImportError(
+        row: map['row'] as int? ?? 0,
+        message: map['message'] as String? ?? 'Invalid row',
+      );
+    }).toList();
     return WorkoutImportResult(
       createdCount: data['created_count'] as int? ?? 0,
       errors: errors,

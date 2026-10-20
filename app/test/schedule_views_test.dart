@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
@@ -331,6 +332,27 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('Add class and Add WOD open the same window at $size', (
+      tester,
+    ) async {
+      await _pumpSchedule(tester, size);
+      // Next week: every day is in the future, so both buttons exist.
+      await tester.tap(find.byTooltip('Next week'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add class').first);
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      final classWindow = tester.getRect(find.byType(AppFormDialog));
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add WOD').first);
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(tester.getRect(find.byType(AppFormDialog)), classWindow);
     });
 
     testWidgets('Athletes book a class from the week at $size', (tester) async {

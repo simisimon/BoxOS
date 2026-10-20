@@ -61,10 +61,10 @@ class DailyWorkoutSection {
   final WorkoutSectionScore scoreType;
 
   Map<String, dynamic> toJson() => {
-        'title': title,
-        'description': description,
-        'score_type': workoutSectionScoreToWire(scoreType),
-      };
+    'title': title,
+    'description': description,
+    'score_type': workoutSectionScoreToWire(scoreType),
+  };
 }
 
 class DailyWorkout {

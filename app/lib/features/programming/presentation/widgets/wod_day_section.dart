@@ -1,5 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
@@ -745,27 +746,26 @@ class _SectionDraft {
   });
 
   factory _SectionDraft.empty() => _SectionDraft(
-        titleController: TextEditingController(),
-        descriptionController: TextEditingController(),
-        scoreType: WorkoutSectionScore.time,
-      );
+    titleController: TextEditingController(),
+    descriptionController: TextEditingController(),
+    scoreType: WorkoutSectionScore.time,
+  );
 
   factory _SectionDraft.from(DailyWorkoutSection section) => _SectionDraft(
-        titleController: TextEditingController(text: section.title),
-        descriptionController:
-            TextEditingController(text: section.description),
-        scoreType: section.scoreType,
-      );
+    titleController: TextEditingController(text: section.title),
+    descriptionController: TextEditingController(text: section.description),
+    scoreType: section.scoreType,
+  );
 
   final TextEditingController titleController;
   final TextEditingController descriptionController;
   WorkoutSectionScore scoreType;
 
   DailyWorkoutSection toSection() => DailyWorkoutSection(
-        title: titleController.text.trim(),
-        description: descriptionController.text.trim(),
-        scoreType: scoreType,
-      );
+    title: titleController.text.trim(),
+    description: descriptionController.text.trim(),
+    scoreType: scoreType,
+  );
 
   void dispose() {
     titleController.dispose();
@@ -798,10 +798,12 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
     super.initState();
     final initialDate = widget.existing?.scheduledDate ?? widget.prefillDate;
     final today = _dateOnly(DateTime.now());
-    _selectedDate =
-        initialDate.isBefore(today) ? today : _dateOnly(initialDate);
-    _titleController =
-        TextEditingController(text: widget.existing?.title ?? 'Daily WOD');
+    _selectedDate = initialDate.isBefore(today)
+        ? today
+        : _dateOnly(initialDate);
+    _titleController = TextEditingController(
+      text: widget.existing?.title ?? 'Daily WOD',
+    );
     final existingSections =
         widget.existing?.sections ?? const <DailyWorkoutSection>[];
     _sections = existingSections.isEmpty
@@ -885,49 +887,44 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel =
-        MaterialLocalizations.of(context).formatFullDate(_selectedDate);
+    final dateLabel = MaterialLocalizations.of(
+      context,
+    ).formatFullDate(_selectedDate);
     final isCreating = widget.existing == null;
-    return AlertDialog(
-      title: Text(isCreating ? 'New Daily WOD' : 'Edit Daily WOD'),
-      content: SizedBox(
-        width: 520,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _isSaving ? null : _pickDate,
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(dateLabel),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                  validator: (value) => (value ?? '').trim().isEmpty
-                      ? 'Enter a workout title'
-                      : null,
-                ),
-                const SizedBox(height: 18),
-                _SectionsEditor(
-                  sections: _sections,
-                  isSaving: _isSaving,
-                  canRemove: _sections.length > 1,
-                  onAdd:
-                      _sections.length >= _maxSections ? null : _addSection,
-                  onRemove: _removeSection,
-                  onScoreChanged: (index, value) {
-                    setState(() => _sections[index].scoreType = value);
-                  },
-                  maxSections: _maxSections,
-                ),
-              ],
+    return AppFormDialog(
+      title: isCreating ? 'New WOD' : 'Edit WOD',
+      subtitle: dateLabel,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _pickDate,
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(dateLabel),
             ),
-          ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Enter a workout title' : null,
+            ),
+            const SizedBox(height: 18),
+            _SectionsEditor(
+              sections: _sections,
+              isSaving: _isSaving,
+              canRemove: _sections.length > 1,
+              onAdd: _sections.length >= _maxSections ? null : _addSection,
+              onRemove: _removeSection,
+              onScoreChanged: (index, value) {
+                setState(() => _sections[index].scoreType = value);
+              },
+              maxSections: _maxSections,
+            ),
+          ],
         ),
       ),
       actions: [
@@ -1108,9 +1105,8 @@ class _SectionCard extends StatelessWidget {
             decoration: const InputDecoration(labelText: 'Description'),
             minLines: 2,
             maxLines: 5,
-            validator: (value) => (value ?? '').trim().isEmpty
-                ? 'Enter a description'
-                : null,
+            validator: (value) =>
+                (value ?? '').trim().isEmpty ? 'Enter a description' : null,
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<WorkoutSectionScore>(
@@ -1250,8 +1246,8 @@ class _WhiteboardResultDialogState
                     labelText: _scoreType == 'time'
                         ? 'Score (mm:ss or hh:mm:ss)'
                         : _scoreType == 'reps'
-                            ? 'Score (reps)'
-                            : 'Score (load)',
+                        ? 'Score (reps)'
+                        : 'Score (load)',
                   ),
                   validator: (value) =>
                       (value ?? '').trim().isEmpty ? 'Enter a score' : null,
@@ -1390,8 +1386,8 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
                     labelText: _scoreType == 'time'
                         ? 'Score (mm:ss or hh:mm:ss)'
                         : _scoreType == 'reps'
-                            ? 'Score (reps)'
-                            : 'Score (load)',
+                        ? 'Score (reps)'
+                        : 'Score (load)',
                   ),
                   validator: (value) =>
                       (value ?? '').trim().isEmpty ? 'Enter a score' : null,

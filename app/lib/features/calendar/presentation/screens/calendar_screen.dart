@@ -1,5 +1,6 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
@@ -383,21 +384,11 @@ Future<void> _showClassFormDialog(
 }) {
   return showDialog<void>(
     context: context,
-    builder: (dialogContext) => Dialog(
-      backgroundColor: appSurface,
-      insetPadding: const EdgeInsets.all(16),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: _ClassForm(
-            date: date,
-            existing: existing,
-            onSaved: () => Navigator.of(dialogContext).pop(),
-            onCancel: () => Navigator.of(dialogContext).pop(),
-          ),
-        ),
-      ),
+    builder: (dialogContext) => _ClassForm(
+      date: date,
+      existing: existing,
+      onSaved: () => Navigator.of(dialogContext).pop(),
+      onCancel: () => Navigator.of(dialogContext).pop(),
     ),
   );
 }
@@ -1295,218 +1286,204 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final localizations = MaterialLocalizations.of(context);
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            _isCreating ? 'New class' : 'Edit class',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: appText,
-              fontWeight: FontWeight.w800,
+    final dateLabel = localizations.formatFullDate(_baseDate);
+    return AppFormDialog(
+      title: _isCreating ? 'New class' : 'Edit class',
+      subtitle: widget.existing?.classTemplateId != null
+          ? '$dateLabel · changes apply to this date only'
+          : dateLabel,
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : widget.onCancel,
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _submit,
+          child: _isSaving
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(_isCreating ? 'Create' : 'Save'),
+        ),
+      ],
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final type in ClassType.values)
+                  ChoiceChip(
+                    label: Text(type.label),
+                    selected: _type == type,
+                    onSelected: (_) => _selectType(type),
+                  ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            localizations.formatFullDate(_baseDate),
-            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-          ),
-          const SizedBox(height: 6),
-          if (widget.existing?.classTemplateId != null) ...[
-            Text(
-              'Changes apply to this date only.',
-              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Enter a title' : null,
             ),
-            const SizedBox(height: 10),
-          ],
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final type in ClassType.values)
-                ChoiceChip(
-                  label: Text(type.label),
-                  selected: _type == type,
-                  onSelected: (_) => _selectType(type),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _titleController,
-            decoration: const InputDecoration(labelText: 'Title'),
-            validator: (value) =>
-                (value ?? '').trim().isEmpty ? 'Enter a title' : null,
-          ),
-          const SizedBox(height: 12),
-          FutureBuilder<List<ScheduleTrainer>>(
-            future: _trainersFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: LinearProgressIndicator(),
+            const SizedBox(height: 12),
+            FutureBuilder<List<ScheduleTrainer>>(
+              future: _trainersFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: LinearProgressIndicator(),
+                  );
+                }
+                final trainers = snapshot.data ?? const <ScheduleTrainer>[];
+                return DropdownButtonFormField<int>(
+                  initialValue: _selectedTrainerId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Trainer'),
+                  items: [
+                    for (final trainer in trainers)
+                      DropdownMenuItem<int>(
+                        value: trainer.id,
+                        child: Text(trainer.label),
+                      ),
+                  ],
+                  validator: (value) =>
+                      value == null ? 'Select a trainer' : null,
+                  onChanged: (value) =>
+                      setState(() => _selectedTrainerId = value),
                 );
-              }
-              final trainers = snapshot.data ?? const <ScheduleTrainer>[];
-              return DropdownButtonFormField<int>(
-                initialValue: _selectedTrainerId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Trainer'),
-                items: [
-                  for (final trainer in trainers)
-                    DropdownMenuItem<int>(
-                      value: trainer.id,
-                      child: Text(trainer.label),
-                    ),
-                ],
-                validator: (value) => value == null ? 'Select a trainer' : null,
-                onChanged: (value) =>
-                    setState(() => _selectedTrainerId = value),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: _selectedHour,
-                  decoration: const InputDecoration(labelText: 'Hour'),
-                  items: [
-                    for (var hour = 0; hour < 24; hour++)
-                      DropdownMenuItem(
-                        value: hour,
-                        child: Text(hour.toString().padLeft(2, '0')),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) setState(() => _selectedHour = value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: _selectedMinute,
-                  decoration: const InputDecoration(labelText: 'Minute'),
-                  items: [
-                    for (final minute in _minuteOptions)
-                      DropdownMenuItem(
-                        value: minute,
-                        child: Text(minute.toString().padLeft(2, '0')),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) setState(() => _selectedMinute = value);
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _selectedDuration,
-            decoration: const InputDecoration(labelText: 'Duration (minutes)'),
-            items: [
-              for (final duration in _durationOptions)
-                DropdownMenuItem(value: duration, child: Text('$duration min')),
-            ],
-            onChanged: (value) {
-              if (value != null) setState(() => _selectedDuration = value);
-            },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _capacityController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Capacity'),
-            validator: (value) {
-              final parsed = int.tryParse((value ?? '').trim());
-              if (parsed == null || parsed <= 0) {
-                return 'Enter a valid capacity';
-              }
-              return null;
-            },
-          ),
-          if (_isCreating) ...[
-            const SizedBox(height: 8),
+              },
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Repeats weekly',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: appText,
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedHour,
+                    decoration: const InputDecoration(labelText: 'Hour'),
+                    items: [
+                      for (var hour = 0; hour < 24; hour++)
+                        DropdownMenuItem(
+                          value: hour,
+                          child: Text(hour.toString().padLeft(2, '0')),
                         ),
-                      ),
-                      Text(
-                        _repeatsWeekly
-                            ? 'Runs every week on the selected days, '
-                                  'starting this week.'
-                            : 'Happens once on this date.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: appSubtleText,
-                        ),
-                      ),
                     ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _selectedHour = value);
+                    },
                   ),
                 ),
-                Switch(
-                  value: _repeatsWeekly,
-                  onChanged: (value) => setState(() => _repeatsWeekly = value),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedMinute,
+                    decoration: const InputDecoration(labelText: 'Minute'),
+                    items: [
+                      for (final minute in _minuteOptions)
+                        DropdownMenuItem(
+                          value: minute,
+                          child: Text(minute.toString().padLeft(2, '0')),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null)
+                        setState(() => _selectedMinute = value);
+                    },
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            if (_repeatsWeekly)
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _selectedDuration,
+              decoration: const InputDecoration(
+                labelText: 'Duration (minutes)',
+              ),
+              items: [
+                for (final duration in _durationOptions)
+                  DropdownMenuItem(
+                    value: duration,
+                    child: Text('$duration min'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _selectedDuration = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _capacityController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Capacity'),
+              validator: (value) {
+                final parsed = int.tryParse((value ?? '').trim());
+                if (parsed == null || parsed <= 0) {
+                  return 'Enter a valid capacity';
+                }
+                return null;
+              },
+            ),
+            if (_isCreating) ...[
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  for (var day = 1; day <= 7; day++)
-                    FilterChip(
-                      label: Text(_weekdayShortLabels[day - 1]),
-                      selected: _weekdays.contains(day),
-                      onSelected: (selected) => setState(
-                        () => selected
-                            ? _weekdays.add(day)
-                            : _weekdays.remove(day),
-                      ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Repeats weekly',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: appText,
+                          ),
+                        ),
+                        Text(
+                          _repeatsWeekly
+                              ? 'Runs every week on the selected days, '
+                                    'starting this week.'
+                              : 'Happens once on this date.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: appSubtleText,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  Switch(
+                    value: _repeatsWeekly,
+                    onChanged: (value) =>
+                        setState(() => _repeatsWeekly = value),
+                  ),
                 ],
               ),
-          ],
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _isSaving ? null : widget.onCancel,
-                  child: const Text('Cancel'),
+              const SizedBox(height: 8),
+              if (_repeatsWeekly)
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (var day = 1; day <= 7; day++)
+                      FilterChip(
+                        label: Text(_weekdayShortLabels[day - 1]),
+                        selected: _weekdays.contains(day),
+                        onSelected: (selected) => setState(
+                          () => selected
+                              ? _weekdays.add(day)
+                              : _weekdays.remove(day),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _isSaving ? null : _submit,
-                  child: _isSaving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_isCreating ? 'Create' : 'Save'),
-                ),
-              ),
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

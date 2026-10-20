@@ -18,8 +18,7 @@ const _allowedStatuses = {'draft', 'published'};
 const _allowedSectionScores = {'time', 'rounds_reps', 'weight'};
 const _maxSectionsPerRow = 20;
 
-final _sectionDescriptionColumnPattern =
-    RegExp(r'^section_(\d+)_description$');
+final _sectionDescriptionColumnPattern = RegExp(r'^section_(\d+)_description$');
 
 /// Example the user can drop into the paste box as a starting point.
 const importTemplateCsv =
@@ -64,8 +63,10 @@ class CsvParseOutcome {
 /// content. Each row produces a `{ scheduled_date, title, status?, sections }`
 /// payload matching `POST /programming/workouts/import`.
 CsvParseOutcome parseWorkoutsCsv(String content) {
-  final normalized =
-      content.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+  final normalized = content
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .trim();
   if (normalized.isEmpty) {
     return CsvParseOutcome(headerError: 'Paste your WOD rows above.');
   }
@@ -86,17 +87,20 @@ CsvParseOutcome parseWorkoutsCsv(String content) {
     return CsvParseOutcome(headerError: 'Paste your WOD rows above.');
   }
 
-  final header =
-      table.first.map((c) => c.toString().trim().toLowerCase()).toList();
+  final header = table.first
+      .map((c) => c.toString().trim().toLowerCase())
+      .toList();
   final indexOf = <String, int>{};
   for (var i = 0; i < header.length; i++) {
     indexOf[header[i]] = i;
   }
-  final missing =
-      _requiredHeaders.where((h) => !indexOf.containsKey(h)).toList();
+  final missing = _requiredHeaders
+      .where((h) => !indexOf.containsKey(h))
+      .toList();
   if (missing.isNotEmpty) {
     return CsvParseOutcome(
-      headerError: 'Missing required column(s): ${missing.join(', ')}. '
+      headerError:
+          'Missing required column(s): ${missing.join(', ')}. '
           'The first row must be the header.',
     );
   }
@@ -144,10 +148,11 @@ CsvParseOutcome parseWorkoutsCsv(String content) {
       }
       final sections = <Map<String, dynamic>>[];
       for (final sectionIndex in sectionIndices) {
-        final description =
-            cell(row, 'section_${sectionIndex}_description');
-        final scoreRaw =
-            cell(row, 'section_${sectionIndex}_score').toLowerCase();
+        final description = cell(row, 'section_${sectionIndex}_description');
+        final scoreRaw = cell(
+          row,
+          'section_${sectionIndex}_score',
+        ).toLowerCase();
         if (description.isEmpty && scoreRaw.isEmpty) continue;
         if (description.isEmpty) {
           throw FormatException(
@@ -173,14 +178,13 @@ CsvParseOutcome parseWorkoutsCsv(String content) {
         });
       }
       if (sections.isEmpty) {
-        throw const FormatException(
-          'A WOD needs at least one filled section',
-        );
+        throw const FormatException('A WOD needs at least one filled section');
       }
       previews.add(
         ImportRowPreview(
           line: line,
-          summary: '$summary · ${sections.length} section'
+          summary:
+              '$summary · ${sections.length} section'
               '${sections.length == 1 ? '' : 's'}',
           payload: {
             'scheduled_date': dateStr,
@@ -198,9 +202,7 @@ CsvParseOutcome parseWorkoutsCsv(String content) {
   }
 
   if (previews.isEmpty) {
-    return CsvParseOutcome(
-      headerError: 'No data rows found below the header.',
-    );
+    return CsvParseOutcome(headerError: 'No data rows found below the header.');
   }
   return CsvParseOutcome(rows: previews);
 }
@@ -220,8 +222,9 @@ class ImportWorkoutsDialog extends ConsumerStatefulWidget {
 }
 
 class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.debugInitialText ?? '');
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.debugInitialText ?? '',
+  );
   CsvParseOutcome? _outcome;
   bool _importing = false;
   List<WorkoutImportError> _serverErrors = const [];
@@ -372,7 +375,8 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
                 color: appText,
               ),
               decoration: const InputDecoration(
-                hintText: 'date,title,section_1_description,section_1_score\n'
+                hintText:
+                    'date,title,section_1_description,section_1_score\n'
                     '2026-06-22,Murph,"21-15-9 thrusters/pull-ups",time',
               ),
             ),
@@ -442,9 +446,7 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
       actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       actions: [
         TextButton(
-          onPressed: _importing
-              ? null
-              : () => Navigator.of(context).pop(false),
+          onPressed: _importing ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
         FilledButton(
