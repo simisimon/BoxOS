@@ -314,13 +314,6 @@ class DailyWorkoutDuplicateRequest(BaseModel):
     target_date: str
 
 
-class WhiteboardResultRequest(BaseModel):
-    workout_id: int
-    score_type: str
-    score_value: Any
-    notes_text: str | None = None
-
-
 class WorkoutLogRequest(BaseModel):
     workout_id: int
     class_id: int | None = None
@@ -3099,64 +3092,6 @@ def import_daily_workouts(
         connection.close()
 
 
-@app.post("/programming/whiteboard-results")
-def submit_whiteboard_result(
-    body: WhiteboardResultRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    workout_id = validation.require_user_id(body.workout_id)
-    score_type, score_value, score_label = validation.require_whiteboard_score(body.score_type, body.score_value)
-    notes_text = validation.require_whiteboard_notes(body.notes_text)
-    connection = db.get_connection()
-    try:
-        workout = connection.execute(
-            f"""
-            select {programming_service.DAILY_WORKOUT_COLUMNS}
-            from daily_workouts
-            where id = ? and gym_id = ?
-            """,
-            (workout_id, session["active_gym_id"]),
-        ).fetchone()
-        if workout is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-        if validation.parse_programming_date(workout["scheduled_date"]) > programming_service.today_utc_date():
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Results can only be submitted on or after the workout date.")
-        if workout["status"] != "published" and not programming_service.can_view_drafts(session["role"]):
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-        timestamp = security.isoformat(security.now_utc())
-        with connection:
-            existing = connection.execute(
-                "select id from whiteboard_results where daily_workout_id = ? and user_id = ?",
-                (workout_id, session["user_id"]),
-            ).fetchone()
-            action = "whiteboard_result_created" if existing is None else "whiteboard_result_updated"
-            if existing is None:
-                connection.execute(
-                    """
-                    insert into whiteboard_results (
-                      daily_workout_id, gym_id, user_id, score_type, score_value,
-                      score_label, notes_text, created_at, updated_at
-                    )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (workout_id, session["active_gym_id"], session["user_id"], score_type, score_value, score_label, notes_text, timestamp, timestamp),
-                )
-            else:
-                connection.execute(
-                    """
-                    update whiteboard_results
-                    set score_type = ?, score_value = ?, score_label = ?, notes_text = ?, updated_at = ?
-                    where id = ?
-                    """,
-                    (score_type, score_value, score_label, notes_text, timestamp, existing["id"]),
-                )
-            payload = programming_service.daily_workout_payload(connection, workout, current_user_id=session["user_id"], can_edit=session["role"] in {"admin", "trainer"})
-            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], target_user_id=session["user_id"], action=action, entity_type="whiteboard_result", entity_id=workout_id, details={"workout_id": workout_id, "score_type": score_type, "score_label": score_label})
-        return {"workout": payload}
-    finally:
-        connection.close()
-
-
 @app.get("/logbook/entries")
 def list_workout_logs(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
     connection = db.get_connection()
@@ -3279,8 +3214,8 @@ def submit_workout_log(
 ) -> dict[str, Any]:
     workout_id = validation.require_user_id(body.workout_id)
     class_id = validation.require_optional_user_id(body.class_id)
-    score_type, score_value, score_label = validation.require_whiteboard_score(body.score_type, body.score_value)
-    notes_text = validation.require_whiteboard_notes(body.notes_text)
+    score_type, score_value, score_label = validation.require_score(body.score_type, body.score_value)
+    notes_text = validation.require_result_notes(body.notes_text)
     connection = db.get_connection()
     try:
         workout = connection.execute(

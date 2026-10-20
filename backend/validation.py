@@ -754,7 +754,7 @@ def require_chat_message_body(value: Any) -> str:
     return body
 
 
-def require_whiteboard_score(score_type_value: Any, score_value_value: Any) -> tuple[str, float, str]:
+def require_score(score_type_value: Any, score_value_value: Any) -> tuple[str, float, str]:
     score_type = str(score_type_value or "").strip().lower()
     if score_type not in {"time", "reps", "load"}:
         raise ApiError(
@@ -805,7 +805,7 @@ def require_whiteboard_score(score_type_value: Any, score_value_value: Any) -> t
     return score_type, score_value, raw_score_value
 
 
-def require_whiteboard_notes(value: Any) -> str:
+def require_result_notes(value: Any) -> str:
     notes = str(value or "").strip()
     if len(notes) > 500:
         raise ApiError(HTTPStatus.BAD_REQUEST, "Notes must be 500 characters or fewer.")

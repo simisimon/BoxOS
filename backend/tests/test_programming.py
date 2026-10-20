@@ -46,32 +46,6 @@ class ProgrammingApiTests(FastApiTestCase):
         self.assertEqual(duplicate.status_code, 409)
         self.assertEqual(duplicate.json()["detail"], "A workout already exists for this date.")
 
-    def test_future_whiteboard_results_are_rejected(self) -> None:
-        admin_headers, gym_id = self.create_gym_as_admin("Whiteboard Box")
-        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
-
-        created = self.client.post(
-            "/programming/workouts",
-            headers=admin_headers,
-            json={
-                "scheduled_date": (security.now_utc().date() + timedelta(days=1)).isoformat(),
-                "title": "Murph Prep",
-                "sections": _sample_sections(),
-                "status": "published",
-            },
-        )
-        self.assertEqual(created.status_code, 200, created.text)
-        workout_id = created.json()["workout"]["id"]
-
-        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
-        whiteboard = self.client.post(
-            "/programming/whiteboard-results",
-            headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "time", "score_value": "12:34", "notes_text": "Too early"},
-        )
-        self.assertEqual(whiteboard.status_code, 400)
-        self.assertEqual(whiteboard.json()["detail"], "Results can only be submitted on or after the workout date.")
-
     def test_personal_workout_validation_rejects_invalid_type(self) -> None:
         athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
 

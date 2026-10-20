@@ -157,55 +157,6 @@ def refresh_pr_flags_for_workout_title(
     )
 
 
-def list_whiteboard_results(connection: ManagedConnection, workout_id: int) -> list[dict[str, Any]]:
-    rows = connection.execute(
-        """
-        select whiteboard_results.id, whiteboard_results.user_id, whiteboard_results.score_type,
-               whiteboard_results.score_value, whiteboard_results.score_label, whiteboard_results.notes_text,
-               whiteboard_results.created_at, whiteboard_results.updated_at, users.display_name, users.nickname
-        from whiteboard_results
-        join users on users.id = whiteboard_results.user_id
-        where whiteboard_results.daily_workout_id = ?
-        order by
-          case whiteboard_results.score_type when 'time' then 0 when 'reps' then 1 when 'load' then 2 else 3 end asc,
-          case when whiteboard_results.score_type = 'time' then whiteboard_results.score_value end asc,
-          case when whiteboard_results.score_type in ('reps', 'load') then whiteboard_results.score_value end desc,
-          whiteboard_results.updated_at asc
-        """,
-        (workout_id,),
-    ).fetchall()
-    return [
-        {
-            "id": row["id"],
-            "user_id": row["user_id"],
-            "athlete_name": row["display_name"] or row["nickname"] or "Member",
-            "score_type": row["score_type"],
-            "score_value": row["score_value"],
-            "score_label": row["score_label"],
-            "notes_text": row["notes_text"],
-            "rank": index + 1,
-        }
-        for index, row in enumerate(rows)
-    ]
-
-
-def get_whiteboard_result_for_user(connection: ManagedConnection, workout_id: int, user_id: int) -> dict[str, Any] | None:
-    row = connection.execute(
-        "select id, user_id, score_type, score_value, score_label, notes_text from whiteboard_results where daily_workout_id = ? and user_id = ?",
-        (workout_id, user_id),
-    ).fetchone()
-    if row is None:
-        return None
-    return {
-        "id": row["id"],
-        "user_id": row["user_id"],
-        "score_type": row["score_type"],
-        "score_value": row["score_value"],
-        "score_label": row["score_label"],
-        "notes_text": row["notes_text"],
-    }
-
-
 def workout_section_payload(row: Row) -> dict[str, Any]:
     return {
         "title": row["title"],
@@ -268,8 +219,6 @@ def daily_workout_payload(connection: ManagedConnection, row: Row, *, current_us
         "status": row["status"],
         "published_at": row["published_at"],
         "can_edit": can_edit,
-        "whiteboard_results": list_whiteboard_results(connection, row["id"]),
-        "my_whiteboard_result": get_whiteboard_result_for_user(connection, row["id"], current_user_id),
         "my_workout_log": get_workout_log_for_user(connection, row["id"], current_user_id),
     }
 

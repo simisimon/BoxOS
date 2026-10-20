@@ -70,7 +70,7 @@ Future<bool> showWodEditorDialog(
 }
 
 /// The full WOD card for [date] (sections, publish/duplicate menu,
-/// whiteboard) in a dialog, for views that only show a summary.
+/// log) in a dialog, for views that only show a summary.
 Future<void> showWodDetailsDialog(
   BuildContext context, {
   required DateTime date,
@@ -408,8 +408,6 @@ class _WorkoutCard extends ConsumerWidget {
           ],
           if (workout.isPublished) ...[
             const SizedBox(height: 16),
-            _PanelSection(child: _WhiteboardSection(workout: workout)),
-            const SizedBox(height: 12),
             _PanelSection(child: _WorkoutLogSection(workout: workout)),
           ],
         ],
@@ -544,7 +542,7 @@ class _PanelSection extends StatelessWidget {
   }
 }
 
-String _whiteboardScoreLabel(String value) {
+String _scoreLabel(String value) {
   switch (value) {
     case 'time':
       return 'For time';
@@ -554,115 +552,6 @@ String _whiteboardScoreLabel(String value) {
       return 'Load';
     default:
       return value;
-  }
-}
-
-class _WhiteboardSection extends ConsumerWidget {
-  const _WhiteboardSection({required this.workout});
-  final DailyWorkout workout;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Whiteboard',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final updated = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => _WhiteboardResultDialog(workout: workout),
-                );
-                if (updated == true) {
-                  ref.invalidate(programmingListProvider);
-                }
-              },
-              icon: const Icon(Icons.emoji_events_outlined),
-              // Theme buttons are full-width; next to the title in a Row
-              // they need a finite minimum width.
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-              label: Text(
-                workout.myWhiteboardResult == null ? 'Submit' : 'Update',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (workout.myWhiteboardResult != null) ...[
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: appSurface,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              'My result: ${workout.myWhiteboardResult!.scoreLabel} '
-              '(${_whiteboardScoreLabel(workout.myWhiteboardResult!.scoreType)})'
-              '${workout.myWhiteboardResult!.notesText.isEmpty ? '' : '\n${workout.myWhiteboardResult!.notesText}'}',
-              style: theme.textTheme.bodyMedium?.copyWith(color: appText),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        if (workout.whiteboardResults.isEmpty)
-          Text(
-            'No whiteboard results yet.',
-            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-          )
-        else
-          Column(
-            children: [
-              for (final result in workout.whiteboardResults)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundColor: const Color(0xFF1E2A43),
-                        child: Text(
-                          '${result.rank}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: appText,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          result.athleteName,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: appText,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        result.scoreLabel,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: appPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-      ],
-    );
   }
 }
 
@@ -680,7 +569,7 @@ class _WorkoutLogSection extends ConsumerWidget {
           children: [
             Expanded(
               child: Text(
-                'My log',
+                'Log Results',
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: appText,
                   fontWeight: FontWeight.w800,
@@ -723,7 +612,7 @@ class _WorkoutLogSection extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     '${workout.myWorkoutLog!.scoreLabel} '
-                    '(${_whiteboardScoreLabel(workout.myWorkoutLog!.scoreType)})'
+                    '(${_scoreLabel(workout.myWorkoutLog!.scoreType)})'
                     '${workout.myWorkoutLog!.notesText.isEmpty ? '' : '\n${workout.myWorkoutLog!.notesText}'}',
                     style: theme.textTheme.bodyMedium?.copyWith(color: appText),
                   ),
@@ -1135,151 +1024,6 @@ class _SectionCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _WhiteboardResultDialog extends ConsumerStatefulWidget {
-  const _WhiteboardResultDialog({required this.workout});
-  final DailyWorkout workout;
-
-  @override
-  ConsumerState<_WhiteboardResultDialog> createState() =>
-      _WhiteboardResultDialogState();
-}
-
-class _WhiteboardResultDialogState
-    extends ConsumerState<_WhiteboardResultDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late String _scoreType;
-  late TextEditingController _scoreValueController;
-  late TextEditingController _notesController;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scoreType = widget.workout.myWhiteboardResult?.scoreType ?? 'time';
-    _scoreValueController = TextEditingController(
-      text: widget.workout.myWhiteboardResult?.scoreLabel ?? '',
-    );
-    _notesController = TextEditingController(
-      text: widget.workout.myWhiteboardResult?.notesText ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _scoreValueController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _isSaving = true);
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .submitWhiteboardResult(
-            workoutId: widget.workout.id,
-            scoreType: _scoreType,
-            scoreValue: _scoreValueController.text.trim(),
-            notesText: _notesController.text.trim(),
-          );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(
-              error,
-              fallback: 'Failed to save whiteboard result',
-            ),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Submit Whiteboard Result'),
-      content: SizedBox(
-        width: 420,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _scoreType,
-                  decoration: const InputDecoration(labelText: 'Score Type'),
-                  items: const [
-                    DropdownMenuItem(value: 'time', child: Text('For time')),
-                    DropdownMenuItem(value: 'reps', child: Text('Reps')),
-                    DropdownMenuItem(value: 'load', child: Text('Load')),
-                  ],
-                  onChanged: _isSaving
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            setState(() => _scoreType = value);
-                          }
-                        },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _scoreValueController,
-                  decoration: InputDecoration(
-                    labelText: _scoreType == 'time'
-                        ? 'Score (mm:ss or hh:mm:ss)'
-                        : _scoreType == 'reps'
-                        ? 'Score (reps)'
-                        : 'Score (load)',
-                  ),
-                  validator: (value) =>
-                      (value ?? '').trim().isEmpty ? 'Enter a score' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _notesController,
-                  decoration: const InputDecoration(labelText: 'Notes'),
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isSaving ? null : _submit,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
-        ),
-      ],
     );
   }
 }

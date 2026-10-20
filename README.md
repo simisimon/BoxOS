@@ -33,7 +33,7 @@ docker compose up -d --build
 
 Ein Seed-Skript legt eine vollständige Demo-Box an: rund 120 Mitglieder, offene
 Beitrittsanfragen, ein Wochenplan mit Classes inkl. Buchungen, Attendance und Warteliste,
-veröffentlichte WODs mit Whiteboard-Ergebnissen sowie Community-Inhalte.
+veröffentlichte WODs sowie Community-Inhalte.
 
 ```bash
 docker compose exec backend-dev python -m backend.seed_demo

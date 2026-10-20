@@ -559,13 +559,6 @@ class FastApiBackendTests(unittest.TestCase):
         self.assertEqual(workouts.status_code, 200)
         self.assertEqual(workouts.json()["workouts"][0]["title"], "Fran")
 
-        whiteboard = self.client.post(
-            "/programming/whiteboard-results",
-            headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "time", "score_value": "5:55", "notes_text": "Felt good"},
-        )
-        self.assertEqual(whiteboard.status_code, 200)
-
         log_entry = self.client.post(
             "/logbook/entries",
             headers=athlete_headers,

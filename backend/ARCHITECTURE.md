@@ -124,7 +124,7 @@ Announcements, comments, permissions, and announcement-activity notifications.
 Community chat message payloads.
 
 ### `workout_service.py`
-Workout/logbook/whiteboard payload shaping and PR-related workout helpers.
+Workout/logbook payload shaping and PR-related workout helpers.
 
 ### `programming_service.py`
 Daily WODs (one per gym and day), programming and admin-analytics helpers.
@@ -152,7 +152,7 @@ Avoid:
 ## Demo data
 
 `seed_demo.py` builds a complete demo box (members, weekly classes with bookings, WODs,
-whiteboard results, community content) for local development:
+community content) for local development:
 
 ```bash
 docker compose exec backend-dev python -m backend.seed_demo

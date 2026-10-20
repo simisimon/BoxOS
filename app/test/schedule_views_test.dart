@@ -148,8 +148,8 @@ class _FakeScheduleRepository implements ScheduleRepository {
 }
 
 class _FakeProgrammingRepository implements ProgrammingRepository {
-  // Today's WOD, so the week view renders a full workout card (whiteboard,
-  // log) and not only empty days.
+  // Today's WOD, so the week view renders a full workout card (log) and
+  // not only empty days.
   @override
   Future<List<DailyWorkout>> fetchWorkouts() async {
     final now = DateTime.now();
@@ -169,8 +169,6 @@ class _FakeProgrammingRepository implements ProgrammingRepository {
         status: DailyWorkoutStatus.published,
         publishedAt: now,
         canEdit: true,
-        whiteboardResults: const [],
-        myWhiteboardResult: null,
         myWorkoutLog: null,
       ),
     ];
@@ -249,7 +247,8 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('Whiteboard'), findsOneWidget);
+      expect(find.text('Log Results'), findsOneWidget);
+      expect(find.text('Whiteboard'), findsNothing);
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsNothing);

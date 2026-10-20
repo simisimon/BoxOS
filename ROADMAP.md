@@ -141,11 +141,10 @@ Bereits vorhanden:
 - Attendance Tracking
 - Booking-bezogene In-App-Notifications
 
-### 5.4 Programming, Whiteboard & Logging
+### 5.4 Programming & Logging
 Bereits vorhanden:
 - Daily WOD Creation / Edit
 - Programming Calendar
-- Whiteboard Submission
 - Workout Logging
 - Workout History
 - Basic PR Detection
@@ -198,7 +197,6 @@ Hinweis: Die Community-Ebene ist noch nicht vollständig als starke tägliche Ha
 - Schedule Listing
 - Booking / Cancellation / Waitlist
 - Programming Calendar
-- Whiteboard Viewing / Submission
 - Logbook-Flows
 - gym-bezogene Notifications
 
@@ -211,7 +209,6 @@ Hinweis: Die Community-Ebene ist noch nicht vollständig als starke tägliche Ha
 | Attendance erfassen | Nein | Ja | Ja |
 | Programming Calendar sehen | Ja | Ja | Ja |
 | Daily WODs erstellen/bearbeiten | Nein | Ja | Ja |
-| Whiteboard Result submitten | Ja | Ja | Ja |
 | Eigenes Workout loggen | Ja | Ja | Ja |
 | Eigenes Logbook sehen | Ja | Ja | Ja |
 | Join Request absenden | Ja | Ja | Ja |
@@ -265,12 +262,11 @@ Soll umfassen:
 - Payment State Visibility
 - Booking Restrictions auf Basis aktiver Entitlements
 
-### 7.5 Workout Programming & Whiteboard
+### 7.5 Workout Programming
 Soll umfassen:
 - Daily WOD Authoring
 - Programming Calendar
 - Track Variants, wo sinnvoll
-- Whiteboard- und Leaderboard-Workflows
 
 ### 7.6 Workout Logging & Performance
 Soll umfassen:
@@ -308,7 +304,7 @@ Soll umfassen:
   - Profile / Notification Preferences / Device Registration
   - Gym Creation / Discovery / Join Requests / Active Gym Switching
   - Schedule Booking / Waitlists / Attendance Tracking
-  - Programming Calendar / Digital Whiteboard
+  - Programming Calendar
   - Workout Logging / Workout History / Basic PR Detection
   - In-App WOD- und PR-Notifications
   - Role Switching
@@ -403,7 +399,6 @@ Offene Punkte:
 Vorhanden:
 - tägliche WOD-Erstellung und Bearbeitung
 - Programming Calendar
-- Whiteboard
 - Workout Log Submission
 
 Offene Punkte:
@@ -756,10 +751,9 @@ Exit-Kriterium:
 - Membership Restriction Messaging
 - stärkere Konfliktvermeidung
 
-### Programming / Whiteboard
+### Programming
 - Templates und strukturierte Abschnitte
 - bessere Score-Validation
-- Whiteboard-Filter / Sorting
 - Edit History / Audit Visibility
 - strukturierte Felder für Warm-up / Scaling / Stimulus / Intent
 - Publishing States und Multi-Day-Workflows
@@ -792,7 +786,6 @@ Exit-Kriterium:
 - Gym-Kontext
 - Scheduling / Booking / Waitlists / Attendance
 - Daily Programming
-- Whiteboard
 - Logging / Logbook
 - In-App Notifications
 - mobile UI-Basis
@@ -870,7 +863,7 @@ Mindestens für:
 2. Gym Creation
 3. Join Request Approval
 4. Class Creation / Booking / Waitlist / Attendance
-5. WOD Creation / Logging / Whiteboard
+5. WOD Creation / Logging
 6. Notifications
 7. Membership / Payment Flows nach Implementierung
 
@@ -941,7 +934,7 @@ Mindestens für:
 BoxOS erreicht das aktuelle Zielbild, wenn ein einzelnes Gym die Plattform **ohne Entwicklerintervention** produktiv einsetzen kann und dabei:
 - Admins Gyms, Mitglieder und Rollen sicher verwalten können
 - Klassen geplant, gebucht und attendance-seitig sauber betrieben werden können
-- WODs veröffentlicht, geloggt und am Whiteboard genutzt werden können
+- WODs veröffentlicht und geloggt werden können
 - Athleten sinnvolle Benachrichtigungen erhalten
 - Memberships und Zahlungen Buchungslogik steuern
 - Admins operative Kennzahlen, Revenue und Druckstellen sehen

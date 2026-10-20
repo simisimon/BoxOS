@@ -183,8 +183,8 @@ def seed(rng: random.Random | None = None) -> None:
             # --- Classes + bookings + attendance --------------------------
             _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today)
 
-            # --- Programming + whiteboard + athlete progress --------------
-            _seed_programming(conn, rng, gym_id, owner_id, member_ids, today)
+            # --- Programming + athlete progress --------------
+            _seed_programming(conn, gym_id, owner_id, today)
             _seed_demo_athlete(conn, rng, gym_id)
             _seed_community(conn, rng, gym_id, owner_id, member_ids)
 
@@ -298,7 +298,7 @@ def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today):
                     )
 
 
-def _seed_programming(conn, rng, gym_id, owner_id, member_ids, today):
+def _seed_programming(conn, gym_id, owner_id, today):
     sections = [
         ("Strength · Back Squat", "5·5·3·3·1 building to a heavy single.", "weight"),
         ("Metcon · Fran", "21-15-9 Thrusters (43/30kg) + Pull-ups. For time.", "time"),
@@ -320,16 +320,6 @@ def _seed_programming(conn, rng, gym_id, owner_id, member_ids, today):
                    values (?, ?, ?, ?, ?)""",
                 (wod_id, pos, title, desc, score),
             )
-        # Whiteboard results on today's WOD.
-        if offset == 0:
-            for uid in rng.sample(member_ids, min(14, len(member_ids))):
-                secs = rng.randint(168, 320)
-                conn.execute(
-                    """insert into whiteboard_results (daily_workout_id, gym_id, user_id, score_type,
-                         score_value, score_label, notes_text, created_at, updated_at)
-                       values (?, ?, ?, 'time', ?, ?, '', ?, ?)""",
-                    (wod_id, gym_id, uid, secs, f"{secs // 60}:{secs % 60:02d}", _ts(), _ts()),
-                )
 
 
 def _seed_demo_athlete(conn, rng, gym_id):

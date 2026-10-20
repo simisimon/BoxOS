@@ -77,8 +77,6 @@ class DailyWorkout {
     required this.status,
     required this.publishedAt,
     required this.canEdit,
-    required this.whiteboardResults,
-    required this.myWhiteboardResult,
     required this.myWorkoutLog,
   });
 
@@ -90,8 +88,6 @@ class DailyWorkout {
   final DailyWorkoutStatus status;
   final DateTime? publishedAt;
   final bool canEdit;
-  final List<WhiteboardResult> whiteboardResults;
-  final WhiteboardResult? myWhiteboardResult;
   final WorkoutLogEntrySummary? myWorkoutLog;
 
   bool get isPublished => status == DailyWorkoutStatus.published;
@@ -117,26 +113,4 @@ class WorkoutLogEntrySummary {
   final DateTime updatedAt;
   final bool isPr;
   final int? prRank;
-}
-
-class WhiteboardResult {
-  const WhiteboardResult({
-    required this.id,
-    required this.userId,
-    required this.athleteName,
-    required this.scoreType,
-    required this.scoreValue,
-    required this.scoreLabel,
-    required this.notesText,
-    required this.rank,
-  });
-
-  final int id;
-  final int userId;
-  final String athleteName;
-  final String scoreType;
-  final double scoreValue;
-  final String scoreLabel;
-  final String notesText;
-  final int rank;
 }

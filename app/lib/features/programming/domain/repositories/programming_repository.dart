@@ -48,11 +48,4 @@ abstract class ProgrammingRepository {
     required DateTime sourceDate,
     required DateTime targetDate,
   });
-
-  Future<DailyWorkout> submitWhiteboardResult({
-    required int workoutId,
-    required String scoreType,
-    required String scoreValue,
-    required String notesText,
-  });
 }
