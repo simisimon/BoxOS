@@ -1,4 +1,3 @@
-import 'package:app/features/admin_analytics/presentation/screens/admin_analytics_screen.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/application/auth_state.dart';
 import 'package:app/features/auth/presentation/screens/auth_loading_screen.dart';
@@ -181,11 +180,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'notification-settings',
         builder: (context, state) => const NotificationSettingsScreen(),
       ),
-      GoRoute(
-        path: '/admin-analytics',
-        name: 'admin-analytics',
-        builder: (context, state) => const AdminAnalyticsScreen(),
-      ),
+      // Full analytics now unfold inside the owner dashboard.
+      GoRoute(path: '/admin-analytics', redirect: (context, state) => '/home'),
       GoRoute(
         path: '/box-settings',
         name: 'box-settings',

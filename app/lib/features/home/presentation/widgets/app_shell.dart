@@ -23,6 +23,7 @@ class AuthenticatedScaffold extends StatelessWidget {
     required this.onRoleSelected,
     this.profileImageUrl = '',
     this.fullBleedBody = false,
+    this.branchBadges = const {},
   });
 
   /// The currently active shell branch (matches `navigationShell.currentIndex`).
@@ -48,6 +49,10 @@ class AuthenticatedScaffold extends StatelessWidget {
   /// clamped/centered to the readable content column — used by surfaces like
   /// the schedule calendar that should span the whole screen.
   final bool fullBleedBody;
+
+  /// Counter badges per shell branch index, e.g. open join requests on
+  /// Members. Missing or zero means no badge.
+  final Map<int, int> branchBadges;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +87,7 @@ class AuthenticatedScaffold extends StatelessWidget {
                 _ShellRail(
                   selectedBranchIndex: selectedBranchIndex,
                   destinations: destinations,
+                  badges: branchBadges,
                   onSelectBranch: onSelectBranch,
                 ),
               Expanded(
@@ -112,6 +118,7 @@ class AuthenticatedScaffold extends StatelessWidget {
           : _ShellFooter(
               selectedBranchIndex: selectedBranchIndex,
               destinations: destinations,
+              badges: branchBadges,
               onSelectBranch: onSelectBranch,
             ),
     );
@@ -342,11 +349,13 @@ class _ShellRail extends StatelessWidget {
   const _ShellRail({
     required this.selectedBranchIndex,
     required this.destinations,
+    required this.badges,
     required this.onSelectBranch,
   });
 
   final int selectedBranchIndex;
   final List<ShellDestination> destinations;
+  final Map<int, int> badges;
   final ValueChanged<int> onSelectBranch;
 
   @override
@@ -382,8 +391,14 @@ class _ShellRail extends StatelessWidget {
         destinations: [
           for (final dest in destinations)
             NavigationRailDestination(
-              icon: Icon(dest.icon),
-              selectedIcon: Icon(dest.activeIcon),
+              icon: _CountBadge(
+                count: badges[dest.branchIndex] ?? 0,
+                child: Icon(dest.icon),
+              ),
+              selectedIcon: _CountBadge(
+                count: badges[dest.branchIndex] ?? 0,
+                child: Icon(dest.activeIcon),
+              ),
               label: Text(dest.label),
             ),
         ],
@@ -396,11 +411,13 @@ class _ShellFooter extends StatelessWidget {
   const _ShellFooter({
     required this.selectedBranchIndex,
     required this.destinations,
+    required this.badges,
     required this.onSelectBranch,
   });
 
   final int selectedBranchIndex;
   final List<ShellDestination> destinations;
+  final Map<int, int> badges;
   final ValueChanged<int> onSelectBranch;
 
   @override
@@ -427,6 +444,7 @@ class _ShellFooter extends StatelessWidget {
                       icon: dest.icon,
                       activeIcon: dest.activeIcon,
                       label: dest.label,
+                      badge: badges[dest.branchIndex] ?? 0,
                       selected: dest.branchIndex == selectedBranchIndex,
                       onTap: () => onSelectBranch(dest.branchIndex),
                     ),
@@ -445,6 +463,7 @@ class _FooterDest extends StatelessWidget {
     required this.icon,
     required this.activeIcon,
     required this.label,
+    required this.badge,
     required this.selected,
     required this.onTap,
   });
@@ -452,6 +471,7 @@ class _FooterDest extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
+  final int badge;
   final bool selected;
   final VoidCallback onTap;
 
@@ -483,10 +503,13 @@ class _FooterDest extends StatelessWidget {
                       color: selected ? appPrimaryHairline : Colors.transparent,
                     ),
                   ),
-                  child: Icon(
-                    selected ? activeIcon : icon,
-                    color: selected ? appPrimary : color,
-                    size: 22,
+                  child: _CountBadge(
+                    count: badge,
+                    child: Icon(
+                      selected ? activeIcon : icon,
+                      color: selected ? appPrimary : color,
+                      size: 22,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -504,6 +527,25 @@ class _FooterDest extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Red counter on a tab icon, like unread mail on a phone home screen.
+class _CountBadge extends StatelessWidget {
+  const _CountBadge({required this.count, required this.child});
+
+  final int count;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Badge(
+      isLabelVisible: count > 0,
+      backgroundColor: appDanger,
+      textColor: Colors.white,
+      label: Text(count > 99 ? '99+' : '$count'),
+      child: child,
     );
   }
 }

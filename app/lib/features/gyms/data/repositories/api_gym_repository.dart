@@ -17,6 +17,14 @@ final gymRepositoryProvider = Provider<GymRepository>((ref) {
   return ApiGymRepository(dio: dio, tokenStorage: tokenStorage);
 });
 
+/// Open join requests of the active gym (owners only). The shell shows the
+/// count as a badge on the Members tab; the Members screen invalidates this
+/// after each review so the badge follows.
+final pendingJoinRequestsProvider =
+    FutureProvider.autoDispose<List<GymJoinRequest>>(
+      (ref) => ref.read(gymRepositoryProvider).fetchJoinRequests(),
+    );
+
 class ApiGymRepository implements GymRepository {
   ApiGymRepository({required Dio dio, required TokenStorage tokenStorage})
     : _dio = dio,

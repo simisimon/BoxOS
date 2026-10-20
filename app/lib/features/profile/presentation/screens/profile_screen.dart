@@ -142,17 +142,8 @@ class ProfileScreen extends ConsumerWidget {
                 eyebrow: 'Owner',
                 title: 'Operate the gym',
                 subtitle:
-                    'Analytics here; member management and join-request review live in the Members tab.',
+                    'Analytics live on the Dashboard; member management and join-request review live in the Members tab.',
                 children: [
-                  _SecondaryActionTile(
-                    icon: Icons.insights_outlined,
-                    title: 'Admin Analytics',
-                    subtitle:
-                        'Read attendance, utilization, and pressure at a glance.',
-                    enabled: !isLoading,
-                    onTap: () => context.go('/admin-analytics'),
-                  ),
-                  const SizedBox(height: 12),
                   _SecondaryActionTile(
                     icon: Icons.tune_rounded,
                     title: 'Box Settings',

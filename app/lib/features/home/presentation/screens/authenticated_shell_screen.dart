@@ -1,3 +1,4 @@
+import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/home/presentation/widgets/app_shell.dart';
 import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -26,6 +27,14 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       role: profile?.role,
     );
 
+    // Only roles with a Members tab (owners) may read join requests.
+    final hasMembersTab = destinations.any(
+      (destination) => destination.branchIndex == kMembersBranch,
+    );
+    final openJoinRequests = hasMembersTab
+        ? ref.watch(pendingJoinRequestsProvider).value?.length ?? 0
+        : 0;
+
     // Only the schedule week (My Box) spans the full width; every other view,
     // the owner dashboard included, sits in the same clamped content column.
     final fullBleed = navigationShell.currentIndex == kMyBoxBranch;
@@ -39,6 +48,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       unreadNotifications: unreadNotifications,
       profileImageUrl: profile?.profileImageUrl ?? '',
       fullBleedBody: fullBleed,
+      branchBadges: {kMembersBranch: openJoinRequests},
       body: navigationShell,
       onSelectBranch: (branchIndex) => navigationShell.goBranch(
         branchIndex,

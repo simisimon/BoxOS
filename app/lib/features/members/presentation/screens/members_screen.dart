@@ -48,6 +48,8 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         profileRepo.fetchRoleManagedUsers(),
       ]);
       if (!mounted) return;
+      // Keep the Members tab badge in step with what this screen shows.
+      ref.invalidate(pendingJoinRequestsProvider);
       setState(() {
         _requests = results[0] as List<GymJoinRequest>;
         _users = results[1] as List<RoleManagedUser>;
@@ -73,6 +75,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
           .read(gymRepositoryProvider)
           .reviewJoinRequest(requestId: request.id, approve: approve);
       if (!mounted) return;
+      ref.invalidate(pendingJoinRequestsProvider);
       // Drop the handled request immediately; refresh the roster so an
       // approved athlete shows up as a member without a manual reload.
       setState(() {

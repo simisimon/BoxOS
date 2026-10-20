@@ -1,92 +1,33 @@
 import 'package:app/core/presentation/app_chrome.dart';
-import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'dart:ui';
 
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
-import 'package:app/features/profile/application/profile_controller.dart';
-import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-class AdminAnalyticsScreen extends ConsumerWidget {
-  const AdminAnalyticsScreen({super.key});
+/// Full analytics, folded into the owner dashboard. The review window is the
+/// dashboard's 7/14/30 selector, so there is no window control here.
+class AdminAnalyticsDetails extends ConsumerWidget {
+  const AdminAnalyticsDetails({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profileAsync = ref.watch(currentProfileProvider);
-    final selectedWindowDays = ref.watch(adminAnalyticsWindowDaysProvider);
-    final analyticsAsync = ref.watch(adminAnalyticsOverviewProvider);
-    final profile = profileAsync.hasValue ? profileAsync.value : null;
-    final hasAccess =
-        profile?.role == UserRole.admin && profile?.activeGym != null;
-
-    return AppMobileScaffold(
-      title: 'Read the floor fast',
-      eyebrow: 'Analytics',
-      onBack: () => context.go('/profile'),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          appSpaceLg,
-          appSpaceLg,
-          appSpaceLg,
-          appSpace2xl,
-        ),
-        children: [
-          const _HeaderSubtitle(
-            text:
-                'Attendance, utilization, and operational pressure in one quick scan.',
-          ),
-          const SizedBox(height: appSpaceLg),
-          if (!hasAccess)
-            const _BlockedState()
-          else
-            analyticsAsync.when(
-              data: (overview) => _OverviewContent(
-                overview: overview,
-                selectedWindowDays: selectedWindowDays,
-                onWindowChanged: (windowDays) => ref
-                    .read(adminAnalyticsWindowDaysProvider.notifier)
-                    .setWindowDays(windowDays),
-              ),
-              loading: () => const _LoadingState(),
-              error: (error, _) => _ErrorState(message: error.toString()),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderSubtitle extends StatelessWidget {
-  const _HeaderSubtitle({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: appMutedText,
-            height: 1.45,
-          ),
-    );
+    return ref
+        .watch(adminAnalyticsOverviewProvider)
+        .when(
+          data: (overview) => _OverviewContent(overview: overview),
+          loading: () => const _LoadingState(),
+          error: (error, _) => _ErrorState(message: error.toString()),
+        );
   }
 }
 
 class _OverviewContent extends StatelessWidget {
-  const _OverviewContent({
-    required this.overview,
-    required this.selectedWindowDays,
-    required this.onWindowChanged,
-  });
+  const _OverviewContent({required this.overview});
 
   final AdminAnalyticsOverview overview;
-  final int selectedWindowDays;
-  final ValueChanged<int> onWindowChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -121,22 +62,6 @@ class _OverviewContent extends StatelessWidget {
           maxColumns: 2,
           spacing: 16,
           children: [
-            _Panel(
-          eyebrow: 'Window control',
-          title: 'Choose the review horizon',
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final windowDays in const [7, 14, 30])
-                _WindowChip(
-                  label: '${windowDays}D',
-                  selected: selectedWindowDays == windowDays,
-                  onTap: () => onWindowChanged(windowDays),
-                ),
-            ],
-          ),
-        ),
             _Panel(
           eyebrow: 'Membership health',
           title: 'Who is joining and what mix is forming',
@@ -557,45 +482,6 @@ class _RecentMemberRow extends StatelessWidget {
   }
 }
 
-class _WindowChip extends StatelessWidget {
-  const _WindowChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? appPrimary.withOpacity(0.16) : appSurfaceAlt,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: selected ? appPrimary : appBorder),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected ? appPrimary : Colors.white,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.0,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DailyRow extends StatelessWidget {
   const _DailyRow({required this.day});
 
@@ -755,22 +641,6 @@ class _ProblemClassRow extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _BlockedState extends StatelessWidget {
-  const _BlockedState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _Panel(
-      eyebrow: 'Access locked',
-      title: 'Admin gym context required',
-      child: Text(
-        'You need an active admin gym to view analytics.',
-        style: TextStyle(color: Colors.white70, height: 1.5),
-      ),
     );
   }
 }

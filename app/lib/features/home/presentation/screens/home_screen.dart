@@ -1,12 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:app/core/errors/error_message.dart';
+import 'package:app/features/admin_analytics/presentation/widgets/admin_analytics_details.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
-import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
-import 'package:app/features/gyms/domain/models/gym_join_request.dart';
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
@@ -36,10 +34,6 @@ const _perfGreen = Color(0xFF3DDC97);
 // Pending join requests for the owner dashboard's inline-approve strip. Kept
 // auto-disposing so it re-fetches whenever the owner returns to /home, and is
 // invalidated after each approve/reject so the strip stays in sync.
-final _dashboardJoinRequestsProvider =
-    FutureProvider.autoDispose<List<GymJoinRequest>>((ref) async {
-      return ref.read(gymRepositoryProvider).fetchJoinRequests();
-    });
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -1055,7 +1049,6 @@ class _OwnerDashboardContent extends ConsumerWidget {
               onWindowSelected: (value) => ref
                   .read(adminAnalyticsWindowDaysProvider.notifier)
                   .setWindowDays(value),
-              onFullAnalytics: () => context.go('/admin-analytics'),
             ),
             const SizedBox(height: appSpaceXl),
             _KpiGrid(tiles: tiles, columns: wide ? 3 : 2),
@@ -1077,7 +1070,7 @@ class _OwnerDashboardContent extends ConsumerWidget {
               ],
             ],
             const SizedBox(height: appSpaceMd),
-            const _JoinRequestsCard(),
+            _FullAnalyticsCard(windowDays: window),
           ],
         );
       },
@@ -1086,18 +1079,16 @@ class _OwnerDashboardContent extends ConsumerWidget {
 }
 
 /// Dashboard title bar: OPERATIONS eyebrow + "Box Dashboard" display title on
-/// the left, review-window selector + "Full analytics →" on the right. Wraps
-/// the controls beneath the title on narrow widths.
+/// the left, review-window selector on the right. Wraps the selector beneath
+/// the title on narrow widths.
 class _WindowBar extends StatelessWidget {
   const _WindowBar({
     required this.selectedWindow,
     required this.onWindowSelected,
-    required this.onFullAnalytics,
   });
 
   final int selectedWindow;
   final ValueChanged<int> onWindowSelected;
-  final VoidCallback onFullAnalytics;
 
   @override
   Widget build(BuildContext context) {
@@ -1124,17 +1115,7 @@ class _WindowBar extends StatelessWidget {
             ),
           ],
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _WindowSelector(
-              selected: selectedWindow,
-              onSelected: onWindowSelected,
-            ),
-            const SizedBox(width: appSpaceMd),
-            _FullAnalyticsButton(onTap: onFullAnalytics),
-          ],
-        ),
+        _WindowSelector(selected: selectedWindow, onSelected: onWindowSelected),
       ],
     );
   }
@@ -1187,52 +1168,62 @@ class _WindowSelector extends StatelessWidget {
   }
 }
 
-class _FullAnalyticsButton extends StatelessWidget {
-  const _FullAnalyticsButton({required this.onTap});
+/// Full analytics, folded at the bottom of the dashboard; tapping the header
+/// unfolds them in place. Uses the same review window as the KPIs above.
+class _FullAnalyticsCard extends StatefulWidget {
+  const _FullAnalyticsCard({required this.windowDays});
 
-  final VoidCallback onTap;
+  final int windowDays;
+
+  @override
+  State<_FullAnalyticsCard> createState() => _FullAnalyticsCardState();
+}
+
+class _FullAnalyticsCardState extends State<_FullAnalyticsCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    // Cut-corner CTA (angled bottom-right) with a cyan glow — the wireframe's
-    // primary dashboard button silhouette.
-    final shape = appButtonShape(cut: 13);
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: shape,
-        shadows: [
-          BoxShadow(color: appPrimary.withValues(alpha: 0.45), blurRadius: 20),
-        ],
-      ),
-      child: Material(
-        color: appPrimary,
-        shape: shape,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Full analytics',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
-                  ),
+    return Container(
+      decoration: appPanelDecoration(radius: appRadiusMd),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 16,
                 ),
-                SizedBox(width: 7),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 15,
-                  color: Colors.white,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'FULL ANALYTICS · ${widget.windowDays}D',
+                        style: appMono(fontSize: 10, letterSpacing: 1.4),
+                      ),
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: appSubtleText,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          if (_expanded)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 0, 18, 18),
+              child: AdminAnalyticsDetails(),
+            ),
+        ],
       ),
     );
   }
@@ -1589,206 +1580,6 @@ class _PressureClassRow extends StatelessWidget {
         const SizedBox(width: appSpaceMd),
         AppPill(label: pill, intent: intent, dense: true),
       ],
-    );
-  }
-}
-
-/// Inline join-request approvals. Reads the pending queue, lets the owner
-/// approve/reject without leaving /home, and refreshes the dashboard counts.
-class _JoinRequestsCard extends ConsumerStatefulWidget {
-  const _JoinRequestsCard();
-
-  @override
-  ConsumerState<_JoinRequestsCard> createState() => _JoinRequestsCardState();
-}
-
-class _JoinRequestsCardState extends ConsumerState<_JoinRequestsCard> {
-  int? _pendingId;
-
-  Future<void> _review(GymJoinRequest request, bool approve) async {
-    setState(() => _pendingId = request.id);
-    try {
-      await ref
-          .read(gymRepositoryProvider)
-          .reviewJoinRequest(requestId: request.id, approve: approve);
-      if (!mounted) return;
-      ref.invalidate(_dashboardJoinRequestsProvider);
-      ref.invalidate(adminAnalyticsOverviewProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve
-                ? 'Approved ${request.email}.'
-                : 'Rejected ${request.email}.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessageFrom(error, fallback: 'Review failed')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _pendingId = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final requestsAsync = ref.watch(_dashboardJoinRequestsProvider);
-    final requests = requestsAsync.value ?? const <GymJoinRequest>[];
-    if (requests.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: appPanelDecoration(radius: appRadiusMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'JOIN REQUESTS · INLINE APPROVE',
-                style: appMono(fontSize: 10, letterSpacing: 1.4),
-              ),
-              const Spacer(),
-              AppPill(
-                label: '${requests.length} pending',
-                intent: AppPillIntent.warning,
-                dense: true,
-              ),
-            ],
-          ),
-          const SizedBox(height: appSpaceLg),
-          for (var i = 0; i < requests.length; i++) ...[
-            if (i > 0) const SizedBox(height: appSpaceSm),
-            _JoinRequestRow(
-              request: requests[i],
-              busy: _pendingId == requests[i].id,
-              onApprove: () => _review(requests[i], true),
-              onReject: () => _review(requests[i], false),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _JoinRequestRow extends StatelessWidget {
-  const _JoinRequestRow({
-    required this.request,
-    required this.busy,
-    required this.onApprove,
-    required this.onReject,
-  });
-
-  final GymJoinRequest request;
-  final bool busy;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = request.displayName.trim().isNotEmpty
-        ? request.displayName
-        : request.email;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      decoration: appInsetDecoration(),
-      child: Row(
-        children: [
-          AppAvatar(displayName: name, size: 34),
-          const SizedBox(width: appSpaceMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: appText,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  request.email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: appMono(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: appSpaceMd),
-          if (busy)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else ...[
-            _RequestActionButton(
-              icon: Icons.check_rounded,
-              filled: true,
-              onTap: onApprove,
-            ),
-            const SizedBox(width: 6),
-            _RequestActionButton(
-              icon: Icons.close_rounded,
-              filled: false,
-              onTap: onReject,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RequestActionButton extends StatelessWidget {
-  const _RequestActionButton({
-    required this.icon,
-    required this.filled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool filled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(appRadiusSm),
-        child: Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: filled ? _perfGreen : Colors.transparent,
-            borderRadius: BorderRadius.circular(appRadiusSm),
-            border: filled ? null : Border.all(color: appBorderStrong),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: filled ? appInverseText : appSubtleText,
-          ),
-        ),
-      ),
     );
   }
 }
