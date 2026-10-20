@@ -165,26 +165,14 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
 
   Future<void> _delete() async {
     final existing = widget.existing!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete class'),
-        content: Text(
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete class',
+      message:
           'Remove ${existing.title} from the week plan? Upcoming dates nobody '
           'has booked are removed too; booked dates stay on the calendar.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: appDanger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (confirmed != true || !mounted) {
       return;

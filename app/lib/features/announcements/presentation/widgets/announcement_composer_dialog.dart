@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
@@ -167,147 +168,8 @@ class _AnnouncementComposerDialogState
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Dialogs keep their own readable max width independent of the responsive
-    // page content width (see core/presentation/responsive/breakpoints.dart).
-    final dialogWidth = (screenWidth - 32).clamp(100.0, 480.0);
-
-    return AlertDialog(
-      backgroundColor: appSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: appBorder),
-      ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      title: Text(
-        _isEditing ? 'Edit Announcement' : 'Create Announcement',
-        style: const TextStyle(color: appText),
-      ),
-      content: SizedBox(
-        width: dialogWidth,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(appRadiusLg),
-                    color: appSurfaceAlt,
-                    border: Border.all(color: appBorder),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Add a gallery image',
-                        style: TextStyle(
-                          color: appText,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Pick a photo from your phone. It will upload and attach automatically.',
-                        style: TextStyle(color: appMutedText, height: 1.4),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_selectedImageBytes != null) ...[
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Image.memory(
-                              _selectedImageBytes!,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: _isUploadingImage
-                                ? null
-                                : _pickImageFromGallery,
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size(0, 44),
-                            ),
-                            icon: _isUploadingImage
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.photo_library_outlined),
-                            label: Text(
-                              _isUploadingImage
-                                  ? 'Uploading...'
-                                  : 'Choose from gallery',
-                            ),
-                          ),
-                          if (_imageUrlController.text.trim().isNotEmpty)
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _imageUrlController.clear();
-                                  _selectedImageBytes = null;
-                                });
-                              },
-                              child: const Text('Remove image'),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _titleController,
-                  style: const TextStyle(color: appText),
-                  decoration: const InputDecoration(
-                    labelText: 'Title',
-                    hintText: 'Saturday schedule update',
-                  ),
-                  validator: (value) {
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Title is required';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _descriptionController,
-                  minLines: 4,
-                  maxLines: 7,
-                  style: const TextStyle(color: appText),
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Write the actual update athletes should read.',
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (value) {
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Description is required';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return AppFormDialog(
+      title: _isEditing ? 'Edit Announcement' : 'Create Announcement',
       actions: [
         TextButton(
           onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
@@ -322,6 +184,128 @@ class _AnnouncementComposerDialogState
           ),
         ),
       ],
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(appRadiusLg),
+                  color: appSurfaceAlt,
+                  border: Border.all(color: appBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Add a gallery image',
+                      style: TextStyle(
+                        color: appText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Pick a photo from your phone. It will upload and attach automatically.',
+                      style: TextStyle(color: appMutedText, height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_selectedImageBytes != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Image.memory(
+                            _selectedImageBytes!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: _isUploadingImage
+                              ? null
+                              : _pickImageFromGallery,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 44),
+                          ),
+                          icon: _isUploadingImage
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.photo_library_outlined),
+                          label: Text(
+                            _isUploadingImage
+                                ? 'Uploading...'
+                                : 'Choose from gallery',
+                          ),
+                        ),
+                        if (_imageUrlController.text.trim().isNotEmpty)
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _imageUrlController.clear();
+                                _selectedImageBytes = null;
+                              });
+                            },
+                            child: const Text('Remove image'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _titleController,
+                style: const TextStyle(color: appText),
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  hintText: 'Saturday schedule update',
+                ),
+                validator: (value) {
+                  if ((value ?? '').trim().isEmpty) {
+                    return 'Title is required';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _descriptionController,
+                minLines: 4,
+                maxLines: 7,
+                style: const TextStyle(color: appText),
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Write the actual update athletes should read.',
+                  alignLabelWithHint: true,
+                ),
+                validator: (value) {
+                  if ((value ?? '').trim().isEmpty) {
+                    return 'Description is required';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

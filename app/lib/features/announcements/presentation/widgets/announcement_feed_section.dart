@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
@@ -73,34 +74,12 @@ class _AnnouncementFeedSectionState
   }
 
   Future<void> _deleteAnnouncement(Announcement announcement) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: appSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: appBorder),
-        ),
-        title: const Text(
-          'Delete announcement',
-          style: TextStyle(color: appText),
-        ),
-        content: Text(
-          'Delete "${announcement.title}"? This can’t be undone.',
-          style: const TextStyle(color: appMutedText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: appDanger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete announcement',
+      message: 'Delete "${announcement.title}"? This can’t be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (confirmed != true) {
       return;

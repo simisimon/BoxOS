@@ -70,22 +70,12 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     if (!mounted) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Class'),
-        content: Text('Delete ${item.title} on this schedule?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete Class',
+      message: 'Delete ${item.title} on this schedule?',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (confirmed != true) {
       return;
@@ -1504,18 +1494,30 @@ Future<_SeriesScope?> _askSeriesScope(
 }) {
   return showDialog<_SeriesScope>(
     context: context,
-    builder: (dialogContext) => SimpleDialog(
-      title: Text('$action weekly class'),
-      children: [
-        SimpleDialogOption(
+    builder: (dialogContext) => AppFormDialog(
+      title: '$action weekly class',
+      fitContent: true,
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Cancel'),
+        ),
+        OutlinedButton(
           onPressed: () => Navigator.of(dialogContext).pop(_SeriesScope.single),
           child: const Text('Only this date'),
         ),
-        SimpleDialogOption(
+        FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(_SeriesScope.series),
           child: const Text('All upcoming dates'),
         ),
       ],
+      child: Text(
+        'This class repeats every week. Apply the change to this date only '
+        'or to all upcoming dates?',
+        style: Theme.of(
+          dialogContext,
+        ).textTheme.bodyMedium?.copyWith(color: appText, height: 1.45),
+      ),
     ),
   );
 }

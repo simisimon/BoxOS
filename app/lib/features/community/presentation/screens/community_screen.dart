@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
@@ -185,24 +186,13 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   Future<void> _deleteMessage(ChatMessage message) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete message?'),
-        content: const Text(
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete message?',
+      message:
           'The message will be removed for everyone. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (confirmed != true) return;
     try {

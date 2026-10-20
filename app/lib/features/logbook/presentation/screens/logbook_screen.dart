@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/logbook/data/repositories/api_benchmark_repository.dart';
@@ -92,27 +93,12 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
   }
 
   Future<void> _deleteWorkout(PersonalWorkout workout) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: appSurface,
-        title: const Text('Delete workout', style: TextStyle(color: appText)),
-        content: Text(
-          'Delete "${workout.title}"? This can’t be undone.',
-          style: const TextStyle(color: appMutedText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: appDanger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete workout',
+      message: 'Delete "${workout.title}"? This can’t be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (confirmed != true) {
       return;
@@ -455,11 +441,7 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
             ],
           ),
           const SizedBox(height: 12),
-          _ReactionRow(
-            entry: entry,
-            busy: _busy,
-            onToggle: _toggleReaction,
-          ),
+          _ReactionRow(entry: entry, busy: _busy, onToggle: _toggleReaction),
         ],
       ),
     );
@@ -543,9 +525,7 @@ class _ReactionChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? appPrimarySoft : appSurfaceAlt,
             borderRadius: BorderRadius.circular(appRadiusPill),
-            border: Border.all(
-              color: active ? appPrimaryHairline : appBorder,
-            ),
+            border: Border.all(color: active ? appPrimaryHairline : appBorder),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -852,7 +832,6 @@ class _TypeActionCard extends StatelessWidget {
   }
 }
 
-
 class _TypeBadge extends StatelessWidget {
   const _TypeBadge({required this.type});
 
@@ -891,10 +870,7 @@ class _PersonalWorkoutCard extends StatelessWidget {
     if (workout.type == WorkoutType.crossfit) {
       final count = workout.movements.length;
       final format = _crossfitFormatLabel(workout.format);
-      return [
-        ?format,
-        '$count movement${count == 1 ? '' : 's'}',
-      ].join(' · ');
+      return [?format, '$count movement${count == 1 ? '' : 's'}'].join(' · ');
     }
     final count = workout.exercises.length;
     return '$count exercise${count == 1 ? '' : 's'}';
@@ -954,7 +930,10 @@ class _PersonalWorkoutCard extends StatelessWidget {
           ),
           IconButton(
             onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline_rounded, color: appSubtleText),
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              color: appSubtleText,
+            ),
             tooltip: 'Delete',
           ),
         ],
@@ -1057,8 +1036,7 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
       if (scoreType != null && _scoreTypes.containsKey(scoreType)) {
         _scoreType = scoreType;
       }
-      _timeCapController.text =
-          structure['time_cap_minutes']?.toString() ?? '';
+      _timeCapController.text = structure['time_cap_minutes']?.toString() ?? '';
       _roundsController.text = structure['rounds']?.toString() ?? '';
       for (final movement in _movements) {
         movement.dispose();
@@ -1120,160 +1098,8 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: appSurface,
-      title: const Text('New CrossFit workout', style: TextStyle(color: appText)),
-      content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _loadBenchmark,
-                icon: const Icon(Icons.bookmark_outline_rounded),
-                label: const Text('Load a benchmark WOD'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Workout name'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _format,
-                      decoration: const InputDecoration(labelText: 'Format'),
-                      items: [
-                        for (final entry in _formats.entries)
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _format = value);
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _scoreType,
-                      decoration: const InputDecoration(labelText: 'Score'),
-                      items: [
-                        for (final entry in _scoreTypes.entries)
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _scoreType = value);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _timeCapController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Time cap (min)',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _roundsController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Rounds'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Movements',
-                  style: TextStyle(color: appText, fontWeight: FontWeight.w800),
-                ),
-              ),
-              const SizedBox(height: 8),
-              for (var i = 0; i < _movements.length; i++) ...[
-                _BuilderItemCard(
-                  onRemove: _movements.length == 1
-                      ? null
-                      : () => setState(() => _movements.removeAt(i).dispose()),
-                  children: [
-                    TextField(
-                      controller: _movements[i].name,
-                      decoration: InputDecoration(
-                        labelText: 'Movement',
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          tooltip: 'Search exercises',
-                          onPressed: () =>
-                              _pickExerciseInto(context, _movements[i].name),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _movements[i].reps,
-                            decoration: const InputDecoration(
-                              labelText: 'Reps',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _movements[i].weight,
-                            decoration: const InputDecoration(
-                              labelText: 'Weight',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () =>
-                      setState(() => _movements.add(_MovementControllers())),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add movement'),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: appDanger)),
-              ],
-            ],
-          ),
-        ),
-      ),
+    return AppFormDialog(
+      title: 'New CrossFit workout',
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -1281,6 +1107,152 @@ class _CrossfitBuilderDialogState extends State<_CrossfitBuilderDialog> {
         ),
         FilledButton(onPressed: _save, child: const Text('Save')),
       ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _loadBenchmark,
+              icon: const Icon(Icons.bookmark_outline_rounded),
+              label: const Text('Load a benchmark WOD'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Workout name'),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _format,
+                    decoration: const InputDecoration(labelText: 'Format'),
+                    items: [
+                      for (final entry in _formats.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _format = value);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _scoreType,
+                    decoration: const InputDecoration(labelText: 'Score'),
+                    items: [
+                      for (final entry in _scoreTypes.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _scoreType = value);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _timeCapController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Time cap (min)',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _roundsController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Rounds'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Movements',
+                style: TextStyle(color: appText, fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < _movements.length; i++) ...[
+              _BuilderItemCard(
+                onRemove: _movements.length == 1
+                    ? null
+                    : () => setState(() => _movements.removeAt(i).dispose()),
+                children: [
+                  TextField(
+                    controller: _movements[i].name,
+                    decoration: InputDecoration(
+                      labelText: 'Movement',
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        tooltip: 'Search exercises',
+                        onPressed: () =>
+                            _pickExerciseInto(context, _movements[i].name),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _movements[i].reps,
+                          decoration: const InputDecoration(labelText: 'Reps'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _movements[i].weight,
+                          decoration: const InputDecoration(
+                            labelText: 'Weight',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () =>
+                    setState(() => _movements.add(_MovementControllers())),
+                icon: const Icon(Icons.add),
+                label: const Text('Add movement'),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(color: appDanger)),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1329,107 +1301,15 @@ class _FitnessBuilderDialogState extends State<_FitnessBuilderDialog> {
       setState(() => _error = 'Add at least one exercise.');
       return;
     }
-    Navigator.of(context).pop(
-      _WorkoutDraft(
-        title: title,
-        structure: {'exercises': exercises},
-      ),
-    );
+    Navigator.of(
+      context,
+    ).pop(_WorkoutDraft(title: title, structure: {'exercises': exercises}));
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: appSurface,
-      title: const Text('New Fitness workout', style: TextStyle(color: appText)),
-      content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Workout name'),
-              ),
-              const SizedBox(height: 16),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Exercises',
-                  style: TextStyle(color: appText, fontWeight: FontWeight.w800),
-                ),
-              ),
-              const SizedBox(height: 8),
-              for (var i = 0; i < _exercises.length; i++) ...[
-                _BuilderItemCard(
-                  onRemove: _exercises.length == 1
-                      ? null
-                      : () => setState(() => _exercises.removeAt(i).dispose()),
-                  children: [
-                    TextField(
-                      controller: _exercises[i].name,
-                      decoration: InputDecoration(
-                        labelText: 'Exercise',
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          tooltip: 'Search exercises',
-                          onPressed: () =>
-                              _pickExerciseInto(context, _exercises[i].name),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _exercises[i].sets,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Sets'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _exercises[i].reps,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Reps'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _exercises[i].weight,
-                            decoration: const InputDecoration(
-                              labelText: 'Weight',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () =>
-                      setState(() => _exercises.add(_ExerciseControllers())),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add exercise'),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: appDanger)),
-              ],
-            ],
-          ),
-        ),
-      ),
+    return AppFormDialog(
+      title: 'New Fitness workout',
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -1437,6 +1317,91 @@ class _FitnessBuilderDialogState extends State<_FitnessBuilderDialog> {
         ),
         FilledButton(onPressed: _save, child: const Text('Save')),
       ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Workout name'),
+            ),
+            const SizedBox(height: 16),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Exercises',
+                style: TextStyle(color: appText, fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < _exercises.length; i++) ...[
+              _BuilderItemCard(
+                onRemove: _exercises.length == 1
+                    ? null
+                    : () => setState(() => _exercises.removeAt(i).dispose()),
+                children: [
+                  TextField(
+                    controller: _exercises[i].name,
+                    decoration: InputDecoration(
+                      labelText: 'Exercise',
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        tooltip: 'Search exercises',
+                        onPressed: () =>
+                            _pickExerciseInto(context, _exercises[i].name),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _exercises[i].sets,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Sets'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _exercises[i].reps,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Reps'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _exercises[i].weight,
+                          decoration: const InputDecoration(
+                            labelText: 'Weight',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () =>
+                    setState(() => _exercises.add(_ExerciseControllers())),
+                icon: const Icon(Icons.add),
+                label: const Text('Add exercise'),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(color: appDanger)),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1541,7 +1506,9 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.8,
         child: Column(
@@ -1701,10 +1668,12 @@ class _BenchmarkPickerSheetState extends ConsumerState<_BenchmarkPickerSheet> {
                   );
                 }
                 final all = snapshot.data ?? const <BenchmarkWorkout>[];
-                final girls =
-                    all.where((item) => item.category == 'girl').toList();
-                final heroes =
-                    all.where((item) => item.category == 'hero').toList();
+                final girls = all
+                    .where((item) => item.category == 'girl')
+                    .toList();
+                final heroes = all
+                    .where((item) => item.category == 'hero')
+                    .toList();
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   children: [
@@ -1760,10 +1729,7 @@ class _BenchmarkTile extends StatelessWidget {
   String _summary() {
     final format = _crossfitFormatLabel(workout.structure['format'] as String?);
     final count = workout.movements.length;
-    return [
-      ?format,
-      '$count movement${count == 1 ? '' : 's'}',
-    ].join(' · ');
+    return [?format, '$count movement${count == 1 ? '' : 's'}'].join(' · ');
   }
 
   @override
@@ -1795,4 +1761,3 @@ class _BenchmarkTile extends StatelessWidget {
     );
   }
 }
-

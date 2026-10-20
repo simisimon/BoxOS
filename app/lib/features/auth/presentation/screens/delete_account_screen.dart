@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
@@ -38,26 +39,14 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete Account?'),
-          content: const Text(
-            'This will immediately remove your account access, anonymize your profile data, and schedule permanent deletion after 30 days.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete Account?',
+      message:
+          'This will immediately remove your account access, anonymize your '
+          'profile data, and schedule permanent deletion after 30 days.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
 
     if (confirmed != true || !mounted) {

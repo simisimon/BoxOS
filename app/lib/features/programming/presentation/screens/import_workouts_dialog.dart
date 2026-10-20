@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/presentation/screens/csv_file_picker.dart';
@@ -321,129 +322,8 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final outcome = _outcome;
-    return AlertDialog(
-      scrollable: true,
-      backgroundColor: appSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: appBorder),
-      ),
-      titlePadding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
-      contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Import WODs',
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: appText,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            icon: const Icon(Icons.close_rounded, color: appText),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Upload a .csv file or paste rows from a spreadsheet '
-              '(Google Sheets / Excel). Comma- and tab-separated are both '
-              'accepted. Required columns: date, title, section_1_description, '
-              'section_1_score. Optional: status (draft/published), additional '
-              'section_N_title / section_N_description / section_N_score '
-              '(N = 1..20, score = time, rounds_reps, or weight). The file is '
-              'checked before anything is imported.',
-              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _controller,
-              onChanged: _onChanged,
-              minLines: 5,
-              maxLines: 8,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12.5,
-                color: appText,
-              ),
-              decoration: const InputDecoration(
-                hintText:
-                    'date,title,section_1_description,section_1_score\n'
-                    '2026-06-22,Murph,"21-15-9 thrusters/pull-ups",time',
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  if (canUploadCsv)
-                    FilledButton.tonalIcon(
-                      onPressed: _uploadFile,
-                      icon: const Icon(Icons.upload_file_rounded, size: 18),
-                      label: const Text('Upload CSV file'),
-                    ),
-                  TextButton.icon(
-                    onPressed: _insertTemplate,
-                    icon: const Icon(Icons.playlist_add_rounded, size: 18),
-                    label: const Text('Insert example'),
-                  ),
-                  TextButton.icon(
-                    onPressed: () async {
-                      await Clipboard.setData(
-                        const ClipboardData(text: importTemplateCsv),
-                      );
-                      _showSnackBar('Template copied to clipboard.');
-                    },
-                    icon: const Icon(Icons.content_copy_rounded, size: 18),
-                    label: const Text('Copy template'),
-                  ),
-                ],
-              ),
-            ),
-            if (outcome?.headerError != null)
-              _MessageCard(
-                icon: Icons.error_outline_rounded,
-                color: appDanger,
-                message: outcome!.headerError!,
-              )
-            else if (outcome != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                '${outcome.validCount} ready to import'
-                '${outcome.invalidCount > 0 ? ' · ${outcome.invalidCount} with errors' : ''}',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              for (final row in outcome.rows) ...[
-                _RowTile(row: row),
-                const SizedBox(height: 6),
-              ],
-            ],
-            if (_serverErrors.isNotEmpty)
-              _MessageCard(
-                icon: Icons.error_outline_rounded,
-                color: appDanger,
-                message: _serverErrors
-                    .map((e) => 'Row ${e.row}: ${e.message}')
-                    .join('\n'),
-              ),
-          ],
-        ),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+    return AppFormDialog(
+      title: 'Import WODs',
       actions: [
         TextButton(
           onPressed: _importing ? null : () => Navigator.of(context).pop(false),
@@ -466,6 +346,99 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
                 ),
         ),
       ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Upload a .csv file or paste rows from a spreadsheet '
+            '(Google Sheets / Excel). Comma- and tab-separated are both '
+            'accepted. Required columns: date, title, section_1_description, '
+            'section_1_score. Optional: status (draft/published), additional '
+            'section_N_title / section_N_description / section_N_score '
+            '(N = 1..20, score = time, rounds_reps, or weight). The file is '
+            'checked before anything is imported.',
+            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            onChanged: _onChanged,
+            minLines: 5,
+            maxLines: 8,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12.5,
+              color: appText,
+            ),
+            decoration: const InputDecoration(
+              hintText:
+                  'date,title,section_1_description,section_1_score\n'
+                  '2026-06-22,Murph,"21-15-9 thrusters/pull-ups",time',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              children: [
+                if (canUploadCsv)
+                  FilledButton.tonalIcon(
+                    onPressed: _uploadFile,
+                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    label: const Text('Upload CSV file'),
+                  ),
+                TextButton.icon(
+                  onPressed: _insertTemplate,
+                  icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                  label: const Text('Insert example'),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      const ClipboardData(text: importTemplateCsv),
+                    );
+                    _showSnackBar('Template copied to clipboard.');
+                  },
+                  icon: const Icon(Icons.content_copy_rounded, size: 18),
+                  label: const Text('Copy template'),
+                ),
+              ],
+            ),
+          ),
+          if (outcome?.headerError != null)
+            _MessageCard(
+              icon: Icons.error_outline_rounded,
+              color: appDanger,
+              message: outcome!.headerError!,
+            )
+          else if (outcome != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${outcome.validCount} ready to import'
+              '${outcome.invalidCount > 0 ? ' · ${outcome.invalidCount} with errors' : ''}',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: appText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final row in outcome.rows) ...[
+              _RowTile(row: row),
+              const SizedBox(height: 6),
+            ],
+          ],
+          if (_serverErrors.isNotEmpty)
+            _MessageCard(
+              icon: Icons.error_outline_rounded,
+              color: appDanger,
+              message: _serverErrors
+                  .map((e) => 'Row ${e.row}: ${e.message}')
+                  .join('\n'),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
@@ -476,22 +477,9 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     final controller = TextEditingController(text: comment.body);
     final saved = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: appSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: appBorder),
-        ),
-        title: const Text('Edit comment', style: TextStyle(color: appText)),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          style: const TextStyle(color: appText),
-          decoration: const InputDecoration(
-            hintText: 'Update your comment',
-            hintStyle: TextStyle(color: appSubtleText),
-          ),
-        ),
+      builder: (context) => AppFormDialog(
+        title: 'Edit comment',
+        fitContent: true,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -502,6 +490,15 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
             child: const Text('Save'),
           ),
         ],
+        child: TextField(
+          controller: controller,
+          maxLines: 4,
+          style: const TextStyle(color: appText),
+          decoration: const InputDecoration(
+            hintText: 'Update your comment',
+            hintStyle: TextStyle(color: appSubtleText),
+          ),
+        ),
       ),
     );
     controller.dispose();

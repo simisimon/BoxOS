@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/tracking/data/repositories/api_tracking_repository.dart';
@@ -167,9 +168,9 @@ class _WorkoutTimerScreenState extends ConsumerState<WorkoutTimerScreen> {
       ),
     );
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Result saved.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Result saved.')));
       Navigator.of(context).pop(true);
     }
   }
@@ -203,8 +204,7 @@ class _WorkoutTimerScreenState extends ConsumerState<WorkoutTimerScreen> {
                   capMinutes: _capMinutes,
                   intervalSeconds: _intervalSeconds,
                   enabled: !_running && _elapsed == Duration.zero,
-                  onCapChanged: (value) =>
-                      setState(() => _capMinutes = value),
+                  onCapChanged: (value) => setState(() => _capMinutes = value),
                   onIntervalChanged: (value) =>
                       setState(() => _intervalSeconds = value),
                 ),
@@ -253,8 +253,7 @@ class _WorkoutTimerScreenState extends ConsumerState<WorkoutTimerScreen> {
       case TimerMode.amrap:
         return 'AMRAP $_capMinutes min';
       case TimerMode.emom:
-        final totalIntervals =
-            (_capMinutes * 60) ~/ _intervalSeconds;
+        final totalIntervals = (_capMinutes * 60) ~/ _intervalSeconds;
         final currentInterval = _elapsed.inSeconds ~/ _intervalSeconds + 1;
         final shown = currentInterval > totalIntervals
             ? totalIntervals
@@ -321,8 +320,7 @@ class _WorkoutSummaryCard extends StatelessWidget {
             const SizedBox(height: 14),
             for (var i = 0; i < workout.movements.length; i++) ...[
               _MovementRow(movement: workout.movements[i]),
-              if (i != workout.movements.length - 1)
-                const SizedBox(height: 8),
+              if (i != workout.movements.length - 1) const SizedBox(height: 8),
             ],
           ],
         ],
@@ -364,10 +362,7 @@ class _MovementRow extends StatelessWidget {
               if (movement.detail != null && movement.detail!.isNotEmpty)
                 Text(
                   movement.detail!,
-                  style: const TextStyle(
-                    color: appSubtleText,
-                    height: 1.35,
-                  ),
+                  style: const TextStyle(color: appSubtleText, height: 1.35),
                 ),
             ],
           ),
@@ -599,11 +594,7 @@ class _StepperButton extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: appBorder),
           ),
-          child: Icon(
-            icon,
-            color: enabled ? appText : appSubtleText,
-            size: 18,
-          ),
+          child: Icon(icon, color: enabled ? appText : appSubtleText, size: 18),
         ),
       ),
     );
@@ -630,9 +621,7 @@ class _TimerDisplay extends StatelessWidget {
       decoration: BoxDecoration(
         color: appSurface,
         borderRadius: BorderRadius.circular(appRadiusXl),
-        border: Border.all(
-          color: finished ? appPrimaryHairline : appBorder,
-        ),
+        border: Border.all(color: finished ? appPrimaryHairline : appBorder),
       ),
       child: Column(
         children: [
@@ -744,9 +733,7 @@ class _PrimaryTimerButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: disabled ? appSurfaceAlt : appPrimary,
             borderRadius: BorderRadius.circular(appRadiusLg),
-            border: Border.all(
-              color: disabled ? appBorder : appPrimary,
-            ),
+            border: Border.all(color: disabled ? appBorder : appPrimary),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -803,11 +790,7 @@ class _SecondaryTimerButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                color: disabled ? appSubtleText : appText,
-                size: 22,
-              ),
+              Icon(icon, color: disabled ? appSubtleText : appText, size: 22),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -917,7 +900,9 @@ class _SaveResultDialogState extends ConsumerState<_SaveResultDialog> {
       _error = null;
     });
     try {
-      await ref.read(trackingRepositoryProvider).saveSession(
+      await ref
+          .read(trackingRepositoryProvider)
+          .saveSession(
             source: widget.workout.source,
             sourceKey: widget.workout.sourceKey,
             workoutTitle: widget.workout.title,
@@ -949,57 +934,8 @@ class _SaveResultDialogState extends ConsumerState<_SaveResultDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: appSurface,
-      title: const Text('Save result', style: TextStyle(color: appText)),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DropdownButtonFormField<TrackingScoreType>(
-              initialValue: _scoreType,
-              decoration: const InputDecoration(labelText: 'Score type'),
-              items: [
-                for (final type in TrackingScoreType.values)
-                  DropdownMenuItem(value: type, child: Text(type.label)),
-              ],
-              onChanged: _saving
-                  ? null
-                  : (value) {
-                      if (value != null) setState(() => _scoreType = value);
-                    },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _valueController,
-              enabled: !_saving,
-              decoration: InputDecoration(
-                labelText: 'Score',
-                hintText: _valueHint(),
-              ),
-              keyboardType: _scoreType == TrackingScoreType.load
-                  ? const TextInputType.numberWithOptions(decimal: true)
-                  : TextInputType.text,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notesController,
-              enabled: !_saving,
-              maxLines: 3,
-              maxLength: 500,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 4),
-              Text(_error!, style: const TextStyle(color: appDanger)),
-            ],
-          ],
-        ),
-      ),
+    return AppFormDialog(
+      title: 'Save result',
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
@@ -1016,6 +952,49 @@ class _SaveResultDialogState extends ConsumerState<_SaveResultDialog> {
               : const Text('Save'),
         ),
       ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<TrackingScoreType>(
+            initialValue: _scoreType,
+            decoration: const InputDecoration(labelText: 'Score type'),
+            items: [
+              for (final type in TrackingScoreType.values)
+                DropdownMenuItem(value: type, child: Text(type.label)),
+            ],
+            onChanged: _saving
+                ? null
+                : (value) {
+                    if (value != null) setState(() => _scoreType = value);
+                  },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _valueController,
+            enabled: !_saving,
+            decoration: InputDecoration(
+              labelText: 'Score',
+              hintText: _valueHint(),
+            ),
+            keyboardType: _scoreType == TrackingScoreType.load
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : TextInputType.text,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notesController,
+            enabled: !_saving,
+            maxLines: 3,
+            maxLength: 500,
+            decoration: const InputDecoration(labelText: 'Notes (optional)'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 4),
+            Text(_error!, style: const TextStyle(color: appDanger)),
+          ],
+        ],
+      ),
     );
   }
 }

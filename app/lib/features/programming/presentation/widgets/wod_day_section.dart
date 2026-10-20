@@ -78,16 +78,16 @@ Future<void> showWodDetailsDialog(
 }) {
   return showDialog<void>(
     context: context,
-    builder: (dialogContext) => Dialog(
-      backgroundColor: appSurface,
-      insetPadding: const EdgeInsets.all(16),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: WodDaySection(date: date, canManage: canManage),
+    builder: (dialogContext) => AppFormDialog(
+      title: 'WOD',
+      subtitle: MaterialLocalizations.of(dialogContext).formatFullDate(date),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
         ),
-      ),
+      ],
+      child: WodDaySection(date: date, canManage: canManage),
     ),
   );
 }
@@ -1096,58 +1096,8 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Log Workout Result'),
-      content: SizedBox(
-        width: 420,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _scoreType,
-                  decoration: const InputDecoration(labelText: 'Score Type'),
-                  items: const [
-                    DropdownMenuItem(value: 'time', child: Text('For time')),
-                    DropdownMenuItem(value: 'reps', child: Text('Reps')),
-                    DropdownMenuItem(value: 'load', child: Text('Load')),
-                  ],
-                  onChanged: _isSaving
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            setState(() => _scoreType = value);
-                          }
-                        },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _scoreValueController,
-                  decoration: InputDecoration(
-                    labelText: _scoreType == 'time'
-                        ? 'Score (mm:ss or hh:mm:ss)'
-                        : _scoreType == 'reps'
-                        ? 'Score (reps)'
-                        : 'Score (load)',
-                  ),
-                  validator: (value) =>
-                      (value ?? '').trim().isEmpty ? 'Enter a score' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _notesController,
-                  decoration: const InputDecoration(labelText: 'Notes'),
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return AppFormDialog(
+      title: 'Log Workout Result',
       actions: [
         TextButton(
           onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
@@ -1164,6 +1114,53 @@ class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
               : const Text('Save'),
         ),
       ],
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: _scoreType,
+                decoration: const InputDecoration(labelText: 'Score Type'),
+                items: const [
+                  DropdownMenuItem(value: 'time', child: Text('For time')),
+                  DropdownMenuItem(value: 'reps', child: Text('Reps')),
+                  DropdownMenuItem(value: 'load', child: Text('Load')),
+                ],
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          setState(() => _scoreType = value);
+                        }
+                      },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _scoreValueController,
+                decoration: InputDecoration(
+                  labelText: _scoreType == 'time'
+                      ? 'Score (mm:ss or hh:mm:ss)'
+                      : _scoreType == 'reps'
+                      ? 'Score (reps)'
+                      : 'Score (load)',
+                ),
+                validator: (value) =>
+                    (value ?? '').trim().isEmpty ? 'Enter a score' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(labelText: 'Notes'),
+                minLines: 2,
+                maxLines: 4,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
