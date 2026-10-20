@@ -92,8 +92,8 @@ class AuthenticatedScaffold extends StatelessWidget {
                           final maxWidth = context.contentMaxWidth;
                           final horizontalPadding =
                               constraints.maxWidth > maxWidth
-                                  ? (constraints.maxWidth - maxWidth) / 2
-                                  : 0.0;
+                              ? (constraints.maxWidth - maxWidth) / 2
+                              : 0.0;
                           return Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: horizontalPadding,
@@ -192,39 +192,22 @@ class _ShellHeader extends StatelessWidget {
                     ),
                   ),
                   if (availableRoles.length > 1) ...[
-                    _HeaderIconButton(
-                      icon: Icons.swap_horiz_rounded,
-                      tooltip: 'Switch role',
-                      onTap: () async {
-                        final renderBox =
-                            context.findRenderObject() as RenderBox?;
-                        final position = renderBox == null
-                            ? const RelativeRect.fromLTRB(0, 0, 0, 0)
-                            : RelativeRect.fromRect(
-                                Rect.fromPoints(
-                                  renderBox.localToGlobal(Offset.zero),
-                                  renderBox.localToGlobal(
-                                    renderBox.size.bottomRight(Offset.zero),
-                                  ),
-                                ),
-                                Offset.zero & MediaQuery.of(context).size,
-                              );
-                        final selected = await showMenu<UserRole>(
-                          context: context,
-                          position: position,
-                          items: availableRoles
-                              .map(
-                                (role) => PopupMenuItem<UserRole>(
-                                  value: role,
-                                  child: Text(role.label),
-                                ),
-                              )
-                              .toList(),
-                        );
-                        if (selected != null) {
-                          onRoleSelected(selected);
-                        }
-                      },
+                    // Builder gives the button its own context, so the menu
+                    // opens under the button instead of the header's corner.
+                    Builder(
+                      builder: (buttonContext) => _HeaderIconButton(
+                        icon: Icons.swap_horiz_rounded,
+                        tooltip: 'Switch role',
+                        onTap: () async {
+                          final selected = await _showRoleMenu(
+                            buttonContext,
+                            availableRoles,
+                          );
+                          if (selected != null) {
+                            onRoleSelected(selected);
+                          }
+                        },
+                      ),
                     ),
                     const SizedBox(width: 6),
                   ],
@@ -271,6 +254,38 @@ class _LogoBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opens the role menu right below the button that [buttonContext] belongs
+/// to, positioned the same way [PopupMenuButton] does it.
+Future<UserRole?> _showRoleMenu(
+  BuildContext buttonContext,
+  List<UserRole> roles,
+) {
+  final button = buttonContext.findRenderObject()! as RenderBox;
+  final overlay =
+      Overlay.of(buttonContext).context.findRenderObject()! as RenderBox;
+  final position = RelativeRect.fromRect(
+    Rect.fromPoints(
+      button.localToGlobal(
+        button.size.bottomLeft(Offset.zero) + const Offset(0, 6),
+        ancestor: overlay,
+      ),
+      button.localToGlobal(
+        button.size.bottomRight(Offset.zero) + const Offset(0, 6),
+        ancestor: overlay,
+      ),
+    ),
+    Offset.zero & overlay.size,
+  );
+  return showMenu<UserRole>(
+    context: buttonContext,
+    position: position,
+    items: [
+      for (final role in roles)
+        PopupMenuItem<UserRole>(value: role, child: Text(role.label)),
+    ],
+  );
 }
 
 class _HeaderIconButton extends StatelessWidget {
@@ -465,9 +480,7 @@ class _FooterDest extends StatelessWidget {
                     color: selected ? appPrimarySoft : Colors.transparent,
                     borderRadius: BorderRadius.circular(appRadiusPill),
                     border: Border.all(
-                      color: selected
-                          ? appPrimaryHairline
-                          : Colors.transparent,
+                      color: selected ? appPrimaryHairline : Colors.transparent,
                     ),
                   ),
                   child: Icon(

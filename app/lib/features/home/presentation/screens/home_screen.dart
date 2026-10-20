@@ -39,8 +39,8 @@ const _perfGreen = Color(0xFF3DDC97);
 // invalidated after each approve/reject so the strip stays in sync.
 final _dashboardJoinRequestsProvider =
     FutureProvider.autoDispose<List<GymJoinRequest>>((ref) async {
-  return ref.read(gymRepositoryProvider).fetchJoinRequests();
-});
+      return ref.read(gymRepositoryProvider).fetchJoinRequests();
+    });
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -79,7 +79,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final hasActiveGym = profile?.activeGym != null;
-    final isOwner = profile?.accountType == AccountType.admin &&
+    final isOwner =
+        profile?.accountType == AccountType.admin &&
         profile?.role == UserRole.admin;
 
     // Owner/Admin workflow
@@ -118,10 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onOpenBooking: () => context.go('/my-box'),
             ),
             const SizedBox(height: appSpace2xl),
-            const _SectionHeading(
-              'This Week',
-              eyebrow: 'Performance',
-            ),
+            const _SectionHeading('This Week', eyebrow: 'Performance'),
             const SizedBox(height: appSpaceMd),
             _PerformanceTracker(
               entriesFuture: _entriesFuture,
@@ -354,18 +352,11 @@ class _TodayHeroBody extends StatelessWidget {
             const SizedBox(height: 6),
             const Text(
               'Your coach hasn’t posted today’s training yet. Check back soon.',
-              style: TextStyle(
-                color: appMutedText,
-                fontSize: 13,
-                height: 1.45,
-              ),
+              style: TextStyle(color: appMutedText, fontSize: 13, height: 1.45),
             ),
           ],
           const SizedBox(height: appSpaceLg),
-          _NextBookingStrip(
-            booking: nextBooking,
-            onTap: onOpenBooking,
-          ),
+          _NextBookingStrip(booking: nextBooking, onTap: onOpenBooking),
           const SizedBox(height: appSpaceLg),
           Row(
             children: [
@@ -390,15 +381,7 @@ class _TodayHeroBody extends StatelessWidget {
 
   static String _todayLabel() {
     final now = DateTime.now();
-    const weekdays = [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const months = [
       'Jan',
       'Feb',
@@ -433,19 +416,12 @@ class _NextBookingStrip extends StatelessWidget {
         padding: const EdgeInsets.all(appSpaceMd),
         child: Row(
           children: const [
-            Icon(
-              Icons.event_outlined,
-              color: appSubtleText,
-              size: 18,
-            ),
+            Icon(Icons.event_outlined, color: appSubtleText, size: 18),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'No class booked. Tap to reserve your slot.',
-                style: TextStyle(
-                  color: appSubtleText,
-                  fontSize: 12.5,
-                ),
+                style: TextStyle(color: appSubtleText, fontSize: 12.5),
               ),
             ),
             Icon(Icons.chevron_right_rounded, color: appSubtleText, size: 18),
@@ -498,10 +474,7 @@ class _NextBookingStrip extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '$dayLabel · $startLabel',
-                  style: const TextStyle(
-                    color: appSubtleText,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: appSubtleText, fontSize: 12),
                 ),
               ],
             ),
@@ -523,15 +496,7 @@ class _NextBookingStrip extends StatelessWidget {
     final diff = day.difference(today).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Tomorrow';
-    const weekdays = [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     if (diff > 1 && diff <= 6) return weekdays[local.weekday - 1];
     return '${local.day}/${local.month}';
   }
@@ -1036,8 +1001,9 @@ class _OwnerDashboardContent extends ConsumerWidget {
         caption: overview.newMembersInWindow > 0
             ? '+${overview.newMembersInWindow} this window'
             : 'no new joins',
-        captionColor:
-            overview.newMembersInWindow > 0 ? _perfGreen : appSubtleText,
+        captionColor: overview.newMembersInWindow > 0
+            ? _perfGreen
+            : appSubtleText,
         dot: appPrimary,
       ),
       _KpiData(
@@ -1062,10 +1028,12 @@ class _OwnerDashboardContent extends ConsumerWidget {
       _KpiData(
         label: 'Pending requests',
         value: '${overview.pendingJoinRequests}',
-        caption:
-            overview.pendingJoinRequests > 0 ? 'needs review' : 'all clear',
-        captionColor:
-            overview.pendingJoinRequests > 0 ? _perfAmber : appSubtleText,
+        caption: overview.pendingJoinRequests > 0
+            ? 'needs review'
+            : 'all clear',
+        captionColor: overview.pendingJoinRequests > 0
+            ? _perfAmber
+            : appSubtleText,
         dot: _perfAmber,
         highlight: overview.pendingJoinRequests > 0,
       ),
@@ -1152,13 +1120,16 @@ class _WindowBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('OPERATIONS', style: appMono(fontSize: 10, letterSpacing: 1.6)),
+            Text(
+              'OPERATIONS',
+              style: appMono(fontSize: 10, letterSpacing: 1.6),
+            ),
             const SizedBox(height: 5),
             Text(
               'Box Dashboard',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                letterSpacing: -0.4,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(letterSpacing: -0.4),
             ),
           ],
         ),
@@ -1202,8 +1173,10 @@ class _WindowSelector extends StatelessWidget {
             GestureDetector(
               onTap: () => onSelected(days),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: days == selected ? appPrimary : Colors.transparent,
                   borderRadius: BorderRadius.circular(7),
@@ -1237,10 +1210,7 @@ class _FullAnalyticsButton extends StatelessWidget {
       decoration: ShapeDecoration(
         shape: shape,
         shadows: [
-          BoxShadow(
-            color: appPrimary.withValues(alpha: 0.45),
-            blurRadius: 20,
-          ),
+          BoxShadow(color: appPrimary.withValues(alpha: 0.45), blurRadius: 20),
         ],
       ),
       child: Material(
@@ -1263,7 +1233,11 @@ class _FullAnalyticsButton extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: 7),
-                Icon(Icons.arrow_forward_rounded, size: 15, color: Colors.white),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 15,
+                  color: Colors.white,
+                ),
               ],
             ),
           ),
@@ -1424,11 +1398,10 @@ class _AttendanceTimelineCard extends StatelessWidget {
       final earlierMean =
           ordered.take(half).fold<int>(0, (a, d) => a + d.attended) / half;
       final recentMean =
-          ordered.skip(ordered.length - half).fold<int>(
-                0,
-                (a, d) => a + d.attended,
-              ) /
-              half;
+          ordered
+              .skip(ordered.length - half)
+              .fold<int>(0, (a, d) => a + d.attended) /
+          half;
       if (earlierMean > 0) {
         trendPct = (recentMean - earlierMean) / earlierMean * 100;
       }
@@ -1473,10 +1446,9 @@ class _AttendanceTimelineCard extends StatelessWidget {
           if (ordered.isEmpty)
             Text(
               'No attendance recorded in this window yet.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: appMutedText),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: appMutedText),
             )
           else
             SizedBox(
@@ -1525,7 +1497,12 @@ class _TimelineBar extends StatelessWidget {
                 : const [appPrimary, Color(0xFF044E57)],
           ),
           boxShadow: isLatest
-              ? [BoxShadow(color: appPrimary.withValues(alpha: 0.5), blurRadius: 12)]
+              ? [
+                  BoxShadow(
+                    color: appPrimary.withValues(alpha: 0.5),
+                    blurRadius: 12,
+                  ),
+                ]
               : null,
         ),
       ),
@@ -1824,4 +1801,3 @@ class _RequestActionButton extends StatelessWidget {
     );
   }
 }
-

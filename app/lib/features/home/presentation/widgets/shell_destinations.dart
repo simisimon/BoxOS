@@ -113,8 +113,7 @@ const List<ShellDestination> _ownerDestinations = [
 bool isOwnerView({
   required AccountType? accountType,
   required UserRole? role,
-}) =>
-    accountType == AccountType.admin && role == UserRole.admin;
+}) => accountType == AccountType.admin && role == UserRole.admin;
 
 /// The tab that should read as active for [branchIndex].
 ///
@@ -127,7 +126,6 @@ int navBranchFor(int branchIndex) =>
 List<ShellDestination> destinationsForView({
   required AccountType? accountType,
   required UserRole? role,
-}) =>
-    isOwnerView(accountType: accountType, role: role)
-        ? _ownerDestinations
-        : _athleteDestinations;
+}) => isOwnerView(accountType: accountType, role: role)
+    ? _ownerDestinations
+    : _athleteDestinations;

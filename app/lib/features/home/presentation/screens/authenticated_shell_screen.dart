@@ -29,10 +29,12 @@ class AuthenticatedShellScreen extends ConsumerWidget {
 
     // The owner Dashboard (home branch) and the schedule calendar (My Box) span
     // the full width like the wireframe instead of the clamped content column.
-    final isOwner = profile?.accountType == AccountType.admin &&
+    final isOwner =
+        profile?.accountType == AccountType.admin &&
         profile?.role == UserRole.admin;
     final currentIndex = navigationShell.currentIndex;
-    final fullBleed = currentIndex == kMyBoxBranch ||
+    final fullBleed =
+        currentIndex == kMyBoxBranch ||
         (currentIndex == kHomeBranch && isOwner);
 
     return AuthenticatedScaffold(
@@ -45,18 +47,17 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       profileImageUrl: profile?.profileImageUrl ?? '',
       fullBleedBody: fullBleed,
       body: navigationShell,
-      onSelectBranch: (branchIndex) =>
-          navigationShell.goBranch(
-            branchIndex,
-            initialLocation: branchIndex == navigationShell.currentIndex,
-          ),
+      onSelectBranch: (branchIndex) => navigationShell.goBranch(
+        branchIndex,
+        initialLocation: branchIndex == navigationShell.currentIndex,
+      ),
       onHeaderProfileTap: () => navigationShell.goBranch(kProfileBranch),
       onNotificationsTap: () => context.push('/notifications'),
       onRoleSelected: (role) => _switchRole(context, ref, role),
     );
   }
 
-  static Future<void> _switchRole(
+  Future<void> _switchRole(
     BuildContext context,
     WidgetRef ref,
     UserRole role,
@@ -64,6 +65,10 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     try {
       await ref.read(profileRepositoryProvider).updateActiveRole(role: role);
       ref.invalidate(currentProfileProvider);
+      // Each role has its own tab set (the owner's Members tab, for one, is
+      // not an athlete tab), so land on the new role's start page instead of
+      // leaving the previous role's screen open.
+      navigationShell.goBranch(kHomeBranch, initialLocation: true);
     } catch (_) {
       if (!context.mounted) {
         return;
