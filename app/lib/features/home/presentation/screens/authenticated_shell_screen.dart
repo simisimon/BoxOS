@@ -2,7 +2,6 @@ import 'package:app/features/home/presentation/widgets/app_shell.dart';
 import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
-import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,15 +26,9 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       role: profile?.role,
     );
 
-    // The owner Dashboard (home branch) and the schedule calendar (My Box) span
-    // the full width like the wireframe instead of the clamped content column.
-    final isOwner =
-        profile?.accountType == AccountType.admin &&
-        profile?.role == UserRole.admin;
-    final currentIndex = navigationShell.currentIndex;
-    final fullBleed =
-        currentIndex == kMyBoxBranch ||
-        (currentIndex == kHomeBranch && isOwner);
+    // Only the schedule week (My Box) spans the full width; every other view,
+    // the owner dashboard included, sits in the same clamped content column.
+    final fullBleed = navigationShell.currentIndex == kMyBoxBranch;
 
     return AuthenticatedScaffold(
       selectedBranchIndex: navBranchFor(navigationShell.currentIndex),

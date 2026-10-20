@@ -1,6 +1,5 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/core/presentation/responsive/breakpoints.dart';
 import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'dart:ui';
 
@@ -28,7 +27,6 @@ class AdminAnalyticsScreen extends ConsumerWidget {
       title: 'Read the floor fast',
       eyebrow: 'Analytics',
       onBack: () => context.go('/profile'),
-      maxWidth: context.dashboardMaxWidth,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           appSpaceLg,

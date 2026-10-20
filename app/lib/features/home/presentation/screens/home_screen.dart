@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/core/presentation/responsive/breakpoints.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
@@ -158,24 +157,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Owner with an active box lands on the operational dashboard — the
     // wireframe's "signal, not a news feed" view. Announcements and shortcuts
-    // live in their own tabs/surfaces. The shell renders this branch full-bleed
-    // for owners, so the dashboard spans the width; we cap it at the roomy
-    // dashboard width and center it to match the wireframe's wide layout.
-    return AppGridBackground(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: context.dashboardMaxWidth),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              appSpace2xl,
-              appSpaceXl,
-              appSpace2xl,
-              appSpace3xl,
-            ),
-            children: const [_OwnerDashboard()],
-          ),
-        ),
+    // live in their own tabs/surfaces. Same content column and padding as the
+    // other tabs (Members, Community, Logbook, Profile).
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        appSpaceLg,
+        appSpaceLg,
+        appSpaceLg,
+        appSpace3xl,
       ),
+      children: const [_OwnerDashboard()],
     );
   }
 }

@@ -48,22 +48,6 @@ double contentMaxWidthFor(AppBreakpoint breakpoint) {
   }
 }
 
-/// Wider content cap for dashboard / admin surfaces that benefit from a
-/// multi-column layout. Roomier than [contentMaxWidthFor] but still bounded so
-/// the content does not stretch edge-to-edge on very large monitors.
-double dashboardMaxWidthFor(AppBreakpoint breakpoint) {
-  switch (breakpoint) {
-    case AppBreakpoint.compact:
-      return double.infinity;
-    case AppBreakpoint.medium:
-      return 720;
-    case AppBreakpoint.expanded:
-      return 1120;
-    case AppBreakpoint.large:
-      return 1360;
-  }
-}
-
 extension BreakpointContext on BuildContext {
   /// The current window size class, derived from the window width.
   AppBreakpoint get appBreakpoint =>
@@ -71,9 +55,6 @@ extension BreakpointContext on BuildContext {
 
   /// Readable max width for the primary content column at the current size.
   double get contentMaxWidth => contentMaxWidthFor(appBreakpoint);
-
-  /// Wider max width for dashboard / admin surfaces (see [dashboardMaxWidthFor]).
-  double get dashboardMaxWidth => dashboardMaxWidthFor(appBreakpoint);
 
   /// Whether the layout should use a side [NavigationRail] instead of a bottom
   /// navigation bar. True from the `expanded` size class upwards.

@@ -264,7 +264,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         bottom: true,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final maxWidth = context.dashboardMaxWidth;
+            final maxWidth = context.contentMaxWidth;
             final horizontalPadding = constraints.maxWidth > maxWidth
                 ? (constraints.maxWidth - maxWidth) / 2
                 : 0.0;

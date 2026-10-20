@@ -39,8 +39,7 @@ class AppMobileScaffold extends StatelessWidget {
   final bool? resizeToAvoidBottomInset;
 
   /// Overrides the content/header width cap. Defaults to the responsive
-  /// [BreakpointContext.contentMaxWidth]; admin/dashboard screens pass the
-  /// roomier [BreakpointContext.dashboardMaxWidth] for multi-column layouts.
+  /// [BreakpointContext.contentMaxWidth].
   final double? maxWidth;
 
   @override
