@@ -8,7 +8,7 @@ import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
 import 'package:app/features/calendar/presentation/widgets/class_template_dialog.dart';
-import 'package:app/features/calendar/presentation/widgets/wod_week_view.dart';
+import 'package:app/features/calendar/presentation/widgets/schedule_week_view.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/presentation/screens/import_workouts_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -25,18 +25,11 @@ class MyBoxScreen extends ConsumerStatefulWidget {
 }
 
 class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
-  /// First day of the month currently shown in the grid.
-  late DateTime _visibleMonth;
+  /// The class whose side panel is open, or null when the week is full-width.
+  int? _selectedClassId;
 
-  /// Managers flip between the calendar (classes) and the week view (WODs).
-  bool _showWeek = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    _visibleMonth = DateTime(now.year, now.month);
-  }
+  /// Monday of the week shown; kept here so opening a class keeps the week.
+  DateTime _weekStart = mondayOf(DateTime.now());
 
   Future<void> _refresh() async {
     ref.invalidate(scheduleListProvider);
@@ -50,36 +43,6 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _goToPreviousMonth() {
-    setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
-    });
-  }
-
-  void _goToNextMonth() {
-    setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
-    });
-  }
-
-  void _goToToday() {
-    final now = DateTime.now();
-    setState(() {
-      _visibleMonth = DateTime(now.year, now.month);
-    });
-  }
-
-  /// The day whose side panel is open, or null when the calendar is full-width.
-  DateTime? _selectedDay;
-
-  void _selectDay(DateTime day) {
-    setState(() => _selectedDay = _dateOnly(day));
-  }
-
-  void _closeDay() {
-    setState(() => _selectedDay = null);
   }
 
   Future<void> _openImport() async {
@@ -282,40 +245,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                     accentColor: appPrimary,
                   ),
                 ),
-                data: (items) => canManage
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: SegmentedButton<bool>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: false,
-                                  icon: Icon(Icons.calendar_month_outlined),
-                                  label: Text('Calendar'),
-                                ),
-                                ButtonSegment(
-                                  value: true,
-                                  icon: Icon(Icons.view_week_outlined),
-                                  label: Text('Week'),
-                                ),
-                              ],
-                              selected: {_showWeek},
-                              showSelectedIcon: false,
-                              onSelectionChanged: (selection) =>
-                                  setState(() => _showWeek = selection.first),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: _showWeek
-                                ? const WodWeekView()
-                                : _buildScheduleBody(context, items, canManage),
-                          ),
-                        ],
-                      )
-                    : _buildScheduleBody(context, items, canManage),
+                data: (items) => _buildScheduleBody(context, items, canManage),
               ),
       ),
     );
@@ -326,40 +256,31 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     List<ScheduleClass> items,
     bool canManage,
   ) {
-    // Days that already have a WOD programmed; WOD-type classes on other days
-    // get flagged for managers.
-    final wodDays = ref
-        .watch(programmingListProvider)
-        .maybeWhen(
-          data: (workouts) => {
-            for (final workout in workouts) _dateOnly(workout.scheduledDate),
-          },
-          orElse: () => null,
-        );
-    final calendar = _MonthCalendar(
-      month: _visibleMonth,
-      items: items,
-      wodDays: wodDays,
-      today: _dateOnly(DateTime.now()),
-      selectedDay: _selectedDay,
+    final selected = items
+        .where((item) => item.id == _selectedClassId)
+        .firstOrNull;
+    final week = ScheduleWeekView(
+      weekStart: _weekStart,
+      onWeekChanged: (monday) => setState(() => _weekStart = monday),
       canManage: canManage,
-      onPrevMonth: _goToPreviousMonth,
-      onNextMonth: _goToNextMonth,
-      onToday: _goToToday,
-      onRefresh: _refresh,
+      selectedClassId: selected?.id,
+      onOpenClass: (item) => setState(() => _selectedClassId = item.id),
+      onAddClass: canManage
+          ? (date) => _showClassFormDialog(context, date: date)
+          : null,
       onImport: canManage ? _openImport : null,
-      onSelectDay: _selectDay,
     );
 
-    if (_selectedDay == null) {
-      return calendar;
+    // A deleted class simply drops out of [items], which closes the panel.
+    if (selected == null) {
+      return week;
     }
 
-    final panel = _DayPanel(
-      key: ValueKey(_selectedDay),
-      date: _selectedDay!,
+    final panel = _ClassPanel(
+      key: ValueKey(selected.id),
+      item: selected,
       canManage: canManage,
-      onClose: _closeDay,
+      onClose: () => setState(() => _selectedClassId = null),
       onToggleBooking: _toggleBooking,
       onToggleWaitlist: _toggleWaitlist,
       onUpdateAttendance: (item, booking, status) => _updateAttendance(
@@ -370,8 +291,8 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       onDelete: (item) => _deleteClass(item, canManage),
     );
 
-    // Wide windows show the day panel inline on the left, next to the calendar;
-    // narrow windows swap the calendar out for the full-width panel.
+    // Wide windows show the class panel inline on the left, next to the week;
+    // narrow windows swap the week out for the full-width panel.
     final isWide = MediaQuery.sizeOf(context).width >= 640;
     if (!isWide) {
       return panel;
@@ -381,7 +302,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       children: [
         SizedBox(width: 360, child: panel),
         const SizedBox(width: 12),
-        Expanded(child: calendar),
+        Expanded(child: week),
       ],
     );
   }
@@ -454,411 +375,39 @@ class _CalendarStateCard extends StatelessWidget {
   }
 }
 
-/// Month grid calendar: a header with month navigation + Today, a weekday row,
-/// and a 6×7 grid of day cells that surface each day's classes as colored bars.
-/// Tapping a day opens the day-detail sheet (see [_DayScheduleSheet]).
-class _MonthCalendar extends StatelessWidget {
-  const _MonthCalendar({
-    required this.month,
-    required this.items,
-    required this.wodDays,
-    required this.today,
-    required this.selectedDay,
-    required this.canManage,
-    required this.onPrevMonth,
-    required this.onNextMonth,
-    required this.onToday,
-    required this.onRefresh,
-    required this.onImport,
-    required this.onSelectDay,
-  });
-
-  /// First day of the displayed month.
-  final DateTime month;
-  final List<ScheduleClass> items;
-
-  /// Days with a programmed WOD, or null while programming is still loading
-  /// (no "missing" flags are shown until it is known).
-  final Set<DateTime>? wodDays;
-  final DateTime today;
-  final DateTime? selectedDay;
-  final bool canManage;
-  final VoidCallback onPrevMonth;
-  final VoidCallback onNextMonth;
-  final VoidCallback onToday;
-  final Future<void> Function() onRefresh;
-
-  /// Opens the CSV import flow. Null hides the button (non-managers).
-  final VoidCallback? onImport;
-  final ValueChanged<DateTime> onSelectDay;
-
-  static const _weekdayLabels = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final monthLabel = MaterialLocalizations.of(context).formatMonthYear(month);
-    final firstOfMonth = DateTime(month.year, month.month, 1);
-    // Grid starts on the Monday on or before the 1st of the month.
-    final gridStart = _addDays(firstOfMonth, 1 - firstOfMonth.weekday);
-
-    // Bucket classes by their local calendar day for quick per-cell lookup.
-    final eventsByDay = <DateTime, List<ScheduleClass>>{};
-    for (final item in items) {
-      final day = _dateOnly(item.startTime);
-      (eventsByDay[day] ??= <ScheduleClass>[]).add(item);
-    }
-    for (final dayItems in eventsByDay.values) {
-      dayItems.sort((a, b) => a.startTime.compareTo(b.startTime));
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: appBorder),
+/// Class form in a dialog: a new class on [date], or edits [existing].
+Future<void> _showClassFormDialog(
+  BuildContext context, {
+  required DateTime date,
+  ScheduleClass? existing,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      backgroundColor: appSurface,
+      insetPadding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: _ClassForm(
+            date: date,
+            existing: existing,
+            onSaved: () => Navigator.of(dialogContext).pop(),
+            onCancel: () => Navigator.of(dialogContext).pop(),
+          ),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  monthLabel,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: appText,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              _CalendarHeaderButton(label: 'Today', onTap: onToday),
-              const SizedBox(width: 8),
-              if (onImport != null) ...[
-                _CalendarIconButton(
-                  icon: Icons.upload_file_rounded,
-                  tooltip: 'Import WODs',
-                  onTap: onImport!,
-                ),
-                const SizedBox(width: 6),
-              ],
-              _CalendarIconButton(
-                icon: Icons.refresh_rounded,
-                tooltip: 'Refresh',
-                onTap: () => onRefresh(),
-              ),
-              const SizedBox(width: 6),
-              _CalendarIconButton(
-                icon: Icons.chevron_left_rounded,
-                tooltip: 'Previous month',
-                onTap: onPrevMonth,
-              ),
-              const SizedBox(width: 6),
-              _CalendarIconButton(
-                icon: Icons.chevron_right_rounded,
-                tooltip: 'Next month',
-                onTap: onNextMonth,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              for (final label in _weekdayLabels)
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      label.toUpperCase(),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: appSubtleText,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // The grid fills the remaining height — each week splits the space
-          // evenly so the calendar stretches across the whole screen.
-          Expanded(
-            child: Column(
-              children: [
-                for (var week = 0; week < 6; week++)
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var dow = 0; dow < 7; dow++)
-                          Builder(
-                            builder: (context) {
-                              final day = _dateOnly(
-                                _addDays(gridStart, week * 7 + dow),
-                              );
-                              return Expanded(
-                                child: _MonthDayCell(
-                                  key: ValueKey(day),
-                                  day: day,
-                                  inMonth: day.month == month.month,
-                                  isToday: _isSameDay(day, today),
-                                  isSelected:
-                                      selectedDay != null &&
-                                      _isSameDay(day, selectedDay!),
-                                  events:
-                                      eventsByDay[day] ??
-                                      const <ScheduleClass>[],
-                                  wodMissing:
-                                      canManage &&
-                                      wodDays != null &&
-                                      !day.isBefore(today) &&
-                                      !wodDays!.contains(day) &&
-                                      (eventsByDay[day] ?? const []).any(
-                                        (event) => event.type.showsWod,
-                                      ),
-                                  onTap: onSelectDay,
-                                ),
-                              );
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
 }
 
-class _MonthDayCell extends StatelessWidget {
-  const _MonthDayCell({
+/// Side panel for one class, next to the week: booking for athletes,
+/// edit/delete and attendance for managers.
+class _ClassPanel extends ConsumerWidget {
+  const _ClassPanel({
     super.key,
-    required this.day,
-    required this.inMonth,
-    required this.isToday,
-    required this.isSelected,
-    required this.events,
-    required this.wodMissing,
-    required this.onTap,
-  });
-
-  final DateTime day;
-  final bool inMonth;
-  final bool isToday;
-  final bool isSelected;
-  final List<ScheduleClass> events;
-
-  /// WOD classes are scheduled but nothing is programmed for the day yet.
-  final bool wodMissing;
-  final ValueChanged<DateTime> onTap;
-
-  static const _maxBars = 2;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final shown = events.take(_maxBars).toList();
-    final extra = events.length - shown.length;
-
-    return Padding(
-      padding: const EdgeInsets.all(2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: () => onTap(day),
-          child: Container(
-            clipBehavior: Clip.hardEdge,
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? appPrimarySoft
-                  : (inMonth ? appSurfaceAlt : Colors.transparent),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: isSelected || isToday ? appPrimary : appBorder,
-                width: isSelected || isToday ? 1.4 : 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      alignment: Alignment.center,
-                      decoration: isToday
-                          ? const BoxDecoration(
-                              color: appPrimary,
-                              shape: BoxShape.circle,
-                            )
-                          : null,
-                      child: Text(
-                        '${day.day}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: isToday
-                              ? Colors.white
-                              : (inMonth ? appText : appSubtleText),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    if (wodMissing)
-                      const Tooltip(
-                        message: 'No WOD programmed',
-                        child: Icon(
-                          Icons.error_outline_rounded,
-                          size: 12,
-                          color: appWarning,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final event in shown)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 2),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 3,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: classTypeColor(event.type),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            event.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                            softWrap: false,
-                            style: const TextStyle(
-                              color: appInverseText,
-                              fontSize: 8,
-                              height: 1.2,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      if (extra > 0)
-                        Text(
-                          '+$extra more',
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          softWrap: false,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: appSubtleText,
-                            fontSize: 8,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CalendarIconButton extends StatelessWidget {
-  const _CalendarIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(3),
-          onTap: onTap,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: appSurfaceAlt,
-              borderRadius: BorderRadius.circular(3),
-              border: Border.all(color: appBorder),
-            ),
-            child: Icon(icon, color: appText, size: 22),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CalendarHeaderButton extends StatelessWidget {
-  const _CalendarHeaderButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(3),
-        onTap: onTap,
-        child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: appSurfaceAlt,
-            borderRadius: BorderRadius.circular(3),
-            border: Border.all(color: appBorder),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom sheet listing a single day's classes, with an "Add Class" entry for
-/// managers. Watches [scheduleListProvider] so bookings/creates/deletes update
-/// it live (the parent invalidates the provider after each mutation).
-/// Side panel shown to the left of the calendar when a day is selected. Lists
-/// that day's classes and hosts the inline add/edit form. Watches
-/// [scheduleListProvider] so it stays in sync with the calendar.
-class _DayPanel extends ConsumerStatefulWidget {
-  const _DayPanel({
-    super.key,
-    required this.date,
+    required this.item,
     required this.canManage,
     required this.onClose,
     required this.onToggleBooking,
@@ -867,7 +416,7 @@ class _DayPanel extends ConsumerStatefulWidget {
     required this.onDelete,
   });
 
-  final DateTime date;
+  final ScheduleClass item;
   final bool canManage;
   final VoidCallback onClose;
   final void Function(ScheduleClass item) onToggleBooking;
@@ -880,60 +429,15 @@ class _DayPanel extends ConsumerStatefulWidget {
   onUpdateAttendance;
   final void Function(ScheduleClass item) onDelete;
 
-  @override
-  ConsumerState<_DayPanel> createState() => _DayPanelState();
-}
-
-class _DayPanelState extends ConsumerState<_DayPanel> {
-  /// Classes start collapsed so a busy day stays scannable.
-  final Set<int> _expanded = {};
-
-  void _toggleExpanded(ScheduleClass item) {
-    setState(() {
-      if (!_expanded.remove(item.id)) {
-        _expanded.add(item.id);
-      }
-    });
-  }
-
-  /// Classes can only be created from today onward.
-  bool get _isPastDay =>
-      _dateOnly(widget.date).isBefore(_dateOnly(DateTime.now()));
-
-  /// Create/edit opens on top of the panel so the class list stays put.
-  Future<void> _showClassForm({ScheduleClass? existing}) {
-    return showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: appSurface,
-        insetPadding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: _ClassForm(
-              date: widget.date,
-              existing: existing,
-              onSaved: () => Navigator.of(dialogContext).pop(),
-              onCancel: () => Navigator.of(dialogContext).pop(),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openAdd() => _showClassForm();
-
-  Future<void> _openEdit(ScheduleClass item) async {
+  Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
     if (item.classTemplateId != null) {
       final scope = await _askSeriesScope(context, action: 'Edit');
-      if (scope == null || !mounted) {
+      if (scope == null || !context.mounted) {
         return;
       }
       if (scope == _SeriesScope.series) {
         final templates = await ref.read(classTemplatesProvider.future);
-        if (!mounted) {
+        if (!context.mounted) {
           return;
         }
         final template = templates
@@ -945,44 +449,28 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
         }
       }
     }
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
-    await _showClassForm(existing: item);
+    await _showClassFormDialog(
+      context,
+      date: _dateOnly(item.startTime),
+      existing: item,
+    );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final dateLabel = MaterialLocalizations.of(
-      context,
-    ).formatFullDate(widget.date);
-    final scheduleAsync = ref.watch(scheduleListProvider);
-    final dayItems = scheduleAsync.maybeWhen(
-      data: (items) =>
-          items
-              .where((item) => _isSameDay(item.startTime, widget.date))
-              .toList()
-            ..sort((a, b) => a.startTime.compareTo(b.startTime)),
-      orElse: () => const <ScheduleClass>[],
-    );
-    final hasWodClasses = dayItems.any((item) => item.type.showsWod);
-    final programmingAsync = ref.watch(programmingListProvider);
+    final date = _dateOnly(item.startTime);
     String? wodTitle;
-    for (final workout in programmingAsync.value ?? const []) {
-      if (_isSameDay(workout.scheduledDate, widget.date)) {
+    for (final workout
+        in ref.watch(programmingListProvider).value ?? const []) {
+      if (_isSameDay(workout.scheduledDate, date)) {
         wodTitle = workout.title;
         break;
       }
     }
-    final wodMissing =
-        widget.canManage &&
-        hasWodClasses &&
-        !_isPastDay &&
-        programmingAsync.hasValue &&
-        wodTitle == null;
-    // Managers program WODs in the week view; here they only see the hint.
-    final showWod = !widget.canManage && hasWodClasses;
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -1003,7 +491,7 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SCHEDULE',
+                        'CLASS',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: appPrimary,
                           fontWeight: FontWeight.w800,
@@ -1012,7 +500,7 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        dateLabel,
+                        MaterialLocalizations.of(context).formatFullDate(date),
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: appText,
                           fontWeight: FontWeight.w800,
@@ -1022,7 +510,7 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
                   ),
                 ),
                 IconButton(
-                  onPressed: widget.onClose,
+                  onPressed: onClose,
                   icon: const Icon(Icons.close_rounded, color: appText),
                   tooltip: 'Close',
                 ),
@@ -1034,88 +522,22 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                if (wodMissing) ...[
-                  const _WodMissingHint(),
+                _ScheduleClassCard(
+                  item: item,
+                  wodTitle: wodTitle,
+                  canManage: canManage,
+                  onToggleBooking: () => onToggleBooking(item),
+                  onToggleWaitlist: () => onToggleWaitlist(item),
+                  onUpdateAttendance: (booking, status) =>
+                      onUpdateAttendance(item, booking, status),
+                  onEdit: () => _openEdit(context, ref),
+                  onDelete: () => onDelete(item),
+                ),
+                // Athletes read the WOD here; managers program it in the week.
+                if (!canManage && item.type.showsWod) ...[
                   const SizedBox(height: 18),
+                  WodDaySection(date: date, canManage: false),
                 ],
-                // Open Gym / Skill / PT days have no WOD to show.
-                if (showWod) ...[
-                  WodDaySection(date: widget.date, canManage: false),
-                  const SizedBox(height: 18),
-                ],
-                _SectionLabel(icon: Icons.event_outlined, label: 'Classes'),
-                const SizedBox(height: 10),
-                if (widget.canManage && !_isPastDay) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _openAdd,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add class'),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ] else if (widget.canManage && _isPastDay) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: appSurfaceAlt,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: appBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.history_rounded,
-                          size: 18,
-                          color: appSubtleText,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'This day is in the past — new classes can '
-                            'only be added from today onward.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: appSubtleText,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                if (dayItems.isEmpty)
-                  _CalendarStateCard(
-                    icon: widget.canManage
-                        ? Icons.edit_calendar_outlined
-                        : Icons.event_busy_outlined,
-                    title: 'No classes scheduled',
-                    message: widget.canManage
-                        ? 'Nothing is scheduled on this day yet. Use '
-                              '"Add class" — switch on "Repeats weekly" for '
-                              'a class that runs every week.'
-                        : 'No classes are scheduled on this date.',
-                    accentColor: appPrimary,
-                  )
-                else
-                  for (final item in dayItems) ...[
-                    _ScheduleClassCard(
-                      item: item,
-                      wodTitle: wodTitle,
-                      expanded: _expanded.contains(item.id),
-                      onToggleExpanded: () => _toggleExpanded(item),
-                      canManage: widget.canManage,
-                      onToggleBooking: () => widget.onToggleBooking(item),
-                      onToggleWaitlist: () => widget.onToggleWaitlist(item),
-                      onUpdateAttendance: (booking, status) =>
-                          widget.onUpdateAttendance(item, booking, status),
-                      onEdit: () => _openEdit(item),
-                      onDelete: () => widget.onDelete(item),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
               ],
             ),
           ),
@@ -1125,69 +547,10 @@ class _DayPanelState extends ConsumerState<_DayPanel> {
   }
 }
 
-class _WodMissingHint extends StatelessWidget {
-  const _WodMissingHint();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: appWarning.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: appWarning.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded, size: 18, color: appWarning),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'WOD classes are scheduled but no WOD is programmed yet — '
-              'add it in the Week view.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: appText),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Icon(icon, color: appPrimary, size: 16),
-        const SizedBox(width: 6),
-        Text(
-          label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: appPrimary,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.0,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ScheduleClassCard extends StatelessWidget {
   const _ScheduleClassCard({
     required this.item,
     required this.wodTitle,
-    required this.expanded,
-    required this.onToggleExpanded,
     required this.canManage,
     required this.onToggleBooking,
     required this.onToggleWaitlist,
@@ -1200,10 +563,6 @@ class _ScheduleClassCard extends StatelessWidget {
 
   /// Title of the day's programmed WOD; only shown on WOD-type classes.
   final String? wodTitle;
-
-  /// Collapsed cards show only [_ClassCardHeader]; tapping it expands them.
-  final bool expanded;
-  final VoidCallback onToggleExpanded;
   final bool canManage;
   final VoidCallback onToggleBooking;
   final VoidCallback onToggleWaitlist;
@@ -1223,155 +582,149 @@ class _ScheduleClassCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: appSurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: expanded ? appBorderStrong : appBorder),
+        border: Border.all(color: appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ClassCardHeader(
-            item: item,
-            wodTitle: wodTitle,
-            expanded: expanded,
-            onTap: onToggleExpanded,
-          ),
-          if (expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _CapacityBar(
-                    booked: item.bookedCount,
-                    capacity: item.capacity,
-                    waitlist: item.waitlistCount,
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _MetricTile(
-                        label: 'Bookings',
-                        value: '${item.bookedCount}/${item.capacity}',
-                        accentColor: appPrimary,
-                      ),
-                      _MetricTile(
-                        label: 'Open spots',
-                        value: '${item.remainingSpots}',
-                        accentColor: appPrimary,
-                      ),
-                      if (item.waitlistCount > 0)
-                        _MetricTile(
-                          label: 'Waitlist',
-                          value: '${item.waitlistCount}',
-                          accentColor: appPrimary,
-                        ),
-                    ],
-                  ),
-                  if (item.type.showsWod) ...[
-                    const SizedBox(height: 14),
-                    _DetailLine(
-                      label: 'WOD',
-                      value: wodTitle ?? 'Not programmed yet',
-                    ),
-                  ],
-                  if (item.classTemplateId != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Part of the weekly plan',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: appSubtleText,
-                      ),
-                    ),
-                  ],
-                  if (item.attendanceStatus != null || item.isWaitlisted) ...[
-                    const SizedBox(height: 14),
-                    _ContentPanel(
-                      label: 'Your Status',
+          _ClassCardHeader(item: item, wodTitle: wodTitle),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _CapacityBar(
+                  booked: item.bookedCount,
+                  capacity: item.capacity,
+                  waitlist: item.waitlistCount,
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _MetricTile(
+                      label: 'Bookings',
+                      value: '${item.bookedCount}/${item.capacity}',
                       accentColor: appPrimary,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (item.attendanceStatus != null)
-                            Text(
-                              'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: appText,
-                              ),
-                            ),
-                          if (item.isWaitlisted)
-                            Text(
-                              'Waitlist: Active',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: appText,
-                              ),
-                            ),
-                        ],
-                      ),
                     ),
+                    _MetricTile(
+                      label: 'Open spots',
+                      value: '${item.remainingSpots}',
+                      accentColor: appPrimary,
+                    ),
+                    if (item.waitlistCount > 0)
+                      _MetricTile(
+                        label: 'Waitlist',
+                        value: '${item.waitlistCount}',
+                        accentColor: appPrimary,
+                      ),
                   ],
-                  if (isFuture) ...[
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                ),
+                if (item.type.showsWod) ...[
+                  const SizedBox(height: 14),
+                  _DetailLine(
+                    label: 'WOD',
+                    value: wodTitle ?? 'Not programmed yet',
+                  ),
+                ],
+                if (item.classTemplateId != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Part of the weekly plan',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: appSubtleText,
+                    ),
+                  ),
+                ],
+                if (item.attendanceStatus != null || item.isWaitlisted) ...[
+                  const SizedBox(height: 14),
+                  _ContentPanel(
+                    label: 'Your Status',
+                    accentColor: appPrimary,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (item.isBooked)
-                          OutlinedButton(
-                            onPressed: onToggleBooking,
-                            child: const Text('Cancel Booking'),
-                          )
-                        else if (item.isWaitlisted)
-                          OutlinedButton(
-                            onPressed: onToggleWaitlist,
-                            child: const Text('Leave Waitlist'),
-                          )
-                        else
-                          FilledButton(
-                            onPressed: item.isFull
-                                ? onToggleWaitlist
-                                : onToggleBooking,
-                            child: Text(
-                              item.isFull ? 'Join Waitlist' : 'Book Class',
+                        if (item.attendanceStatus != null)
+                          Text(
+                            'Attendance: ${_attendanceLabel(item.attendanceStatus!)}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: appText,
                             ),
                           ),
-                        if (canManage) ...[
-                          OutlinedButton(
-                            onPressed: onEdit,
-                            child: const Text('Edit'),
+                        if (item.isWaitlisted)
+                          Text(
+                            'Waitlist: Active',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: appText,
+                            ),
                           ),
-                          OutlinedButton(
-                            onPressed: onDelete,
-                            child: const Text('Delete'),
-                          ),
-                        ],
                       ],
                     ),
-                  ],
-                  if (item.bookings.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    const Divider(color: appBorder),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Booked Members',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: appText,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  ),
+                ],
+                if (isFuture) ...[
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (item.isBooked)
+                        OutlinedButton(
+                          onPressed: onToggleBooking,
+                          child: const Text('Cancel Booking'),
+                        )
+                      else if (item.isWaitlisted)
+                        OutlinedButton(
+                          onPressed: onToggleWaitlist,
+                          child: const Text('Leave Waitlist'),
+                        )
+                      else
+                        FilledButton(
+                          onPressed: item.isFull
+                              ? onToggleWaitlist
+                              : onToggleBooking,
+                          child: Text(
+                            item.isFull ? 'Join Waitlist' : 'Book Class',
+                          ),
+                        ),
+                      if (canManage) ...[
+                        OutlinedButton(
+                          onPressed: onEdit,
+                          child: const Text('Edit'),
+                        ),
+                        OutlinedButton(
+                          onPressed: onDelete,
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+                if (item.bookings.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(color: appBorder),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Booked Members',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: appText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final booking in item.bookings) ...[
+                    _AttendanceRow(
+                      booking: booking,
+                      canManageAttendance: canManageAttendance,
+                      onUpdateAttendance: onUpdateAttendance,
                     ),
                     const SizedBox(height: 10),
-                    for (final booking in item.bookings) ...[
-                      _AttendanceRow(
-                        booking: booking,
-                        canManageAttendance: canManageAttendance,
-                        onUpdateAttendance: onUpdateAttendance,
-                      ),
-                      const SizedBox(height: 10),
-                    ],
                   ],
                 ],
-              ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -1389,19 +742,12 @@ class _ScheduleClassCard extends StatelessWidget {
   }
 }
 
-/// Collapsed summary of a class: time, title, type, fill — tap to expand.
+/// Summary line of a class: time, title, type, fill.
 class _ClassCardHeader extends StatelessWidget {
-  const _ClassCardHeader({
-    required this.item,
-    required this.wodTitle,
-    required this.expanded,
-    required this.onTap,
-  });
+  const _ClassCardHeader({required this.item, required this.wodTitle});
 
   final ScheduleClass item;
   final String? wodTitle;
-  final bool expanded;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1418,98 +764,73 @@ class _ClassCardHeader extends StatelessWidget {
       if (item.type.showsWod) 'WOD: ${wodTitle ?? '—'}',
     ].join(' · ');
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 62,
-                child: Text(
-                  startTime,
-                  style: appMono(
-                    fontSize: 12,
-                    color: appText,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 62,
+            child: Text(
+              startTime,
+              style: appMono(fontSize: 12, color: appText, letterSpacing: 0),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: appText,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
+                    Flexible(
+                      child: Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: appText,
+                          fontWeight: FontWeight.w800,
                         ),
-                        const SizedBox(width: 6),
-                        ClassTypeBadge(type: item.type, dense: true),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: appSubtleText,
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    ClassTypeBadge(type: item.type, dense: true),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              if (item.isBooked || item.isWaitlisted) ...[
-                Tooltip(
-                  message: item.isBooked ? 'You are booked' : 'On the waitlist',
-                  child: Icon(
-                    item.isBooked
-                        ? Icons.check_circle_rounded
-                        : Icons.hourglass_top_rounded,
-                    size: 16,
-                    color: item.isBooked ? appSuccess : appWarning,
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: appSubtleText,
                   ),
                 ),
-                const SizedBox(width: 6),
               ],
-              Text(
-                '${item.bookedCount}/${item.capacity}',
-                style: appMono(
-                  fontSize: 11,
-                  color: fillColor,
-                  letterSpacing: 0,
-                ),
-              ),
-              Icon(
-                expanded
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-                color: appSubtleText,
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          if (item.isBooked || item.isWaitlisted) ...[
+            Tooltip(
+              message: item.isBooked ? 'You are booked' : 'On the waitlist',
+              child: Icon(
+                item.isBooked
+                    ? Icons.check_circle_rounded
+                    : Icons.hourglass_top_rounded,
+                size: 16,
+                color: item.isBooked ? appSuccess : appWarning,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            '${item.bookedCount}/${item.capacity}',
+            style: appMono(fontSize: 11, color: fillColor, letterSpacing: 0),
+          ),
+        ],
       ),
     );
   }
 }
-
-/// Calendar-day arithmetic. Adding a `Duration` of whole days steps in 24h,
-/// which lands on the wrong day across a DST switch (Oct 25 showed twice).
-DateTime _addDays(DateTime day, int days) =>
-    DateTime(day.year, day.month, day.day + days);
 
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);

@@ -54,6 +54,32 @@ const _owner = UserProfile(
   ],
 );
 
+const _athlete = UserProfile(
+  email: 'owner@boxos.app',
+  accountType: AccountType.admin,
+  role: UserRole.athlete,
+  availableRoles: [UserRole.admin, UserRole.trainer, UserRole.athlete],
+  displayName: 'Box Owner',
+  nickname: 'owner',
+  notificationPreferences: NotificationPreferences(
+    bookingConfirmations: true,
+    waitlistPromotions: true,
+    paymentIssues: true,
+    wodPosted: true,
+    prAchievements: true,
+    announcementActivity: true,
+  ),
+  activeGym: _gym,
+  memberships: [
+    GymMembership(
+      gym: _gym,
+      role: UserRole.admin,
+      availableRoles: [UserRole.admin, UserRole.trainer, UserRole.athlete],
+      status: 'active',
+    ),
+  ],
+);
+
 DateTime _tomorrowAt(int hour) {
   final now = DateTime.now();
   return DateTime(now.year, now.month, now.day + 1, hour);
@@ -74,6 +100,12 @@ final _seriesSession = ScheduleClass(
 
 class _FakeScheduleRepository implements ScheduleRepository {
   ClassTemplateDraft? lastCreatedTemplate;
+  int? lastBookedClassId;
+
+  @override
+  Future<void> bookClass({required int classId}) async {
+    lastBookedClassId = classId;
+  }
 
   @override
   Future<List<ClassTemplate>> fetchTemplates() async => const [
@@ -153,8 +185,9 @@ class _FakeProgrammingRepository implements ProgrammingRepository {
 /// default test theme would hide.
 Future<_FakeScheduleRepository> _pumpSchedule(
   WidgetTester tester,
-  Size size,
-) async {
+  Size size, {
+  UserProfile profile = _owner,
+}) async {
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
@@ -163,7 +196,7 @@ Future<_FakeScheduleRepository> _pumpSchedule(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        currentProfileProvider.overrideWith((ref) async => _owner),
+        currentProfileProvider.overrideWith((ref) async => profile),
         scheduleRepositoryProvider.overrideWithValue(repository),
         scheduleListProvider.overrideWith((ref) async => [_seriesSession]),
         programmingRepositoryProvider.overrideWithValue(
@@ -191,15 +224,13 @@ void _expectNoException(WidgetTester tester) {
   );
 }
 
-Future<void> _openTomorrow(WidgetTester tester) async {
-  final tomorrow = _tomorrowAt(0);
-  final cell = find.byKey(ValueKey(tomorrow));
-  if (cell.evaluate().isEmpty) {
-    // Tomorrow is in next month's grid page.
-    await tester.tap(find.byTooltip('Next month'));
+/// Opens tomorrow's CrossFit from the week; next week when today is Sunday.
+Future<void> _openTomorrowClass(WidgetTester tester) async {
+  if (_tomorrowAt(0).weekday == DateTime.monday) {
+    await tester.tap(find.byTooltip('Next week'));
     await tester.pumpAndSettle();
   }
-  await tester.tap(find.byKey(ValueKey(tomorrow)));
+  await tester.tap(find.text('CrossFit'));
   await tester.pumpAndSettle();
   _expectNoException(tester);
 }
@@ -210,9 +241,6 @@ void main() {
       tester,
     ) async {
       await _pumpSchedule(tester, size);
-
-      await tester.tap(find.text('Week'));
-      await tester.pumpAndSettle();
       _expectNoException(tester);
       // Today's WOD shows on its day slip; tapping it opens the full card.
       expect(find.text('Fran'), findsOneWidget);
@@ -245,16 +273,15 @@ void main() {
       expect(find.text('This week'), findsNothing);
     });
 
-    testWidgets('Calendar adds a weekly class from the day panel at $size', (
+    testWidgets('Week adds a weekly class right in the day at $size', (
       tester,
     ) async {
       final repository = await _pumpSchedule(tester, size);
-      await _openTomorrow(tester);
 
-      await tester.tap(find.text('Add class'));
+      // Past days offer no "Add class", so the first one is today's.
+      await tester.tap(find.text('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      // The form is a dialog on top of the day panel, not a replacement.
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.text('New class'), findsOneWidget);
 
@@ -277,7 +304,7 @@ void main() {
       expect(find.byType(Dialog), findsNothing);
       final draft = repository.lastCreatedTemplate;
       expect(draft, isNotNull);
-      expect(draft!.weekdays, [_tomorrowAt(0).weekday]);
+      expect(draft!.weekdays, [DateTime.now().weekday]);
       expect(draft.classType, 'WOD');
     });
 
@@ -285,15 +312,8 @@ void main() {
       tester,
     ) async {
       await _pumpSchedule(tester, size);
-      await _openTomorrow(tester);
-
-      // Classes start collapsed: details and actions appear on tap.
-      expect(find.text('Booked Members'), findsNothing);
       expect(find.text('Edit'), findsNothing);
-      // On wide screens the month grid repeats the title; the panel is first.
-      await tester.tap(find.text('CrossFit').first);
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
+      await _openTomorrowClass(tester);
 
       await tester.ensureVisible(find.text('Edit'));
       await tester.pumpAndSettle();
@@ -311,6 +331,21 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('Athletes book a class from the week at $size', (tester) async {
+      final repository = await _pumpSchedule(tester, size, profile: _athlete);
+      expect(find.text('Add class'), findsNothing);
+      expect(find.text('Add WOD'), findsNothing);
+      expect(find.byTooltip('Import WODs'), findsNothing);
+
+      await _openTomorrowClass(tester);
+      await tester.ensureVisible(find.text('Book Class'));
+      await tester.tap(find.text('Book Class'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(repository.lastBookedClassId, _seriesSession.id);
+      expect(find.text('Edit'), findsNothing);
     });
   }
 }

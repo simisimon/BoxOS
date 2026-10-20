@@ -1,6 +1,7 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/programming/presentation/widgets/wod_day_section.dart';
@@ -10,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
-DateTime _mondayOf(DateTime day) => _addDays(day, 1 - day.weekday);
+DateTime mondayOf(DateTime day) => _addDays(day, 1 - day.weekday);
 
 /// Calendar-day arithmetic. Adding a `Duration` of whole days steps in 24h,
 /// which lands on the wrong day across a DST switch (Oct 25 showed twice).
@@ -39,61 +40,85 @@ class _WeekDay {
   const _WeekDay({
     required this.date,
     required this.workout,
-    required this.wodClasses,
+    required this.classes,
   });
 
   final DateTime date;
   final DailyWorkout? workout;
-  final List<ScheduleClass> wodClasses;
+
+  /// Every class of the day, by start time.
+  final List<ScheduleClass> classes;
 
   bool get isPast => date.isBefore(_dateOnly(DateTime.now()));
   bool get isToday => date == _dateOnly(DateTime.now());
+  bool get hasWodClasses => classes.any((session) => session.type.showsWod);
 
   _DayStatus get status {
     final workout = this.workout;
     if (workout != null) {
       return workout.isPublished ? _DayStatus.published : _DayStatus.draft;
     }
-    return wodClasses.isEmpty ? _DayStatus.rest : _DayStatus.missing;
+    return hasWodClasses ? _DayStatus.missing : _DayStatus.rest;
   }
 }
 
-/// Programming view for managers: the whole week at a glance, one slip per
-/// day showing whether its WOD is published, drafted or still missing.
-/// Tapping a slip opens the full WOD (or the editor for an empty day).
-class WodWeekView extends ConsumerStatefulWidget {
-  const WodWeekView({super.key});
+/// The schedule, one week at a time: per day the WOD on top and every class
+/// below. Managers add classes and WODs right in the day; everyone opens a
+/// class to book it or see who is coming.
+class ScheduleWeekView extends ConsumerWidget {
+  const ScheduleWeekView({
+    super.key,
+    required this.weekStart,
+    required this.onWeekChanged,
+    required this.canManage,
+    required this.selectedClassId,
+    required this.onOpenClass,
+    this.onAddClass,
+    this.onImport,
+  });
 
-  @override
-  ConsumerState<WodWeekView> createState() => _WodWeekViewState();
-}
+  /// Monday of the week shown.
+  final DateTime weekStart;
+  final ValueChanged<DateTime> onWeekChanged;
+  final bool canManage;
 
-class _WodWeekViewState extends ConsumerState<WodWeekView> {
-  late DateTime _weekStart = _mondayOf(DateTime.now());
+  /// Highlighted while its side panel is open.
+  final int? selectedClassId;
+  final ValueChanged<ScheduleClass> onOpenClass;
 
-  void _shiftWeek(int weeks) {
-    setState(() => _weekStart = _addDays(_weekStart, 7 * weeks));
-  }
+  /// Null hides "Add class" (athletes).
+  final ValueChanged<DateTime>? onAddClass;
 
-  Future<void> _openDay(_WeekDay day) async {
+  /// Opens the CSV WOD import. Null hides the button (athletes).
+  final VoidCallback? onImport;
+
+  Future<void> _openWod(
+    BuildContext context,
+    WidgetRef ref,
+    _WeekDay day,
+  ) async {
     if (day.workout != null) {
-      await showWodDetailsDialog(context, date: day.date, canManage: true);
-    } else if (!day.isPast) {
+      await showWodDetailsDialog(context, date: day.date, canManage: canManage);
+    } else if (canManage && !day.isPast) {
       await showWodEditorDialog(context, ref, date: day.date);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final localizations = MaterialLocalizations.of(context);
     final sessions = ref.watch(scheduleListProvider).value ?? const [];
     final workoutsAsync = ref.watch(programmingListProvider);
-    final workouts = workoutsAsync.value ?? const <DailyWorkout>[];
+    // Athletes only ever see published WODs.
+    final workouts = [
+      for (final workout in workoutsAsync.value ?? const <DailyWorkout>[])
+        if (canManage || workout.isPublished) workout,
+    ];
 
     final days = [for (var i = 0; i < 7; i++) _buildDay(i, workouts, sessions)];
-    final weekEnd = _addDays(_weekStart, 6);
-    final isCurrentWeek = _weekStart == _mondayOf(DateTime.now());
+    final weekEnd = _addDays(weekStart, 6);
+    final isCurrentWeek = weekStart == mondayOf(DateTime.now());
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -112,36 +137,43 @@ class _WodWeekViewState extends ConsumerState<WodWeekView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${localizations.formatShortMonthDay(_weekStart)} – '
+                      '${localizations.formatShortMonthDay(weekStart)} – '
                       '${localizations.formatShortMonthDay(weekEnd)}',
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: appText,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _summary(days),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: appMutedText,
+                    if (canManage) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _summary(days),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: appMutedText,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
               if (!isCurrentWeek)
                 TextButton(
-                  onPressed: () =>
-                      setState(() => _weekStart = _mondayOf(DateTime.now())),
+                  onPressed: () => onWeekChanged(mondayOf(DateTime.now())),
                   child: const Text('This week'),
                 ),
+              if (onImport != null)
+                IconButton(
+                  onPressed: onImport,
+                  icon: const Icon(Icons.upload_file_rounded),
+                  tooltip: 'Import WODs',
+                ),
               IconButton(
-                onPressed: () => _shiftWeek(-1),
+                onPressed: () => onWeekChanged(_addDays(weekStart, -7)),
                 icon: const Icon(Icons.chevron_left_rounded),
                 tooltip: 'Previous week',
               ),
               IconButton(
-                onPressed: () => _shiftWeek(1),
+                onPressed: () => onWeekChanged(_addDays(weekStart, 7)),
                 icon: const Icon(Icons.chevron_right_rounded),
                 tooltip: 'Next week',
               ),
@@ -153,6 +185,17 @@ class _WodWeekViewState extends ConsumerState<WodWeekView> {
                 ? const Center(child: CircularProgressIndicator())
                 : LayoutBuilder(
                     builder: (context, constraints) {
+                      Widget slip(_WeekDay day, _SlipLayout layout) => _DaySlip(
+                        day: day,
+                        layout: layout,
+                        canManage: canManage,
+                        selectedClassId: selectedClassId,
+                        onOpenWod: () => _openWod(context, ref, day),
+                        onOpenClass: onOpenClass,
+                        onAddClass: onAddClass == null || day.isPast
+                            ? null
+                            : () => onAddClass!(day.date),
+                      );
                       if (constraints.maxWidth >= _columnsBreakpoint) {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -160,11 +203,7 @@ class _WodWeekViewState extends ConsumerState<WodWeekView> {
                             for (var i = 0; i < days.length; i++) ...[
                               if (i > 0) const SizedBox(width: 8),
                               Expanded(
-                                child: _DaySlip(
-                                  day: days[i],
-                                  layout: _SlipLayout.column,
-                                  onTap: () => _openDay(days[i]),
-                                ),
+                                child: slip(days[i], _SlipLayout.column),
                               ),
                             ],
                           ],
@@ -173,11 +212,8 @@ class _WodWeekViewState extends ConsumerState<WodWeekView> {
                       return ListView.separated(
                         itemCount: days.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => _DaySlip(
-                          day: days[index],
-                          layout: _SlipLayout.row,
-                          onTap: () => _openDay(days[index]),
-                        ),
+                        itemBuilder: (context, index) =>
+                            slip(days[index], _SlipLayout.row),
                       );
                     },
                   ),
@@ -192,23 +228,22 @@ class _WodWeekViewState extends ConsumerState<WodWeekView> {
     List<DailyWorkout> workouts,
     List<ScheduleClass> sessions,
   ) {
-    final date = _addDays(_weekStart, offset);
+    final date = _addDays(weekStart, offset);
     return _WeekDay(
       date: date,
       workout: workouts
           .where((workout) => _dateOnly(workout.scheduledDate) == date)
           .firstOrNull,
-      wodClasses: [
+      classes: [
         for (final session in sessions)
-          if (session.type.showsWod && _dateOnly(session.startTime) == date)
-            session,
+          if (_dateOnly(session.startTime) == date) session,
       ]..sort((a, b) => a.startTime.compareTo(b.startTime)),
     );
   }
 
   /// One plain sentence on what is left to do this week.
   static String _summary(List<_WeekDay> days) {
-    final wodDays = days.where((day) => day.wodClasses.isNotEmpty).toList();
+    final wodDays = days.where((day) => day.hasWodClasses).toList();
     if (wodDays.isEmpty) {
       return 'No WOD classes this week.';
     }
@@ -226,58 +261,191 @@ class _WodWeekViewState extends ConsumerState<WodWeekView> {
 
 enum _SlipLayout { column, row }
 
-/// One day of the week: status, WOD title and sections, and the WOD class
-/// times. Columns on wide screens, compact rows on phones.
+/// One day of the week: the WOD on top (tap to open or add it), then the
+/// day's classes and, for managers, "Add class". Columns on wide screens,
+/// stacked rows on phones.
 class _DaySlip extends StatelessWidget {
   const _DaySlip({
     required this.day,
     required this.layout,
-    required this.onTap,
+    required this.canManage,
+    required this.selectedClassId,
+    required this.onOpenWod,
+    required this.onOpenClass,
+    required this.onAddClass,
   });
 
   final _WeekDay day;
   final _SlipLayout layout;
-  final VoidCallback onTap;
+  final bool canManage;
+  final int? selectedClassId;
+  final VoidCallback onOpenWod;
+  final ValueChanged<ScheduleClass> onOpenClass;
+  final VoidCallback? onAddClass;
 
-  bool get _isTappable => day.workout != null || !day.isPast;
+  bool get _wodTappable => day.workout != null || (canManage && !day.isPast);
 
   @override
   Widget build(BuildContext context) {
     final status = day.status;
-    final content = layout == _SlipLayout.column
-        ? _ColumnContent(day: day, status: status)
-        : _RowContent(day: day, status: status);
     // Status rail: solid for published or missing, faint for drafts.
     final railColor = switch (status) {
       _DayStatus.draft => appPrimary.withValues(alpha: 0.35),
       _DayStatus.rest => Colors.transparent,
       _ => status.color,
     };
+    final isColumn = layout == _SlipLayout.column;
 
-    return Opacity(
-      opacity: day.isPast && day.workout == null ? 0.55 : 1,
-      child: Material(
-        color: appSurfaceAlt,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(color: day.isToday ? appPrimaryHairline : appBorder),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: _isTappable ? onTap : null,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final wod = InkWell(
+      onTap: _wodTappable ? onOpenWod : null,
+      child: Opacity(
+        opacity: day.isPast && day.workout == null ? 0.55 : 1,
+        child: isColumn
+            ? _ColumnContent(day: day, status: status, canManage: canManage)
+            : _RowContent(day: day, status: status, canManage: canManage),
+      ),
+    );
+    final classes = Padding(
+      // Phone rows line the classes up under the WOD, past the date column.
+      padding: EdgeInsets.fromLTRB(isColumn ? 8 : 68, 0, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final session in day.classes) ...[
+            _ClassTile(
+              session: session,
+              selected: session.id == selectedClassId,
+              onTap: () => onOpenClass(session),
+            ),
+            const SizedBox(height: 4),
+          ],
+          if (onAddClass != null)
+            TextButton.icon(
+              onPressed: onAddClass,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text('Add class'),
+            ),
+        ],
+      ),
+    );
+
+    return Material(
+      color: appSurfaceAlt,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: BorderSide(color: day.isToday ? appPrimaryHairline : appBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(height: 3, color: railColor),
+          if (isColumn)
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [wod, classes],
+                ),
+              ),
+            )
+          else ...[
+            wod,
+            classes,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One class in a day slip: type colour, time, title and fill.
+class _ClassTile extends StatelessWidget {
+  const _ClassTile({
+    required this.session,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ScheduleClass session;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final time = MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(TimeOfDay.fromDateTime(session.startTime));
+    final fillColor = session.isFull ? appDanger : appSubtleText;
+
+    return Material(
+      color: selected ? appPrimary.withValues(alpha: 0.12) : appSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: BorderSide(color: selected ? appPrimary : appBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 5, 6, 5),
+          child: Row(
             children: [
-              Container(height: 3, color: railColor),
-              if (layout == _SlipLayout.column)
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const NeverScrollableScrollPhysics(),
-                    child: content,
+              Container(
+                width: 3,
+                height: 30,
+                color: classTypeColor(session.type),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      time,
+                      style: appMono(
+                        fontSize: 10,
+                        color: appText,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    Text(
+                      session.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: appText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (session.isBooked || session.isWaitlisted)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    session.isBooked
+                        ? Icons.check_circle_rounded
+                        : Icons.hourglass_top_rounded,
+                    size: 14,
+                    color: session.isBooked ? appSuccess : appWarning,
                   ),
-                )
-              else
-                content,
+                ),
+              const SizedBox(width: 4),
+              Text(
+                '${session.bookedCount}/${session.capacity}',
+                style: appMono(
+                  fontSize: 10,
+                  color: fillColor,
+                  letterSpacing: 0,
+                ),
+              ),
             ],
           ),
         ),
@@ -391,17 +559,6 @@ String? _sectionDetail(DailyWorkoutSection section) {
   return line.isEmpty ? null : line;
 }
 
-String _classTimes(BuildContext context, List<ScheduleClass> classes) {
-  final localizations = MaterialLocalizations.of(context);
-  return classes
-      .map(
-        (session) => localizations.formatTimeOfDay(
-          TimeOfDay.fromDateTime(session.startTime),
-        ),
-      )
-      .join('  ');
-}
-
 class _AddWodHint extends StatelessWidget {
   const _AddWodHint();
 
@@ -425,12 +582,18 @@ class _AddWodHint extends StatelessWidget {
 }
 
 class _ColumnContent extends StatelessWidget {
-  const _ColumnContent({required this.day, required this.status});
+  const _ColumnContent({
+    required this.day,
+    required this.status,
+    required this.canManage,
+  });
 
   final _WeekDay day;
   final _DayStatus status;
+  final bool canManage;
 
-  static const _maxSections = 4;
+  /// Kept short so the day's classes stay in view below the WOD.
+  static const _maxSections = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -446,14 +609,7 @@ class _ColumnContent extends StatelessWidget {
           _DayHeading(day: day),
           const SizedBox(height: 6),
           _StatusLabel(status: status, isPast: day.isPast),
-          if (day.wodClasses.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              _classTimes(context, day.wodClasses),
-              style: appMono(fontSize: 10, letterSpacing: 0),
-            ),
-          ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           if (workout != null) ...[
             Text(
               workout.title,
@@ -468,7 +624,7 @@ class _ColumnContent extends StatelessWidget {
             const SizedBox(height: 8),
             for (final section in sections.take(_maxSections))
               Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -501,7 +657,7 @@ class _ColumnContent extends StatelessWidget {
                   color: appSubtleText,
                 ),
               ),
-          ] else if (!day.isPast)
+          ] else if (canManage && !day.isPast)
             const _AddWodHint(),
         ],
       ),
@@ -510,10 +666,15 @@ class _ColumnContent extends StatelessWidget {
 }
 
 class _RowContent extends StatelessWidget {
-  const _RowContent({required this.day, required this.status});
+  const _RowContent({
+    required this.day,
+    required this.status,
+    required this.canManage,
+  });
 
   final _WeekDay day;
   final _DayStatus status;
+  final bool canManage;
 
   @override
   Widget build(BuildContext context) {
@@ -521,7 +682,7 @@ class _RowContent extends StatelessWidget {
     final workout = day.workout;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -552,15 +713,8 @@ class _RowContent extends StatelessWidget {
                         color: appMutedText,
                       ),
                     ),
-                ] else if (!day.isPast)
+                ] else if (canManage && !day.isPast)
                   const _AddWodHint(),
-                if (day.wodClasses.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    _classTimes(context, day.wodClasses),
-                    style: appMono(fontSize: 10, letterSpacing: 0),
-                  ),
-                ],
               ],
             ),
           ),
