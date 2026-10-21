@@ -35,6 +35,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 
   int? _pendingRequestId;
 
+  /// Members and join requests share the page as two tabs.
+  bool _showRequests = false;
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -203,55 +206,77 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       );
     }
 
+    // The page itself does not scroll: below the tabs, the member list and
+    // the member detail each scroll on their own.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(appSpaceLg, appSpaceLg, appSpaceLg, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(
+                  value: false,
+                  icon: const Icon(Icons.group_outlined),
+                  label: Text('Members (${_users.length})'),
+                ),
+                ButtonSegment(
+                  value: true,
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  label: Text('Requests (${_requests.length})'),
+                ),
+              ],
+              selected: {_showRequests},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) =>
+                  setState(() => _showRequests = selection.first),
+            ),
+          ),
+          const SizedBox(height: appSpaceMd),
+          Expanded(
+            child: _showRequests ? _buildRequestsTab() : _buildMembersTab(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMembersTab() {
+    if (_users.isEmpty) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: AppEmptyState(
+          icon: Icons.group_outlined,
+          title: 'No active members',
+          subtitle: 'Approved members of your box show up here.',
+          compact: true,
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoleMixSummary(users: _users),
+        const SizedBox(height: appSpaceMd),
+        Expanded(
+          child: MemberRoster(
+            users: _users,
+            onSave: _saveDraft,
+            onRefresh: _refresh,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRequestsTab() {
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          appSpaceLg,
-          appSpaceLg,
-          appSpaceLg,
-          appSpace3xl,
-        ),
-        children: [
-          AppSectionHeader(
-            title: 'Join Requests',
-            eyebrow: 'Membership',
-            trailing: _requests.isEmpty
-                ? null
-                : AppPill(
-                    label: '${_requests.length}',
-                    intent: AppPillIntent.warning,
-                    dense: true,
-                  ),
-          ),
-          const SizedBox(height: appSpaceMd),
-          _buildRequests(),
-          const SizedBox(height: appSpace2xl),
-          AppSectionHeader(
-            title: 'Members',
-            eyebrow: 'Roster',
-            trailing: _users.isEmpty
-                ? null
-                : AppPill(
-                    label: '${_users.length}',
-                    intent: AppPillIntent.primary,
-                    dense: true,
-                  ),
-          ),
-          const SizedBox(height: appSpaceMd),
-          if (_users.isEmpty)
-            AppEmptyState(
-              icon: Icons.group_outlined,
-              title: 'No active members',
-              subtitle: 'Approved members of your box show up here.',
-              compact: true,
-            )
-          else ...[
-            _RoleMixSummary(users: _users),
-            const SizedBox(height: appSpaceMd),
-            MemberRoster(users: _users, onSave: _saveDraft),
-          ],
-        ],
+        padding: const EdgeInsets.only(bottom: appSpace3xl),
+        children: [_buildRequests()],
       ),
     );
   }

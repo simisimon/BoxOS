@@ -51,6 +51,7 @@ class MemberRoster extends StatefulWidget {
     required this.users,
     required this.onSave,
     this.savingUserId,
+    this.onRefresh,
   });
 
   final List<RoleManagedUser> users;
@@ -63,6 +64,9 @@ class MemberRoster extends StatefulWidget {
   /// Optional external override of the spinning row — useful when the parent
   /// owns the in-flight state for snackbars / refresh side effects.
   final int? savingUserId;
+
+  /// Pull-to-refresh on the member list; null disables it.
+  final Future<void> Function()? onRefresh;
 
   @override
   State<MemberRoster> createState() => _MemberRosterState();
@@ -143,13 +147,24 @@ class _MemberRosterState extends State<MemberRoster> {
     return visible.first;
   }
 
+  /// Phones have no room for a side panel: the detail opens as its own page.
+  void _openDetailPage(RoleManagedUser user) {
+    setState(() => _selectedUserId = user.id);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _MemberDetailPage(user: user, onSave: _save),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _visibleUsers();
     final selectedUser = _selectedUser(visible);
+    // Fills the height its parent gives it: the list and the detail each
+    // scroll on their own, so the detail never moves with the list.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
       children: [
         _MemberToolbar(
           total: widget.users.length,
@@ -163,54 +178,105 @@ class _MemberRosterState extends State<MemberRoster> {
           onSortChanged: (sort) => setState(() => _sort = sort),
         ),
         const SizedBox(height: appSpaceMd),
-        if (visible.isEmpty)
-          AppEmptyState(
-            icon: Icons.search_off_rounded,
-            title: 'No matches',
-            subtitle: 'No members match the current search or filter.',
-            compact: true,
-          )
-        else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 860;
-              final list = _MemberList(
-                users: visible,
-                selectedUserId: selectedUser?.id,
-                savingUserId: _effectiveSavingId,
-                onSelected: (user) => setState(() => _selectedUserId = user.id),
-              );
-              final detail = selectedUser == null
-                  ? const SizedBox.shrink()
-                  : _MemberDetailPanel(
-                      user: selectedUser,
-                      saving: _effectiveSavingId == selectedUser.id,
-                      onSave: _save,
+        Expanded(
+          child: visible.isEmpty
+              ? Align(
+                  alignment: Alignment.topCenter,
+                  child: AppEmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: 'No matches',
+                    subtitle: 'No members match the current search or filter.',
+                    compact: true,
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 720;
+                    Widget list = _MemberList(
+                      users: visible,
+                      selectedUserId: wide ? selectedUser?.id : null,
+                      savingUserId: _effectiveSavingId,
+                      onSelected: wide
+                          ? (user) => setState(() => _selectedUserId = user.id)
+                          : _openDetailPage,
                     );
-              if (!wide) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    list,
-                    const SizedBox(height: appSpaceMd),
-                    detail,
-                  ],
-                );
-              }
-              final detailWidth = (constraints.maxWidth * 0.36)
-                  .clamp(420.0, 520.0)
-                  .toDouble();
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: list),
-                  const SizedBox(width: appSpaceMd),
-                  SizedBox(width: detailWidth, child: detail),
-                ],
-              );
-            },
-          ),
+                    if (widget.onRefresh != null) {
+                      list = RefreshIndicator(
+                        onRefresh: widget.onRefresh!,
+                        child: list,
+                      );
+                    }
+                    if (!wide || selectedUser == null) {
+                      return list;
+                    }
+                    final detailWidth = (constraints.maxWidth * 0.48)
+                        .clamp(360.0, 480.0)
+                        .toDouble();
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: list),
+                        const SizedBox(width: appSpaceMd),
+                        SizedBox(
+                          width: detailWidth,
+                          child: SingleChildScrollView(
+                            // A fresh member starts at the top of the panel.
+                            key: ValueKey(selectedUser.id),
+                            child: _MemberDetailPanel(
+                              user: selectedUser,
+                              saving: _effectiveSavingId == selectedUser.id,
+                              onSave: _save,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+        ),
       ],
+    );
+  }
+}
+
+/// Full-screen member detail for phones, with its own saving state; closes
+/// once the save went through.
+class _MemberDetailPage extends StatefulWidget {
+  const _MemberDetailPage({required this.user, required this.onSave});
+
+  final RoleManagedUser user;
+  final Future<void> Function(MemberDraft draft) onSave;
+
+  @override
+  State<_MemberDetailPage> createState() => _MemberDetailPageState();
+}
+
+class _MemberDetailPageState extends State<_MemberDetailPage> {
+  bool _saving = false;
+
+  Future<void> _save(MemberDraft draft) async {
+    setState(() => _saving = true);
+    try {
+      await widget.onSave(draft);
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: appPageBackground,
+      appBar: AppBar(title: Text(_MemberHeader.displayName(widget.user))),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(appSpaceLg),
+        child: _MemberDetailPanel(
+          user: widget.user,
+          saving: _saving,
+          onSave: _save,
+        ),
+      ),
     );
   }
 }
@@ -430,30 +496,19 @@ class _MemberList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final columns = width >= 1100 ? 3 : (width >= 680 ? 2 : 1);
-        final spacing = appSpaceSm;
-        final itemWidth = columns <= 1
-            ? width
-            : (width - (spacing * (columns - 1))) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final user in users)
-              SizedBox(
-                width: itemWidth,
-                child: _MemberRow(
-                  key: ValueKey(user.id),
-                  user: user,
-                  selected: user.id == selectedUserId,
-                  saving: savingUserId == user.id,
-                  onSelected: () => onSelected(user),
-                ),
-              ),
-          ],
+    return ListView.separated(
+      // Room for the pull-to-refresh spinner and a bit of air at the end.
+      padding: const EdgeInsets.only(bottom: appSpaceLg),
+      itemCount: users.length,
+      separatorBuilder: (_, _) => const SizedBox(height: appSpaceSm),
+      itemBuilder: (context, index) {
+        final user = users[index];
+        return _MemberRow(
+          key: ValueKey(user.id),
+          user: user,
+          selected: user.id == selectedUserId,
+          saving: savingUserId == user.id,
+          onSelected: () => onSelected(user),
         );
       },
     );

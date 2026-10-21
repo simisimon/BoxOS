@@ -44,12 +44,16 @@ void main() {
       ),
     ];
 
+    // Desktop width: list and detail panel side by side. The roster fills
+    // the height it is given, so it sits straight in the body.
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: MemberRoster(users: users, onSave: (_) async {}),
-          ),
+          body: MemberRoster(users: users, onSave: (_) async {}),
         ),
       ),
     );
