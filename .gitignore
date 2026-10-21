@@ -67,3 +67,6 @@ backend/boxos_dev.db
 backend/__pycache__/
 **/__pycache__/
 *.py[cod]
+
+# Sensitive local settings
+.claude/settings.local.json
