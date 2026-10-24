@@ -2618,7 +2618,7 @@ void main() {
     await _settleApp(tester);
 
     expect(find.text('Switch gym context fast'), findsOneWidget);
-    expect(find.text('Current Gym'), findsOneWidget);
+    expect(find.text('CURRENT GYM'), findsOneWidget);
     expect(switchButton, findsOneWidget);
   });
 

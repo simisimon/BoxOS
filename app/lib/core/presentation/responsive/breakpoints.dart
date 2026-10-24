@@ -44,7 +44,7 @@ double contentMaxWidthFor(AppBreakpoint breakpoint) {
     case AppBreakpoint.expanded:
       return 840;
     case AppBreakpoint.large:
-      return 960;
+      return 1080;
   }
 }
 

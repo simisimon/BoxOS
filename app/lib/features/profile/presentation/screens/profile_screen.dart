@@ -35,35 +35,36 @@ DateTime _weekStart(DateTime date) {
   return d.subtract(Duration(days: d.weekday - DateTime.monday));
 }
 
-final _trainingSnapshotProvider =
-    FutureProvider.autoDispose<_TrainingSnapshot>((ref) async {
-  final entries = await ref.read(logbookRepositoryProvider).fetchEntries();
-  final thisWeekStart = _weekStart(DateTime.now());
+final _trainingSnapshotProvider = FutureProvider.autoDispose<_TrainingSnapshot>(
+  (ref) async {
+    final entries = await ref.read(logbookRepositoryProvider).fetchEntries();
+    final thisWeekStart = _weekStart(DateTime.now());
 
-  var sessionsThisWeek = 0;
-  var prCount = 0;
-  final weeksWithSessions = <DateTime>{};
-  for (final entry in entries) {
-    if (entry.isPr) prCount++;
-    final weekStart = _weekStart(entry.scheduledDate);
-    weeksWithSessions.add(weekStart);
-    if (!weekStart.isBefore(thisWeekStart)) sessionsThisWeek++;
-  }
+    var sessionsThisWeek = 0;
+    var prCount = 0;
+    final weeksWithSessions = <DateTime>{};
+    for (final entry in entries) {
+      if (entry.isPr) prCount++;
+      final weekStart = _weekStart(entry.scheduledDate);
+      weeksWithSessions.add(weekStart);
+      if (!weekStart.isBefore(thisWeekStart)) sessionsThisWeek++;
+    }
 
-  // Walk back week-by-week from the current week while sessions exist.
-  var streak = 0;
-  var cursor = thisWeekStart;
-  while (weeksWithSessions.contains(cursor)) {
-    streak++;
-    cursor = cursor.subtract(const Duration(days: 7));
-  }
+    // Walk back week-by-week from the current week while sessions exist.
+    var streak = 0;
+    var cursor = thisWeekStart;
+    while (weeksWithSessions.contains(cursor)) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 7));
+    }
 
-  return _TrainingSnapshot(
-    sessionsThisWeek: sessionsThisWeek,
-    weekStreak: streak,
-    prCount: prCount,
-  );
-});
+    return _TrainingSnapshot(
+      sessionsThisWeek: sessionsThisWeek,
+      weekStreak: streak,
+      prCount: prCount,
+    );
+  },
+);
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -80,7 +81,12 @@ class ProfileScreen extends ConsumerWidget {
 
     return AppGridBackground(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: const EdgeInsets.fromLTRB(
+          appSpaceLg,
+          appSpaceLg,
+          appSpaceLg,
+          appSpace2xl,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -95,56 +101,47 @@ class ProfileScreen extends ConsumerWidget {
                   ? null
                   : ref.watch(_trainingSnapshotProvider).value,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: appSpace2xl),
             _ActionSection(
               eyebrow: 'Account Settings',
               title: 'Control your account surface',
-              subtitle:
-                  'Profile edits, gym switching, security, and notifications now sit in clearer action groups.',
               children: [
-                _PrimaryActionTile(
+                _ActionTile(
                   icon: Icons.edit_outlined,
                   title: 'Edit Profile',
                   subtitle:
                       'Update name, nickname, and personal profile details.',
-                  accentColor: appPrimary,
                   enabled: !isLoading,
                   onTap: () => context.go('/edit-profile'),
                 ),
-                const SizedBox(height: 12),
                 if (profile?.accountType == AccountType.admin &&
-                    profile?.activeGym == null) ...[
-                  _PrimaryActionTile(
+                    profile?.activeGym == null)
+                  _ActionTile(
                     icon: Icons.storefront_outlined,
                     title: 'Create Gym',
                     subtitle:
                         'Finish the admin setup path so members and programming can go live.',
-                    accentColor: appPrimary,
                     enabled: !isLoading,
                     onTap: () => context.go('/create-gym'),
-                  ),
-                ] else ...[
-                  _PrimaryActionTile(
+                  )
+                else
+                  _ActionTile(
                     icon: Icons.search_outlined,
                     title: 'Find or Request Gym',
                     subtitle:
                         'Browse available gyms or request access from the athlete flow.',
-                    accentColor: appPrimary,
                     enabled: !isLoading,
                     onTap: () => context.go('/gyms'),
                   ),
-                ],
               ],
             ),
-            const SizedBox(height: 16),
-            if (profile?.role == UserRole.admin)
+            if (profile?.role == UserRole.admin) ...[
+              const SizedBox(height: appSpace2xl),
               _ActionSection(
                 eyebrow: 'Owner',
                 title: 'Operate the gym',
-                subtitle:
-                    'Analytics live on the Dashboard; member management and join-request review live in the Members tab.',
                 children: [
-                  _SecondaryActionTile(
+                  _ActionTile(
                     icon: Icons.tune_rounded,
                     title: 'Box Settings',
                     subtitle:
@@ -154,14 +151,13 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            if (profile?.role == UserRole.admin) const SizedBox(height: 16),
+            ],
+            const SizedBox(height: appSpace2xl),
             _ActionSection(
               eyebrow: 'Preferences & Security',
               title: 'Keep your account tight',
-              subtitle:
-                  'Notifications, password changes, and account lifecycle controls are grouped here.',
               children: [
-                _SecondaryActionTile(
+                _ActionTile(
                   icon: Icons.notifications_outlined,
                   title: 'Notification Settings',
                   subtitle:
@@ -169,16 +165,14 @@ class ProfileScreen extends ConsumerWidget {
                   enabled: !isLoading,
                   onTap: () => context.go('/notification-settings'),
                 ),
-                const SizedBox(height: 12),
-                _SecondaryActionTile(
+                _ActionTile(
                   icon: Icons.lock_outline,
                   title: 'Change Password',
                   subtitle: 'Rotate credentials and keep access secure.',
                   enabled: !isLoading,
                   onTap: () => context.go('/change-password'),
                 ),
-                const SizedBox(height: 12),
-                _SecondaryActionTile(
+                _ActionTile(
                   icon: Icons.logout,
                   title: 'Sign Out',
                   subtitle: 'Leave the current session on this device.',
@@ -186,8 +180,7 @@ class ProfileScreen extends ConsumerWidget {
                   onTap: () =>
                       ref.read(authControllerProvider.notifier).signOut(),
                 ),
-                const SizedBox(height: 12),
-                _SecondaryActionTile(
+                _ActionTile(
                   icon: Icons.delete_outline,
                   title: 'Delete Account',
                   subtitle:
@@ -199,14 +192,12 @@ class ProfileScreen extends ConsumerWidget {
               ],
             ),
             if ((profile?.memberships ?? const []).isNotEmpty) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: appSpace2xl),
               _ActionSection(
                 eyebrow: 'Memberships',
                 title: 'Switch gym context fast',
-                subtitle:
-                    'Your active role, timezone, and current gym state are visible before switching.',
                 children: [
-                  for (final membership in profile!.memberships) ...[
+                  for (final membership in profile!.memberships)
                     _MembershipCard(
                       membership: membership,
                       isCurrentGym: profile.activeGym?.id == membership.gym.id,
@@ -214,9 +205,6 @@ class ProfileScreen extends ConsumerWidget {
                       onSwitch: () =>
                           _switchGym(context, ref, membership.gym.id),
                     ),
-                    if (membership != profile.memberships.last)
-                      const SizedBox(height: 12),
-                  ],
                 ],
               ),
             ],
@@ -267,131 +255,96 @@ class _ProfileHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const accentColor = appPrimary;
 
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [accentColor.withValues(alpha: 0.24), appSurface, appSurfaceAlt],
-        ),
-        border: Border.all(color: appBorder),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.14),
-            blurRadius: 32,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Stack(
+    return AppCard(
+      padding: const EdgeInsets.all(appSpaceXl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -12,
-            top: -12,
-            child: _GlowOrb(color: accentColor, size: 84),
-          ),
-          Positioned(
-            right: 38,
-            bottom: -28,
-            child: _GlowOrb(color: appPrimary.withValues(alpha: 0.6), size: 88),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppAvatar(
-                    displayName: displayName,
-                    imageUrl: profileImageUrl.isEmpty ? null : profileImageUrl,
-                    size: 64,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _HeroPill(label: roleLabel, color: accentColor),
-                        _HeroPill(
-                          label: gymName ?? 'No gym selected',
-                          color: appPrimary,
-                          outlined: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              AppAvatar(
+                displayName: displayName,
+                imageUrl: profileImageUrl.isEmpty ? null : profileImageUrl,
+                size: 64,
               ),
-              const SizedBox(height: 18),
-              Text(
-                'Profile',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: appPrimary,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                displayName,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w900,
-                  height: 0.96,
-                ),
-              ),
-              if ((nickname ?? '').isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  '@$nickname',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: appSubtleText,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 10),
-              Text(
-                email ?? 'No email loaded',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: appMutedText,
-                  height: 1.45,
-                ),
-              ),
-              if (snapshot != null) ...[
-                const SizedBox(height: 18),
-                Row(
+              const SizedBox(width: appSpaceLg),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _SnapshotStat(
-                        value: '${snapshot!.sessionsThisWeek}'
-                            '/$_weeklySessionGoal',
-                        label: 'SESSIONS · WK',
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: appText,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    _snapshotDivider,
-                    Expanded(
-                      child: _SnapshotStat(
-                        value: '${snapshot!.weekStreak}',
-                        label: 'WEEK STREAK',
+                    if ((nickname ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '@$nickname',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: appMutedText,
+                        ),
                       ),
-                    ),
-                    _snapshotDivider,
-                    Expanded(
-                      child: _SnapshotStat(
-                        value: '${snapshot!.prCount}',
-                        label: 'PRs ALL-TIME',
+                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      email ?? 'No email loaded',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: appSubtleText,
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ],
           ),
+          const SizedBox(height: appSpaceLg),
+          Wrap(
+            spacing: appSpaceSm,
+            runSpacing: appSpaceSm,
+            children: [
+              AppPill(label: roleLabel, intent: AppPillIntent.primary),
+              AppPill(label: gymName ?? 'No gym selected'),
+            ],
+          ),
+          if (snapshot != null) ...[
+            const SizedBox(height: appSpaceLg),
+            const Divider(height: 1, color: appBorder),
+            const SizedBox(height: appSpaceLg),
+            Row(
+              children: [
+                Expanded(
+                  child: _SnapshotStat(
+                    value:
+                        '${snapshot!.sessionsThisWeek}'
+                        '/$_weeklySessionGoal',
+                    label: 'SESSIONS · WK',
+                  ),
+                ),
+                _snapshotDivider,
+                Expanded(
+                  child: _SnapshotStat(
+                    value: '${snapshot!.weekStreak}',
+                    label: 'WEEK STREAK',
+                  ),
+                ),
+                _snapshotDivider,
+                Expanded(
+                  child: _SnapshotStat(
+                    value: '${snapshot!.prCount}',
+                    label: 'PRs ALL-TIME',
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -438,141 +391,35 @@ class _SnapshotStat extends StatelessWidget {
   }
 }
 
+/// Section header followed by its cards, spaced like the other tabs.
 class _ActionSection extends StatelessWidget {
   const _ActionSection({
     required this.eyebrow,
     required this.title,
-    required this.subtitle,
     required this.children,
   });
 
   final String eyebrow;
   final String title;
-  final String subtitle;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            eyebrow.toUpperCase(),
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: appPrimary,
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: appText,
-              fontWeight: FontWeight.w800,
-              height: 0.96,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: appSubtleText,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 14),
-          ...children,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSectionHeader(eyebrow: eyebrow, title: title),
+        for (final child in children) ...[
+          const SizedBox(height: appSpaceSm),
+          child,
         ],
-      ),
+      ],
     );
   }
 }
 
-class _PrimaryActionTile extends StatelessWidget {
-  const _PrimaryActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.accentColor,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color accentColor;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [accentColor.withOpacity(0.2), appSurface],
-        ),
-        border: Border.all(color: accentColor.withOpacity(0.22)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: enabled ? onTap : null,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                AppAccentBadge(icon: icon, color: accentColor),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: appText,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: appMutedText,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(Icons.north_east_rounded, color: accentColor),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryActionTile extends StatelessWidget {
-  const _SecondaryActionTile({
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -593,51 +440,36 @@ class _SecondaryActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final accentColor = destructive ? appDanger : appPrimary;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: appBorder),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: enabled ? onTap : null,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
+    return AppCard(
+      onTap: enabled ? onTap : null,
+      child: Row(
+        children: [
+          AppAccentBadge(icon: icon, color: accentColor),
+          const SizedBox(width: appSpaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppAccentBadge(icon: icon, color: accentColor),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: appText,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: appSubtleText,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: destructive ? appDanger : appText,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded, color: accentColor),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: appSubtleText,
+                  ),
+                ),
               ],
             ),
           ),
-        ),
+          const SizedBox(width: appSpaceSm),
+          const Icon(Icons.chevron_right_rounded, color: appSubtleText),
+        ],
       ),
     );
   }
@@ -659,15 +491,7 @@ class _MembershipCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isCurrentGym ? appPrimary.withOpacity(0.26) : appSurfaceAlt,
-        ),
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -678,86 +502,36 @@ class _MembershipCard extends StatelessWidget {
                   membership.gym.name,
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: appText,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               if (isCurrentGym)
-                const _HeroPill(label: 'Current Gym', color: appPrimary),
+                const AppPill(
+                  label: 'Current Gym',
+                  intent: AppPillIntent.primary,
+                  dense: true,
+                ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: appSpaceSm),
           Text(
             'Active role here: ${membership.role.label}',
             style: theme.textTheme.bodyMedium?.copyWith(color: appMutedText),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             'Timezone: ${membership.gym.timezone}',
-            style: theme.textTheme.bodyMedium?.copyWith(color: appSubtleText),
+            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
           ),
           if (!isCurrentGym) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: appSpaceMd),
             OutlinedButton(
               onPressed: enabled ? onSwitch : null,
               child: const Text('Switch to This Gym'),
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({
-    required this.label,
-    required this.color,
-    this.outlined = false,
-  });
-
-  final String label;
-  final Color color;
-  final bool outlined;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(outlined ? 0.55 : 0.3)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: appText,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _GlowOrb extends StatelessWidget {
-  const _GlowOrb({required this.color, required this.size});
-
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withValues(alpha: 0.95), color.withValues(alpha: 0.0)],
-          ),
-        ),
       ),
     );
   }
