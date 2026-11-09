@@ -163,6 +163,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/box-settings',
+                name: 'box-settings',
+                builder: (context, state) => const BoxSettingsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -182,11 +191,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       // Full analytics now unfold inside the owner dashboard.
       GoRoute(path: '/admin-analytics', redirect: (context, state) => '/home'),
-      GoRoute(
-        path: '/box-settings',
-        name: 'box-settings',
-        builder: (context, state) => const BoxSettingsScreen(),
-      ),
       GoRoute(
         path: '/change-password',
         name: 'change-password',

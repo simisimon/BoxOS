@@ -17,6 +17,11 @@ const int kProfileBranch = 5;
 /// branch, which is why the index stays.
 const int kTrackingBranch = 6;
 
+/// Owner-only box configuration. Appended after Tracking so the existing branch
+/// indices stay stable; the owner tab order places it between Logbook and
+/// Profile.
+const int kBoxSettingsBranch = 7;
+
 /// A single bottom-nav / rail destination. [branchIndex] is the shell branch it
 /// activates, decoupling the role-specific tab order from the fixed branch
 /// order in the router.
@@ -99,6 +104,12 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.menu_book_outlined,
     activeIcon: Icons.menu_book_rounded,
     label: 'Logbook',
+  ),
+  ShellDestination(
+    branchIndex: kBoxSettingsBranch,
+    icon: Icons.tune_outlined,
+    activeIcon: Icons.tune_rounded,
+    label: 'Box Settings',
   ),
   ShellDestination(
     branchIndex: kProfileBranch,
