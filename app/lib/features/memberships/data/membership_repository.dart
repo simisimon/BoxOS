@@ -41,19 +41,45 @@ class MembershipRepository {
     return MembershipSettings.fromJson(response.data);
   }
 
+  /// Fields left null are kept. [extraTokenPriceCents] sets the price of one
+  /// extra token; [stopSellingExtraTokens] clears it instead.
   Future<MembershipSettings> updateSettings({
     String? currency,
     bool? requirePlanForBooking,
+    int? extraTokenPriceCents,
+    bool stopSellingExtraTokens = false,
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/membership/settings',
       data: {
         'currency': ?currency,
         'require_plan_for_booking': ?requirePlanForBooking,
+        if (stopSellingExtraTokens) 'extra_token_price_cents': null,
+        if (!stopSellingExtraTokens && extraTokenPriceCents != null)
+          'extra_token_price_cents': extraTokenPriceCents,
       },
       options: await _options(),
     );
     return MembershipSettings.fromJson(response.data);
+  }
+
+  Future<StripeConnectState> fetchStripeState() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/payments/stripe',
+      options: await _options(),
+    );
+    return StripeConnectState.fromApi(response.data?['state'] as String?);
+  }
+
+  /// A one-time link to Stripe's sign-up for the box's account.
+  Future<String> createStripeOnboardingLink() async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/payments/stripe/onboarding',
+      options: await _options(),
+    );
+    final url = response.data?['url'] as String?;
+    if (url == null || url.isEmpty) throw Exception('Missing Stripe link.');
+    return url;
   }
 
   Future<List<MembershipPlan>> fetchPlans({
@@ -118,6 +144,9 @@ class MembershipRepository {
       plans: _memberPlans(response.data?['plans']),
       requirePlanForBooking:
           response.data?['require_plan_for_booking'] as bool? ?? false,
+      extraTokens: ExtraTokens.fromJson(
+        response.data?['extra_tokens'] as Map<String, dynamic>?,
+      ),
     );
   }
 
@@ -159,12 +188,41 @@ class MembershipRepository {
     );
   }
 
-  Future<List<MemberPlan>> fetchMemberPlans(int userId) async {
+  Future<MemberMembership> fetchMemberMembership(int userId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/membership/members/$userId',
       options: await _options(),
     );
-    return _memberPlans(response.data?['plans']);
+    return MemberMembership(
+      plans: _memberPlans(response.data?['plans']),
+      extraTokens: ExtraTokens.fromJson(
+        response.data?['extra_tokens'] as Map<String, dynamic>?,
+      ),
+      extraTokenPriceCents: (response.data?['extra_token_price_cents'] as num?)
+          ?.toInt(),
+      currency: response.data?['currency'] as String? ?? 'EUR',
+    );
+  }
+
+  /// Owner adds [tokens] extra tokens; [priceCents] is the total paid
+  /// (defaults to tokens × the box's token price on the server).
+  Future<void> grantExtraTokens({
+    required int userId,
+    required int tokens,
+    int? priceCents,
+  }) async {
+    await _dio.post<void>(
+      '/membership/extra-tokens',
+      data: {'user_id': userId, 'tokens': tokens, 'price_cents': ?priceCents},
+      options: await _options(),
+    );
+  }
+
+  Future<void> removeExtraTokens(int creditId) async {
+    await _dio.delete<void>(
+      '/membership/extra-tokens/$creditId',
+      options: await _options(),
+    );
   }
 
   Future<void> assignPlan({

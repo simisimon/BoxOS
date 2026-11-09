@@ -73,7 +73,12 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
     );
     _type = plan?.type ?? PlanType.unlimited;
     _tokenPeriod = plan?.tokenPeriod ?? TokenPeriod.month;
-    _billing = plan?.billingPeriod ?? BillingPeriod.monthly;
+    // Yearly billing is no longer offered; an older yearly plan is saved as
+    // monthly from now on.
+    final billing = plan?.billingPeriod ?? BillingPeriod.monthly;
+    _billing = BillingPeriod.offered.contains(billing)
+        ? billing
+        : BillingPeriod.monthly;
     // Empty on the server means "all"; show that as every chip selected.
     _classTypes = plan == null || plan.allowedClassTypes.isEmpty
         ? planClassTypes.toSet()
@@ -326,7 +331,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
                     initialValue: _billing,
                     decoration: const InputDecoration(labelText: 'Billed'),
                     items: [
-                      for (final period in BillingPeriod.values)
+                      for (final period in BillingPeriod.offered)
                         DropdownMenuItem(
                           value: period,
                           child: Text(period.label),

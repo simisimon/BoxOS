@@ -71,6 +71,9 @@ enum BillingPeriod {
     BillingPeriod.oneTime => 'One-off',
   };
 
+  /// What the plan editor offers. [yearly] only remains for older plans.
+  static const offered = [BillingPeriod.monthly, BillingPeriod.oneTime];
+
   /// Suffix after the price, e.g. "€129 / month".
   String get priceSuffix => switch (this) {
     BillingPeriod.monthly => ' / month',
@@ -462,16 +465,38 @@ class MemberPlanSummary {
   }
 }
 
+/// Whether the box's Stripe account can take payments.
+enum StripeConnectState {
+  /// The server has no Stripe key; payments are hidden.
+  unavailable,
+  notConnected,
+
+  /// Account created, the owner has not finished Stripe's sign-up.
+  onboarding,
+  ready;
+
+  static StripeConnectState fromApi(String? value) => switch (value) {
+    'not_connected' => StripeConnectState.notConnected,
+    'onboarding' => StripeConnectState.onboarding,
+    'ready' => StripeConnectState.ready,
+    _ => StripeConnectState.unavailable,
+  };
+}
+
 class MembershipSettings {
   const MembershipSettings({
     required this.currency,
     required this.requirePlanForBooking,
     this.currencies = const ['EUR', 'USD', 'GBP', 'CHF'],
+    this.extraTokenPriceCents,
   });
 
   final String currency;
   final bool requirePlanForBooking;
   final List<String> currencies;
+
+  /// Price of one extra token; null = the box does not sell extra tokens.
+  final int? extraTokenPriceCents;
 
   factory MembershipSettings.fromJson(Map<String, dynamic>? data) {
     return MembershipSettings(
@@ -484,8 +509,102 @@ class MembershipSettings {
                 const ['EUR', 'USD', 'GBP', 'CHF'])
           item.toString(),
       ],
+      extraTokenPriceCents: (data?['extra_token_price_cents'] as num?)
+          ?.toInt(),
     );
   }
+}
+
+/// One grant of extra tokens (bought or given by the owner). Valid for one
+/// month; spent when the member's plan cannot cover a class.
+class ExtraTokenCredit {
+  const ExtraTokenCredit({
+    required this.id,
+    required this.tokens,
+    required this.tokensUsed,
+    required this.tokensRemaining,
+    required this.priceCents,
+    required this.currency,
+    required this.grantedOn,
+    required this.validUntil,
+  });
+
+  final int id;
+  final int tokens;
+  final int tokensUsed;
+  final int tokensRemaining;
+
+  /// Total paid for [tokens].
+  final int priceCents;
+  final String currency;
+
+  /// Gym-local dates (YYYY-MM-DD); [validUntil] is the last usable day.
+  final String grantedOn;
+  final String validUntil;
+
+  factory ExtraTokenCredit.fromJson(Map<String, dynamic> data) {
+    return ExtraTokenCredit(
+      id: data['id'] as int? ?? 0,
+      tokens: (data['tokens'] as num?)?.toInt() ?? 0,
+      tokensUsed: (data['tokens_used'] as num?)?.toInt() ?? 0,
+      tokensRemaining: (data['tokens_remaining'] as num?)?.toInt() ?? 0,
+      priceCents: (data['price_cents'] as num?)?.toInt() ?? 0,
+      currency: data['currency'] as String? ?? 'EUR',
+      grantedOn: data['granted_on'] as String? ?? '',
+      validUntil: data['valid_until'] as String? ?? '',
+    );
+  }
+}
+
+/// A member's unexpired extra tokens.
+class ExtraTokens {
+  const ExtraTokens({this.tokensRemaining = 0, this.credits = const []});
+
+  final int tokensRemaining;
+  final List<ExtraTokenCredit> credits;
+
+  /// "3 extra tokens left · first expire 2026-12-08"; null when none are left.
+  String? get summaryLabel {
+    String? firstExpiry;
+    for (final credit in credits) {
+      if (credit.tokensRemaining > 0) {
+        firstExpiry = credit.validUntil;
+        break;
+      }
+    }
+    if (tokensRemaining == 0 || firstExpiry == null) return null;
+    final count = tokensRemaining == 1
+        ? '1 extra token'
+        : '$tokensRemaining extra tokens';
+    final expiry = tokensRemaining == 1 ? 'valid until' : 'first expire';
+    return '$count left · $expiry $firstExpiry';
+  }
+
+  static ExtraTokens fromJson(Map<String, dynamic>? data) {
+    if (data == null) return const ExtraTokens();
+    return ExtraTokens(
+      tokensRemaining: (data['tokens_remaining'] as num?)?.toInt() ?? 0,
+      credits: [
+        for (final item in data['credits'] as List<dynamic>? ?? const [])
+          ExtraTokenCredit.fromJson(item as Map<String, dynamic>),
+      ],
+    );
+  }
+}
+
+/// A member's plans and extra tokens, for the owner's member detail.
+class MemberMembership {
+  const MemberMembership({
+    required this.plans,
+    required this.extraTokens,
+    this.extraTokenPriceCents,
+    this.currency = 'EUR',
+  });
+
+  final List<MemberPlan> plans;
+  final ExtraTokens extraTokens;
+  final int? extraTokenPriceCents;
+  final String currency;
 }
 
 /// The signed-in member's plans at the active box.
@@ -493,10 +612,12 @@ class MyMembership {
   const MyMembership({
     required this.plans,
     required this.requirePlanForBooking,
+    this.extraTokens = const ExtraTokens(),
   });
 
   final List<MemberPlan> plans;
   final bool requirePlanForBooking;
+  final ExtraTokens extraTokens;
 
   MemberPlan? get current => _first(MemberPlanState.current);
   MemberPlan? get upcoming => _first(MemberPlanState.upcoming);

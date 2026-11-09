@@ -387,3 +387,146 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(
             self.count_rows("notifications", "user_id = ? and type = 'waitlist_skipped'", (waiter_id,)), 1
         )
+
+    # --- extra tokens ---------------------------------------------------------
+
+    def grant(self, tokens: int, user_id: int | None = None, **extra):
+        return self.client.post(
+            "/membership/extra-tokens",
+            headers=self.admin_headers,
+            json={"user_id": user_id or self.athlete_id, "tokens": tokens, **extra},
+        )
+
+    def test_owner_sets_extra_token_price(self) -> None:
+        settings_view = self.client.get("/membership/settings", headers=self.admin_headers).json()
+        self.assertIsNone(settings_view["extra_token_price_cents"])
+
+        updated = self.client.patch(
+            "/membership/settings", headers=self.admin_headers, json={"extra_token_price_cents": 1500}
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["extra_token_price_cents"], 1500)
+
+        # Leaving the field out keeps the price; null turns it off.
+        self.enforce()
+        kept = self.client.get("/membership/settings", headers=self.admin_headers).json()
+        self.assertEqual(kept["extra_token_price_cents"], 1500)
+        cleared = self.client.patch(
+            "/membership/settings", headers=self.admin_headers, json={"extra_token_price_cents": None}
+        )
+        self.assertIsNone(cleared.json()["extra_token_price_cents"])
+
+        negative = self.client.patch(
+            "/membership/settings", headers=self.admin_headers, json={"extra_token_price_cents": -5}
+        )
+        self.assertEqual(negative.status_code, 400)
+
+    def test_granted_tokens_default_to_the_box_price_and_expire_after_a_month(self) -> None:
+        self.client.patch("/membership/settings", headers=self.admin_headers, json={"extra_token_price_cents": 1500})
+        granted = self.grant(3)
+        self.assertEqual(granted.status_code, 201, granted.text)
+        extra = granted.json()["extra_tokens"]
+        self.assertEqual(extra["tokens_remaining"], 3)
+        credit = extra["credits"][0]
+        self.assertEqual(credit["price_cents"], 4500)
+        self.assertEqual(credit["source"], "manual")
+        granted_on = date.fromisoformat(credit["granted_on"])
+        valid_until = date.fromisoformat(credit["valid_until"])
+        self.assertGreater(valid_until, granted_on + timedelta(days=26))
+        self.assertLess(valid_until, granted_on + timedelta(days=31))
+
+        free = self.grant(1, price_cents=0).json()["extra_tokens"]
+        self.assertEqual(free["tokens_remaining"], 4)
+
+        mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
+        self.assertEqual(mine["extra_tokens"]["tokens_remaining"], 4)
+        self.assertEqual(mine["extra_token_price_cents"], 1500)
+        self.assertEqual(
+            self.count_rows("notifications", "user_id = ? and title = 'Extra tokens added'", (self.athlete_id,)), 2
+        )
+
+        self.assertEqual(self.grant(0).status_code, 400)
+        self.assertEqual(self.grant(51).status_code, 400)
+        athlete_grant = self.client.post(
+            "/membership/extra-tokens",
+            headers=self.athlete_headers,
+            json={"user_id": self.athlete_id, "tokens": 5},
+        )
+        self.assertEqual(athlete_grant.status_code, 403)
+
+    def test_extra_tokens_cover_classes_the_plan_cannot(self) -> None:
+        self.enforce()
+        plan = self.create_plan({**TEN_PACK, "token_count": 1, "allowed_class_types": ["WOD"]})
+        self.assign(plan["id"])
+        self.grant(2)
+        wod = self.create_class(self.next_week_day(0))
+        second_wod = self.create_class(self.next_week_day(1))
+        pt = self.create_class(self.next_week_day(1), class_type="PT", hour=12)
+        third_wod = self.create_class(self.next_week_day(2))
+
+        # Plan tokens first, then extra tokens (also for class types the plan leaves out).
+        self.assertEqual(self.book(wod).status_code, 201)
+        mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
+        self.assertEqual(mine["plans"][0]["tokens_remaining"], 0)
+        self.assertEqual(mine["extra_tokens"]["tokens_remaining"], 2)
+        self.assertEqual(self.book(second_wod).status_code, 201)
+        self.assertEqual(self.book(pt).status_code, 201)
+        refused = self.book(third_wod)
+        self.assertEqual(refused.status_code, 403)
+        self.assertIn("no tokens left", refused.json()["detail"])
+
+        mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
+        self.assertEqual(mine["plans"][0]["tokens_used"], 1)
+        self.assertEqual(mine["extra_tokens"]["tokens_remaining"], 0)
+
+        # Cancelling gives the extra token back.
+        self.client.request("DELETE", "/schedule/bookings", headers=self.athlete_headers, json={"class_id": pt})
+        self.assertEqual(self.book(third_wod).status_code, 201)
+
+    def test_extra_tokens_work_without_a_plan_but_not_after_they_expire(self) -> None:
+        self.enforce()
+        self.grant(5)
+        soon = self.create_class(self.next_week_day(1))
+        too_late = self.create_class(self.next_week_day(1) + timedelta(days=35))
+
+        self.assertEqual(self.book(soon).status_code, 201)
+        refused = self.book(too_late)
+        self.assertEqual(refused.status_code, 403)
+        self.assertIn("active membership plan", refused.json()["detail"])
+
+    def test_extra_tokens_are_not_spent_when_plans_are_not_enforced(self) -> None:
+        self.grant(1)
+        class_id = self.create_class(self.next_week_day(1))
+        self.assertEqual(self.book(class_id).status_code, 201)
+        mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
+        self.assertEqual(mine["extra_tokens"]["tokens_remaining"], 1)
+
+    def test_owner_sees_and_removes_extra_tokens(self) -> None:
+        credit_id = self.grant(2).json()["extra_tokens"]["credits"][0]["id"]
+
+        detail = self.client.get(f"/membership/members/{self.athlete_id}", headers=self.admin_headers).json()
+        self.assertEqual(detail["extra_tokens"]["tokens_remaining"], 2)
+        roster = self.client.get("/roles/users", headers=self.admin_headers).json()["users"]
+        athlete = next(user for user in roster if user["id"] == self.athlete_id)
+        self.assertEqual(athlete["extra_tokens_remaining"], 2)
+
+        forbidden = self.client.delete(f"/membership/extra-tokens/{credit_id}", headers=self.athlete_headers)
+        self.assertEqual(forbidden.status_code, 403)
+        removed = self.client.delete(f"/membership/extra-tokens/{credit_id}", headers=self.admin_headers)
+        self.assertEqual(removed.status_code, 200, removed.text)
+        self.assertEqual(removed.json()["extra_tokens"]["tokens_remaining"], 0)
+        missing = self.client.delete(f"/membership/extra-tokens/{credit_id}", headers=self.admin_headers)
+        self.assertEqual(missing.status_code, 404)
+
+    def test_members_do_not_see_payment_status(self) -> None:
+        plan = self.create_plan(UNLIMITED)
+        assigned = self.assign(plan["id"])
+        self.client.patch(
+            "/membership/assignments",
+            headers=self.admin_headers,
+            json={"member_plan_id": assigned["id"], "payment_status": "overdue"},
+        )
+        mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
+        self.assertNotIn("payment_status", mine["plans"][0])
+        owner_view = self.client.get(f"/membership/members/{self.athlete_id}", headers=self.admin_headers).json()
+        self.assertEqual(owner_view["plans"][0]["payment_status"], "overdue")

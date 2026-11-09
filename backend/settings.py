@@ -38,6 +38,14 @@ CORS_ALLOW_ORIGINS = [
 ]
 LOG_DELIVERY_TOKENS = os.getenv("BOXOS_LOG_DELIVERY_TOKENS", "1") == "1"
 RATE_LIMIT_ENABLED = os.getenv("BOXOS_RATE_LIMIT_ENABLED", "1") == "1"
+
+# Stripe Connect (payments). Empty secret key = payments are switched off and
+# the app hides them. Use test-mode keys (sk_test_...) for development.
+STRIPE_SECRET_KEY = os.getenv("BOXOS_STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("BOXOS_STRIPE_WEBHOOK_SECRET", "")
+STRIPE_ACCOUNT_COUNTRY = os.getenv("BOXOS_STRIPE_ACCOUNT_COUNTRY", "DE")
+# Where Stripe sends owners back after onboarding (the Flutter web app).
+APP_BASE_URL = os.getenv("BOXOS_APP_BASE_URL", "http://localhost:3001").rstrip("/")
 DELETE_RETENTION_DAYS = 30
 MAX_RECURRENCE_OCCURRENCES = 365
 MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024

@@ -4,6 +4,7 @@ import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
+import 'package:app/features/memberships/presentation/extra_tokens_dialogs.dart';
 import 'package:app/features/memberships/presentation/plan_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -458,8 +459,8 @@ class PlanRequestCard extends StatelessWidget {
   }
 }
 
-/// Member detail (owner): the member's plan, payment state, open request and
-/// past plans, with assign / end actions.
+/// Member detail (owner): the member's plan, payment state, open request,
+/// extra tokens and past plans, with assign / end / add-token actions.
 class MemberPlanSection extends ConsumerStatefulWidget {
   const MemberPlanSection({
     super.key,
@@ -480,6 +481,9 @@ class MemberPlanSection extends ConsumerStatefulWidget {
 
 class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
   List<MemberPlan>? _plans;
+  ExtraTokens _extraTokens = const ExtraTokens();
+  int? _extraTokenPriceCents;
+  String _currency = 'EUR';
   String? _error;
   bool _busy = false;
   bool _showHistory = false;
@@ -504,10 +508,15 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
 
   Future<void> _load() async {
     try {
-      final plans = await _repository.fetchMemberPlans(widget.userId);
+      final membership = await _repository.fetchMemberMembership(
+        widget.userId,
+      );
       if (!mounted) return;
       setState(() {
-        _plans = plans;
+        _plans = membership.plans;
+        _extraTokens = membership.extraTokens;
+        _extraTokenPriceCents = membership.extraTokenPriceCents;
+        _currency = membership.currency;
         _error = null;
       });
     } catch (error) {
@@ -584,6 +593,41 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
     await _act(
       () => _repository.endMemberPlan(plan.id),
       'Could not end the plan',
+    );
+  }
+
+  Future<void> _grantExtraTokens() async {
+    final grant = await showGrantExtraTokensDialog(
+      context,
+      memberName: widget.memberName,
+      unitPriceCents: _extraTokenPriceCents,
+      currency: _currency,
+    );
+    if (grant == null) return;
+    await _act(
+      () => _repository.grantExtraTokens(
+        userId: widget.userId,
+        tokens: grant.tokens,
+        priceCents: grant.priceCents,
+      ),
+      'Could not add the tokens',
+    );
+  }
+
+  Future<void> _removeExtraTokens(ExtraTokenCredit credit) async {
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Remove ${tokensLabel(credit.tokens)}?',
+      message:
+          'The ${tokensLabel(credit.tokensRemaining)} still left are taken '
+          'away. Classes already booked with them stay booked.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await _act(
+      () => _repository.removeExtraTokens(credit.id),
+      'Could not remove the tokens',
     );
   }
 
@@ -696,6 +740,12 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
             ),
             const SizedBox(height: appSpaceSm),
           ],
+          _ExtraTokensBlock(
+            extraTokens: _extraTokens,
+            enabled: !_busy,
+            onAdd: _grantExtraTokens,
+            onRemove: _removeExtraTokens,
+          ),
           if (history.isNotEmpty) ...[
             Align(
               alignment: Alignment.centerLeft,
@@ -754,6 +804,79 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
           const Divider(height: appSpaceXl),
         ],
       ),
+    );
+  }
+}
+
+/// Member detail: the member's unexpired extra tokens, one line per grant.
+class _ExtraTokensBlock extends StatelessWidget {
+  const _ExtraTokensBlock({
+    required this.extraTokens,
+    required this.enabled,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final ExtraTokens extraTokens;
+  final bool enabled;
+  final VoidCallback onAdd;
+  final ValueChanged<ExtraTokenCredit> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                extraTokens.tokensRemaining == 0
+                    ? 'No extra tokens'
+                    : extraTokens.tokensRemaining == 1
+                    ? '1 extra token left'
+                    : '${extraTokens.tokensRemaining} extra tokens left',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: extraTokens.tokensRemaining == 0
+                      ? appMutedText
+                      : appText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: enabled ? onAdd : null,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add tokens'),
+            ),
+          ],
+        ),
+        for (final credit in extraTokens.credits)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  [
+                    '${credit.tokensRemaining} of ${tokensLabel(credit.tokens)} left',
+                    'valid until ${credit.validUntil}',
+                    formatPrice(credit.priceCents, credit.currency),
+                  ].join(' · '),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: appSubtleText,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove tokens',
+                visualDensity: VisualDensity.compact,
+                onPressed: enabled ? () => onRemove(credit) : null,
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+            ],
+          ),
+        const SizedBox(height: appSpaceSm),
+      ],
     );
   }
 }
