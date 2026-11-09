@@ -104,7 +104,7 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: appSpace2xl),
             // Athletes see their plan at the active box; owners manage plans
-            // in Box Settings and trainers are never limited by one.
+            // in the Box Settings tab and trainers are never limited by one.
             if (profile?.activeGym != null &&
                 profile?.role == UserRole.athlete) ...[
               const MyMembershipCard(),
@@ -143,23 +143,6 @@ class ProfileScreen extends ConsumerWidget {
                   ),
               ],
             ),
-            if (profile?.role == UserRole.admin) ...[
-              const SizedBox(height: appSpace2xl),
-              _ActionSection(
-                eyebrow: 'Owner',
-                title: 'Operate the gym',
-                children: [
-                  _ActionTile(
-                    icon: Icons.tune_rounded,
-                    title: 'Box Settings',
-                    subtitle:
-                        'Membership plans, scheduling rules, class types, and box configuration.',
-                    enabled: !isLoading,
-                    onTap: () => context.go('/box-settings'),
-                  ),
-                ],
-              ),
-            ],
             const SizedBox(height: appSpace2xl),
             _ActionSection(
               eyebrow: 'Preferences & Security',

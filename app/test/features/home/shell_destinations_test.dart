@@ -25,19 +25,36 @@ void main() {
       ]);
     });
 
-    test('the owner tab set is still one over budget', () {
-      // Dropping Tracking took the owner from seven tabs to six. The last one
-      // goes when the logbook rebuild moves athlete history into the member
-      // detail, where a coach actually needs it. Tighten this to 5 then.
-      expect(owner().length, 6);
+    test('the owner tab set puts Box Settings between Logbook and Profile', () {
+      // Box settings left the profile for a tab of its own, so the owner set
+      // is two over the five-tab bottom-nav budget. One goes when the logbook
+      // rebuild moves athlete history into the member detail.
+      expect(owner().length, 7);
       expect(owner().map((d) => d.label), [
         'Dashboard',
         'Schedule',
         'Members',
         'Community',
         'Logbook',
+        'Box Settings',
         'Profile',
       ]);
+    });
+
+    test('only owners get the Box Settings tab', () {
+      expect(owner().map((d) => d.branchIndex), contains(kBoxSettingsBranch));
+      expect(
+        athlete().map((d) => d.branchIndex),
+        isNot(contains(kBoxSettingsBranch)),
+      );
+      final trainer = destinationsForView(
+        accountType: AccountType.athlete,
+        role: UserRole.trainer,
+      );
+      expect(
+        trainer.map((d) => d.branchIndex),
+        isNot(contains(kBoxSettingsBranch)),
+      );
     });
 
     test('Tracking has no tab of its own', () {
@@ -87,6 +104,7 @@ void main() {
         kMembersBranch,
         kCommunityBranch,
         kProfileBranch,
+        kBoxSettingsBranch,
       ]) {
         expect(navBranchFor(branch), branch);
       }

@@ -11,7 +11,6 @@ import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Box-level configuration — one home for the identity, scheduling, membership
@@ -81,35 +80,42 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
     final hasAccess =
         profile?.role == UserRole.admin && profile?.activeGym != null;
 
-    return AppMobileScaffold(
-      title: 'Box configuration',
-      eyebrow: 'Box config',
-      onBack: () => context.go('/profile'),
-      body: !hasAccess
-          ? Padding(
-              padding: const EdgeInsets.all(appSpaceLg),
-              child: AppEmptyState(
-                icon: Icons.lock_outline_rounded,
-                title: 'Owner access required',
-                subtitle: 'Switch to an active box you own to configure it.',
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(
-                appSpaceLg,
-                appSpaceLg,
-                appSpaceLg,
-                appSpace3xl,
-              ),
-              children: [
-                _SectionNav(
-                  selected: _section,
-                  onSelected: (section) => setState(() => _section = section),
-                ),
-                const SizedBox(height: appSpace2xl),
-                _buildPanel(profile!.activeGym!),
-              ],
-            ),
+    // Rendered as a tab body inside the authenticated shell, which supplies
+    // the header, navigation, background and content column.
+    if (!hasAccess) {
+      return const Padding(
+        padding: EdgeInsets.all(appSpaceLg),
+        child: AppEmptyState(
+          icon: Icons.lock_outline_rounded,
+          title: 'Owner access required',
+          subtitle: 'Switch to an active box you own to configure it.',
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        appSpaceLg,
+        appSpaceLg,
+        appSpaceLg,
+        appSpace3xl,
+      ),
+      children: [
+        Text(
+          'Box settings',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: appText,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: appSpaceLg),
+        _SectionNav(
+          selected: _section,
+          onSelected: (section) => setState(() => _section = section),
+        ),
+        const SizedBox(height: appSpace2xl),
+        _buildPanel(profile!.activeGym!),
+      ],
     );
   }
 

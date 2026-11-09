@@ -96,7 +96,8 @@ Future<_FakeGymRepository> _pump(
       ],
       child: MaterialApp(
         theme: buildBoxOsTheme(),
-        home: const BoxSettingsScreen(),
+        // Box settings is a shell tab; the shell supplies the Scaffold.
+        home: const Scaffold(body: BoxSettingsScreen()),
       ),
     ),
   );
