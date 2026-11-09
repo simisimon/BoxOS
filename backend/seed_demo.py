@@ -202,25 +202,25 @@ def seed(rng: random.Random | None = None) -> None:
 
 
 _DEMO_PLANS = [
-    # name, type, price_cents, billing, per_week, class_count, validity_days, class types
+    # name, type, price_cents, billing, token_count, token_period, validity_days, class types
     ("Unlimited", "unlimited", 12900, "monthly", None, None, None, []),
-    ("2x per week", "weekly", 8900, "monthly", 2, None, None, ["WOD", "Open Gym", "Skill"]),
-    ("10-class card", "punch_card", 18000, "one_time", None, 10, 90, ["WOD", "Open Gym", "Skill"]),
+    ("12 tokens / month", "tokens", 8900, "monthly", 12, "month", None, ["WOD", "Open Gym", "Skill"]),
+    ("10-token pack", "token_pack", 18000, "one_time", 10, None, 90, ["WOD", "Open Gym", "Skill"]),
 ]
 
 
 def _seed_plans(conn, rng, gym_id, owner_id, athlete_ids, today):
     """Three plans; most athletes on one (some overdue), a few open requests."""
     plans = []
-    for name, plan_type, price, billing, per_week, count, validity, types in _DEMO_PLANS:
+    for name, plan_type, price, billing, count, period, validity, types in _DEMO_PLANS:
         row = conn.execute(
             """
             insert into membership_plans (gym_id, name, description, plan_type, price_cents, billing_period,
-              classes_per_week, class_count, validity_days, allowed_class_types_json,
+              token_count, token_period, validity_days, allowed_class_types_json,
               created_by_user_id, created_at, updated_at)
             values (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning *
             """,
-            (gym_id, name, plan_type, price, billing, per_week, count, validity,
+            (gym_id, name, plan_type, price, billing, count, period, validity,
              json.dumps(types), owner_id, _ts(), _ts()),
         ).fetchone()
         plans.append(row)
@@ -239,12 +239,12 @@ def _seed_plans(conn, rng, gym_id, owner_id, athlete_ids, today):
         conn.execute(
             """
             insert into member_plans (gym_id, user_id, plan_id, status, plan_name, plan_type, price_cents,
-              billing_period, classes_per_week, class_count, validity_days, allowed_class_types_json,
+              billing_period, token_count, token_period, validity_days, allowed_class_types_json,
               starts_on, ends_on, payment_status, reviewed_at, reviewed_by_user_id, created_at, updated_at)
             values (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (gym_id, user_id, plan["id"], plan["name"], plan["plan_type"], plan["price_cents"],
-             plan["billing_period"], plan["classes_per_week"], plan["class_count"], plan["validity_days"],
+             plan["billing_period"], plan["token_count"], plan["token_period"], plan["validity_days"],
              plan["allowed_class_types_json"], starts_on.isoformat(),
              ends_on.isoformat() if ends_on else None, payment, _ts(), owner_id, _ts(), _ts()),
         )
@@ -254,12 +254,12 @@ def _seed_plans(conn, rng, gym_id, owner_id, athlete_ids, today):
             conn.execute(
                 """
                 insert into member_plans (gym_id, user_id, plan_id, status, plan_name, plan_type, price_cents,
-                  billing_period, classes_per_week, class_count, validity_days, allowed_class_types_json,
+                  billing_period, token_count, token_period, validity_days, allowed_class_types_json,
                   requested_at, created_at, updated_at)
                 values (?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (gym_id, user_id, upgrade["id"], upgrade["name"], upgrade["plan_type"], upgrade["price_cents"],
-                 upgrade["billing_period"], upgrade["classes_per_week"], upgrade["class_count"],
+                 upgrade["billing_period"], upgrade["token_count"], upgrade["token_period"],
                  upgrade["validity_days"], upgrade["allowed_class_types_json"], _ts(), _ts(), _ts()),
             )
             requests += 1

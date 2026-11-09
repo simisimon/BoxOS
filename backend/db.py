@@ -400,8 +400,8 @@ create table if not exists membership_plans (
   plan_type text not null,
   price_cents integer not null,
   billing_period text not null,
-  classes_per_week integer,
-  class_count integer,
+  token_count integer,
+  token_period text,
   validity_days integer,
   allowed_class_types_json text not null default '[]',
   is_archived integer not null default 0,
@@ -425,8 +425,8 @@ create table if not exists member_plans (
   plan_type text not null,
   price_cents integer not null,
   billing_period text not null,
-  classes_per_week integer,
-  class_count integer,
+  token_count integer,
+  token_period text,
   validity_days integer,
   allowed_class_types_json text not null default '[]',
   starts_on text,
@@ -461,6 +461,7 @@ def init_db() -> None:
     try:
         with connection:
             _apply_schema(connection)
+            _migrate_plans_to_tokens(connection)
             seed_exercises(connection)
             seed_benchmark_workouts(connection)
             purge_deleted_users(connection)
@@ -481,6 +482,33 @@ def _apply_schema(connection: ManagedConnection) -> None:
             _ensure_active_gym_fk(connection, text)
         else:
             connection.execute(statement)
+
+
+def _migrate_plans_to_tokens(connection: ManagedConnection) -> None:
+    """Move plans from the first plan model (classes per week / punch card) to
+    tokens: ``weekly`` becomes ``tokens`` per week, ``punch_card`` becomes a
+    one-off ``token_pack``. No-op once the old columns are gone."""
+    for table in ("membership_plans", "member_plans"):
+        old_column = connection.execute(
+            """
+            select 1 from information_schema.columns
+            where table_schema = current_schema() and table_name = ? and column_name = 'classes_per_week'
+            """,
+            (table,),
+        ).fetchone()
+        if old_column is None:
+            continue
+        connection.execute(f"alter table {table} add column if not exists token_count integer")
+        connection.execute(f"alter table {table} add column if not exists token_period text")
+        connection.execute(
+            f"update {table} set plan_type = 'tokens', token_count = classes_per_week, token_period = 'week' "
+            "where plan_type = 'weekly'"
+        )
+        connection.execute(
+            f"update {table} set plan_type = 'token_pack', token_count = class_count where plan_type = 'punch_card'"
+        )
+        connection.execute(f"alter table {table} drop column classes_per_week")
+        connection.execute(f"alter table {table} drop column if exists class_count")
 
 
 def _ensure_active_gym_fk(connection: ManagedConnection, statement: str) -> None:

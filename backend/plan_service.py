@@ -1,11 +1,15 @@
 """Membership plans: plan definitions, member plans and the booking gate.
 
-A box defines plans (``membership_plans``) of three types:
+Plans are token-based: every booking spends one token, on any class type the
+plan includes. A box defines plans (``membership_plans``) of three types:
 
-* ``unlimited``  – book any number of classes.
-* ``weekly``     – at most ``classes_per_week`` bookings per Monday–Sunday week
-                   (in the box's timezone).
-* ``punch_card`` – ``class_count`` classes in total, optionally valid for
+* ``unlimited``  – unlimited tokens.
+* ``tokens``     – ``token_count`` tokens per ``token_period`` (week, month or
+                   year). Periods run from the member plan's start date (a plan
+                   starting on the 9th refills on the 9th); unused tokens
+                   expire at the end of the period. A class spends a token of
+                   the period its date falls in.
+* ``token_pack`` – ``token_count`` tokens once, optionally valid for
                    ``validity_days`` from the start date.
 
 A member gets a plan through a ``member_plans`` row: the member requests a plan
@@ -15,8 +19,9 @@ the box's timezone, ``ends_on`` null = open-ended). Active rows of one member
 never overlap: activating a plan ends or shortens the plans it replaces.
 
 Bookings remember the member plan they were made under
-(``class_bookings.member_plan_id``), so punch-card usage is simply the number of
-bookings on that plan: cancelling or deleting a class gives the class back.
+(``class_bookings.member_plan_id``), so tokens used are simply the bookings on
+that plan (in the period): cancelling or deleting a class gives the token back,
+a no-show keeps it spent.
 
 Plans are only enforced when the box turns on ``gyms.require_plan_for_booking``.
 Owners and trainers are never checked.
@@ -34,7 +39,8 @@ from backend.db import ManagedConnection, Row
 from backend.security import isoformat, now_utc, parse_iso
 from backend.validation import ApiError, decode_roles
 
-PLAN_TYPES = ("unlimited", "weekly", "punch_card")
+PLAN_TYPES = ("unlimited", "tokens", "token_pack")
+TOKEN_PERIODS = ("week", "month", "year")
 BILLING_PERIODS = ("monthly", "yearly", "one_time")
 PAYMENT_STATUSES = ("paid", "due", "overdue")
 CLASS_TYPES = ("WOD", "Open Gym", "Skill", "PT")
@@ -81,19 +87,22 @@ def require_plan_fields(payload: dict[str, Any]) -> dict[str, Any]:
         )
     plan_type = str(payload.get("plan_type") or "").strip().lower()
     if plan_type not in PLAN_TYPES:
-        raise ApiError(HTTPStatus.BAD_REQUEST, "Plan type must be unlimited, weekly, or punch_card.")
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Plan type must be unlimited, tokens, or token_pack.")
     billing_period = str(payload.get("billing_period") or "").strip().lower()
     if billing_period not in BILLING_PERIODS:
         raise ApiError(HTTPStatus.BAD_REQUEST, "Billing period must be monthly, yearly, or one_time.")
     price_cents = require_price_cents(payload.get("price_cents"))
 
-    classes_per_week = None
-    class_count = None
+    token_count = None
+    token_period = None
     validity_days = None
-    if plan_type == "weekly":
-        classes_per_week = _int_field(payload.get("classes_per_week"), "Classes per week", minimum=1, maximum=14)
-    elif plan_type == "punch_card":
-        class_count = _int_field(payload.get("class_count"), "Number of classes", minimum=1, maximum=200)
+    if plan_type == "tokens":
+        token_count = _int_field(payload.get("token_count"), "Tokens", minimum=1, maximum=400)
+        token_period = str(payload.get("token_period") or "").strip().lower()
+        if token_period not in TOKEN_PERIODS:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Token period must be week, month, or year.")
+    elif plan_type == "token_pack":
+        token_count = _int_field(payload.get("token_count"), "Tokens", minimum=1, maximum=400)
         if payload.get("validity_days") is not None:
             validity_days = _int_field(payload.get("validity_days"), "Validity", minimum=1, maximum=730)
 
@@ -115,8 +124,8 @@ def require_plan_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "plan_type": plan_type,
         "price_cents": price_cents,
         "billing_period": billing_period,
-        "classes_per_week": classes_per_week,
-        "class_count": class_count,
+        "token_count": token_count,
+        "token_period": token_period,
         "validity_days": validity_days,
         "allowed_class_types_json": json.dumps(allowed_class_types),
     }
@@ -163,8 +172,8 @@ def plan_payload(row: Row, *, currency: str) -> dict[str, Any]:
         "price_cents": row["price_cents"],
         "currency": currency,
         "billing_period": row["billing_period"],
-        "classes_per_week": row["classes_per_week"],
-        "class_count": row["class_count"],
+        "token_count": row["token_count"],
+        "token_period": row["token_period"],
         "validity_days": row["validity_days"],
         "allowed_class_types": _class_types(row),
         "is_archived": bool(row["is_archived"]),
@@ -205,8 +214,8 @@ def member_plan_payload(
         "price_cents": row["price_cents"],
         "currency": currency,
         "billing_period": row["billing_period"],
-        "classes_per_week": row["classes_per_week"],
-        "class_count": row["class_count"],
+        "token_count": row["token_count"],
+        "token_period": row["token_period"],
         "validity_days": row["validity_days"],
         "allowed_class_types": _class_types(row),
         "starts_on": row["starts_on"],
@@ -214,23 +223,18 @@ def member_plan_payload(
         "payment_status": row["payment_status"],
         "requested_at": row["requested_at"],
         "reviewed_at": row["reviewed_at"],
-        "classes_used": None,
-        "classes_remaining": None,
-        "classes_this_week": None,
+        # Token balance: of the current period (or the first one for an
+        # upcoming plan); null for unlimited plans and inactive rows.
+        "tokens_total": None,
+        "tokens_used": None,
+        "tokens_remaining": None,
+        "period_starts_on": None,
+        "period_ends_on": None,
     }
-    if row["status"] == "active":
-        if row["plan_type"] == "punch_card":
-            used = punch_card_used(connection, row["id"])
-            payload["classes_used"] = used
-            payload["classes_remaining"] = max(int(row["class_count"] or 0) - used, 0)
-        elif row["plan_type"] == "weekly":
-            payload["classes_this_week"] = weekly_booking_count(
-                connection,
-                gym_id=row["gym_id"],
-                user_id=row["user_id"],
-                local_day=today,
-                gym_timezone=gym_timezone,
-            )
+    if row["status"] == "active" and row["plan_type"] in ("tokens", "token_pack"):
+        starts_on = date.fromisoformat(row["starts_on"]) if row["starts_on"] else today
+        balance = token_balance(connection, row, max(today, starts_on), gym_timezone)
+        payload.update(balance)
     return payload
 
 
@@ -330,39 +334,84 @@ def member_plan_rows_for_user(connection: ManagedConnection, gym_id: int, user_i
     ).fetchall()
 
 
-def punch_card_used(connection: ManagedConnection, member_plan_id: int) -> int:
-    row = connection.execute(
-        "select count(*) as count from class_bookings where member_plan_id = ?",
-        (member_plan_id,),
-    ).fetchone()
-    return int(row["count"]) if row is not None else 0
+def _add_months(day: date, months: int, anchor_day: int) -> date:
+    """``day`` moved by ``months``, on ``anchor_day`` (clamped to the month's length)."""
+    month_index = day.year * 12 + day.month - 1 + months
+    year, month = divmod(month_index, 12)
+    month += 1
+    next_month = date(year + (month // 12), month % 12 + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    return date(year, month, min(anchor_day, last_day))
 
 
-def weekly_booking_count(
+def token_period_bounds(starts_on: date, token_period: str, day: date) -> tuple[date, date]:
+    """The token period ``[start, end)`` containing ``day`` for a plan that
+    started on ``starts_on``. Periods are anchored on the start date."""
+    if token_period == "week":
+        index = max((day - starts_on).days, 0) // 7
+        start = starts_on + timedelta(days=7 * index)
+        return start, start + timedelta(days=7)
+    months = 12 if token_period == "year" else 1
+    index = 0
+    if day > starts_on:
+        elapsed = (day.year - starts_on.year) * 12 + (day.month - starts_on.month)
+        index = max(elapsed // months - 1, 0)
+        while _add_months(starts_on, (index + 1) * months, starts_on.day) <= day:
+            index += 1
+    start = _add_months(starts_on, index * months, starts_on.day)
+    return start, _add_months(starts_on, (index + 1) * months, starts_on.day)
+
+
+def tokens_used(
     connection: ManagedConnection,
+    member_plan_id: int,
     *,
-    gym_id: int,
-    user_id: int,
-    local_day: date,
-    gym_timezone: str,
+    window: tuple[date, date] | None = None,
+    gym_timezone: str = "UTC",
 ) -> int:
-    """Bookings of the member in the Monday–Sunday week (gym-local) containing ``local_day``."""
-    week_start = local_day - timedelta(days=local_day.weekday())
-    start_utc = schedule_service.utc_for_local(datetime.combine(week_start, time.min), gym_timezone)
-    end_utc = schedule_service.utc_for_local(datetime.combine(week_start + timedelta(days=7), time.min), gym_timezone)
+    """Bookings made on the member plan, optionally only for classes whose
+    gym-local date falls in ``window`` = ``[start, end)``."""
+    if window is None:
+        row = connection.execute(
+            "select count(*) as count from class_bookings where member_plan_id = ?",
+            (member_plan_id,),
+        ).fetchone()
+        return int(row["count"]) if row is not None else 0
+    start_utc = schedule_service.utc_for_local(datetime.combine(window[0], time.min), gym_timezone)
+    end_utc = schedule_service.utc_for_local(datetime.combine(window[1], time.min), gym_timezone)
     row = connection.execute(
         """
         select count(*) as count
         from class_bookings
         join class_schedules on class_schedules.id = class_bookings.class_schedule_id
-        where class_bookings.user_id = ?
-          and class_schedules.gym_id = ?
+        where class_bookings.member_plan_id = ?
           and cast(class_schedules.start_time as timestamptz) >= cast(? as timestamptz)
           and cast(class_schedules.start_time as timestamptz) < cast(? as timestamptz)
         """,
-        (user_id, gym_id, isoformat(start_utc), isoformat(end_utc)),
+        (member_plan_id, isoformat(start_utc), isoformat(end_utc)),
     ).fetchone()
     return int(row["count"]) if row is not None else 0
+
+
+def token_balance(connection: ManagedConnection, member_plan: Row, day: date, gym_timezone: str) -> dict[str, Any]:
+    """Tokens of the member plan for the period containing ``day`` (token
+    packs: the whole pack)."""
+    total = int(member_plan["token_count"] or 0)
+    starts_on = date.fromisoformat(member_plan["starts_on"]) if member_plan["starts_on"] else day
+    if member_plan["plan_type"] == "tokens":
+        period_start, period_end = token_period_bounds(starts_on, member_plan["token_period"] or "month", day)
+        used = tokens_used(connection, member_plan["id"], window=(period_start, period_end), gym_timezone=gym_timezone)
+        period = (period_start.isoformat(), (period_end - timedelta(days=1)).isoformat())
+    else:
+        used = tokens_used(connection, member_plan["id"])
+        period = (member_plan["starts_on"], member_plan["ends_on"])
+    return {
+        "tokens_total": total,
+        "tokens_used": used,
+        "tokens_remaining": max(total - used, 0),
+        "period_starts_on": period[0],
+        "period_ends_on": period[1],
+    }
 
 
 def plan_summaries_for_gym(connection: ManagedConnection, gym_id: int, gym_timezone: str) -> dict[int, dict[str, Any]]:
@@ -403,7 +452,7 @@ def plan_summaries_for_gym(connection: ManagedConnection, gym_id: int, gym_timez
 
 
 def _end_date_for(row: Row, starts_on: date) -> date | None:
-    if row["plan_type"] == "punch_card" and row["validity_days"]:
+    if row["plan_type"] == "token_pack" and row["validity_days"]:
         return starts_on + timedelta(days=int(row["validity_days"]) - 1)
     return None
 
@@ -490,7 +539,7 @@ def insert_member_plan(
         """
         insert into member_plans (
           gym_id, user_id, plan_id, status, plan_name, plan_type, price_cents, billing_period,
-          classes_per_week, class_count, validity_days, allowed_class_types_json,
+          token_count, token_period, validity_days, allowed_class_types_json,
           requested_at, created_at, updated_at
         ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         returning id
@@ -504,8 +553,8 @@ def insert_member_plan(
             plan["plan_type"],
             plan["price_cents"],
             plan["billing_period"],
-            plan["classes_per_week"],
-            plan["class_count"],
+            plan["token_count"],
+            plan["token_period"],
             plan["validity_days"],
             plan["allowed_class_types_json"],
             timestamp if status == "requested" else None,
@@ -575,20 +624,15 @@ def booking_plan_check(
     class_type = schedule_row["class_type"]
     if allowed and class_type not in allowed:
         return None, f"Your plan {plan['plan_name']} does not include {class_type} classes."
-    if plan["plan_type"] == "weekly":
-        booked = weekly_booking_count(
-            connection,
-            gym_id=gym_id,
-            user_id=user_id,
-            local_day=local_day,
-            gym_timezone=gym["timezone"],
-        )
-        limit = int(plan["classes_per_week"] or 0)
-        if booked >= limit:
-            return None, f"You have used all {limit} classes of your plan for that week."
-    elif plan["plan_type"] == "punch_card":
-        if punch_card_used(connection, plan["id"]) >= int(plan["class_count"] or 0):
-            return None, "Your punch card has no classes left."
+    if plan["plan_type"] in ("tokens", "token_pack"):
+        balance = token_balance(connection, plan, local_day, gym["timezone"])
+        if balance["tokens_remaining"] <= 0:
+            if plan["plan_type"] == "token_pack":
+                return None, "Your token pack has no tokens left."
+            return None, (
+                f"You have used all {balance['tokens_total']} tokens for "
+                f"{balance['period_starts_on']} – {balance['period_ends_on']}."
+            )
     return plan["id"], None
 
 
