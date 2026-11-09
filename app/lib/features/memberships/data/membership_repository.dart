@@ -147,7 +147,20 @@ class MembershipRepository {
       extraTokens: ExtraTokens.fromJson(
         response.data?['extra_tokens'] as Map<String, dynamic>?,
       ),
+      onlinePayments: response.data?['online_payments'] as bool? ?? false,
     );
+  }
+
+  /// Stripe Checkout link to set up the monthly payment of the member's plan.
+  Future<String> createMembershipCheckout(int memberPlanId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/membership/me/checkout',
+      data: {'member_plan_id': memberPlanId},
+      options: await _options(),
+    );
+    final url = response.data?['url'] as String?;
+    if (url == null || url.isEmpty) throw Exception('Missing payment link.');
+    return url;
   }
 
   Future<void> requestPlan(int planId) async {
@@ -254,10 +267,15 @@ class MembershipRepository {
     );
   }
 
-  Future<void> endMemberPlan(int memberPlanId) async {
+  /// Ends the plan today, or with [atPeriodEnd] at the end of the paid month
+  /// (also stops the member's Stripe subscription).
+  Future<void> endMemberPlan(
+    int memberPlanId, {
+    bool atPeriodEnd = false,
+  }) async {
     await _dio.post<void>(
       '/membership/assignments/end',
-      data: {'member_plan_id': memberPlanId},
+      data: {'member_plan_id': memberPlanId, 'at_period_end': atPeriodEnd},
       options: await _options(),
     );
   }
