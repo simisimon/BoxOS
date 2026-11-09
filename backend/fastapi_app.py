@@ -131,6 +131,13 @@ class CreateGymRequest(BaseModel):
     timezone: str = "UTC"  # Default to UTC if not provided
 
 
+class UpdateGymRequest(BaseModel):
+    # Every field is optional: only the ones sent are changed.
+    name: str | None = None
+    logo_url: str | None = None
+    timezone: str | None = None
+
+
 class ScheduleClassRequest(BaseModel):
     title: str
     class_type: str
@@ -982,6 +989,109 @@ def upload_gym_logo(
     file_path = settings.GYM_LOGOS_DIR / stored_name
     file_path.write_bytes(raw_bytes)
     return {"filename": filename, "logo_url": f"/uploads/gym_logos/{stored_name}"}
+
+
+def require_gym_owner_session(
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Owner of the active gym: an active membership there that holds the admin role."""
+    connection = db.get_connection()
+    try:
+        membership = connection.execute(
+            """
+            select roles_json from gym_memberships
+            where user_id = ? and gym_id = ? and status = 'active'
+            """,
+            (session["user_id"], session["active_gym_id"]),
+        ).fetchone()
+    finally:
+        connection.close()
+    if membership is None or "admin" not in validation.decode_roles(membership["roles_json"]):
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN.value,
+            detail="Only the box owner can edit the box identity.",
+        )
+    return session
+
+
+@app.patch("/gyms/current")
+def update_current_gym(
+    body: UpdateGymRequest,
+    session: dict[str, Any] = Depends(require_gym_owner_session),
+) -> dict[str, Any]:
+    """Edit the active gym's identity (name, logo, timezone).
+
+    The slug stays as created so existing links keep working. A timezone change
+    re-plans every class template's future sessions at the same local time in
+    the new zone; booked sessions keep their instant and are detached when they
+    no longer match (see ``schedule_service.resync_template_sessions``).
+    """
+    gym_id = int(session["active_gym_id"])
+    connection = db.get_connection()
+    try:
+        gym = connection.execute(
+            "select id, name, slug, logo_url, timezone from gyms where id = ?",
+            (gym_id,),
+        ).fetchone()
+        if gym is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Gym not found.")
+
+        updated = {"name": gym["name"], "logo_url": gym["logo_url"], "timezone": gym["timezone"]}
+        if body.name is not None:
+            updated["name"] = validation.require_gym_name(body.name)
+        if body.logo_url is not None:
+            logo_url = body.logo_url.strip()
+            updated["logo_url"] = validation.require_logo_url(logo_url) if logo_url else ""
+        if body.timezone is not None:
+            timezone = validation.require_timezone(body.timezone)
+            try:
+                schedule_service.timezone_for_name(timezone)  # raises ApiError on unknown zones
+            except ValueError as error:  # malformed keys such as "../x"
+                raise validation.ApiError(HTTPStatus.BAD_REQUEST, "Gym timezone is invalid.") from error
+            updated["timezone"] = timezone
+
+        changes = {
+            field: {"from": gym[field], "to": value}
+            for field, value in updated.items()
+            if value != gym[field]
+        }
+        detached_sessions = 0
+        if changes:
+            timestamp = security.isoformat(security.now_utc())
+            with connection:
+                connection.execute(
+                    "update gyms set name = ?, logo_url = ?, timezone = ?, updated_at = ? where id = ?",
+                    (updated["name"], updated["logo_url"], updated["timezone"], timestamp, gym_id),
+                )
+                if "timezone" in changes:
+                    for template in schedule_service.list_class_template_rows(connection, gym_id):
+                        detached_sessions += schedule_service.resync_template_sessions(
+                            connection,
+                            template,
+                            gym_timezone=updated["timezone"],
+                            actor_user_id=session["user_id"],
+                        )
+                audit.write_audit_log(
+                    connection,
+                    gym_id=gym_id,
+                    actor_user_id=session["user_id"],
+                    action="gym_updated",
+                    entity_type="gym",
+                    entity_id=gym_id,
+                    details={"changes": changes, "detached_sessions": detached_sessions},
+                )
+        return {
+            "gym": {
+                "id": gym_id,
+                "name": updated["name"],
+                "slug": gym["slug"],
+                "logo_url": updated["logo_url"],
+                "timezone": updated["timezone"],
+            },
+            "detached_sessions": detached_sessions,
+        }
+    finally:
+        connection.close()
 
 
 @app.post("/gyms/join-requests", status_code=HTTPStatus.CREATED.value)

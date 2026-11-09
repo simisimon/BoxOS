@@ -5,6 +5,7 @@ import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
 import 'package:app/features/gyms/domain/models/gym_join_request.dart';
+import 'package:app/features/gyms/domain/models/gym_update_result.dart';
 import 'package:app/features/gyms/domain/models/my_gym_join_request.dart';
 import 'package:app/features/gyms/domain/repositories/gym_repository.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
@@ -54,6 +55,23 @@ class ApiGymRepository implements GymRepository {
       options: Options(headers: await _authHeaders()),
     );
     return _gymFromJson(response.data?['gym'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<GymUpdateResult> updateCurrentGym({
+    String? name,
+    String? logoUrl,
+    String? timezone,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/gyms/current',
+      data: {'name': ?name, 'logo_url': ?logoUrl, 'timezone': ?timezone},
+      options: Options(headers: await _authHeaders()),
+    );
+    return GymUpdateResult(
+      gym: _gymFromJson(response.data?['gym'] as Map<String, dynamic>?),
+      detachedSessions: response.data?['detached_sessions'] as int? ?? 0,
+    );
   }
 
   @override

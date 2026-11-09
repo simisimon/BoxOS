@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:app/features/gyms/domain/models/gym_join_request.dart';
+import 'package:app/features/gyms/domain/models/gym_update_result.dart';
 import 'package:app/features/gyms/domain/models/my_gym_join_request.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 
@@ -11,6 +12,14 @@ abstract class GymRepository {
     required String name,
     required String logoUrl,
     required String timezone,
+  });
+
+  /// Edits the active box's identity (owner only). Fields left null are kept;
+  /// an empty [logoUrl] removes the logo.
+  Future<GymUpdateResult> updateCurrentGym({
+    String? name,
+    String? logoUrl,
+    String? timezone,
   });
 
   Future<String> uploadGymLogo({

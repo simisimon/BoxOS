@@ -1,10 +1,17 @@
+import 'dart:typed_data';
+
+import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
+import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
+import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// Box-level configuration — one home for the identity, scheduling, membership
 /// and notification settings that today are scattered across the profile and
@@ -21,7 +28,13 @@ class BoxSettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<BoxSettingsScreen> createState() => _BoxSettingsScreenState();
 }
 
-enum _SettingsSection { identity, scheduling, memberships, notifications, danger }
+enum _SettingsSection {
+  identity,
+  scheduling,
+  memberships,
+  notifications,
+  danger,
+}
 
 class _ClassType {
   const _ClassType(this.name, this.capacity);
@@ -78,8 +91,7 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
               child: AppEmptyState(
                 icon: Icons.lock_outline_rounded,
                 title: 'Owner access required',
-                subtitle:
-                    'Switch to an active box you own to configure it.',
+                subtitle: 'Switch to an active box you own to configure it.',
               ),
             )
           : ListView(
@@ -95,17 +107,20 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
                   onSelected: (section) => setState(() => _section = section),
                 ),
                 const SizedBox(height: appSpace2xl),
-                _buildPanel(profile?.activeGym?.name ?? 'Your box',
-                    profile?.activeGym?.timezone ?? 'GMT'),
+                _buildPanel(profile!.activeGym!),
               ],
             ),
     );
   }
 
-  Widget _buildPanel(String gymName, String timezone) {
+  Widget _buildPanel(GymSummary gym) {
     switch (_section) {
       case _SettingsSection.identity:
-        return _IdentityPanel(gymName: gymName, timezone: timezone);
+        return _IdentityPanel(
+          // Rebuild the form from the server values after each save.
+          key: ValueKey('${gym.id}|${gym.name}|${gym.logoUrl}|${gym.timezone}'),
+          gym: gym,
+        );
       case _SettingsSection.scheduling:
         return _SchedulingPanel(
           bookingWindowDays: _bookingWindowDays,
@@ -113,8 +128,7 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
           waitlistAutoPromote: _waitlistAutoPromote,
           blockWithoutMembership: _blockWithoutMembership,
           classTypes: _classTypes,
-          onBookingWindowChanged: (v) =>
-              setState(() => _bookingWindowDays = v),
+          onBookingWindowChanged: (v) => setState(() => _bookingWindowDays = v),
           onCancelCutoffChanged: (v) => setState(() => _cancelCutoffHours = v),
           onWaitlistAutoPromoteChanged: (v) =>
               setState(() => _waitlistAutoPromote = v),
@@ -253,11 +267,17 @@ class _NavChip extends StatelessWidget {
 
 /// Shared card header: mono eyebrow + display title + optional Save action.
 class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.eyebrow, required this.title, this.onSave});
+  const _PanelHeader({
+    required this.eyebrow,
+    required this.title,
+    this.onSave,
+    this.busy = false,
+  });
 
   final String eyebrow;
   final String title;
   final VoidCallback? onSave;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -268,78 +288,429 @@ class _PanelHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(eyebrow.toUpperCase(),
-                  style: appMono(fontSize: 10, letterSpacing: 1.5,
-                      color: appPrimary)),
+              Text(
+                eyebrow.toUpperCase(),
+                style: appMono(
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: appPrimary,
+                ),
+              ),
               const SizedBox(height: 5),
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
               ),
             ],
           ),
         ),
-        if (onSave != null)
-          AppPrimaryButton(
-            label: 'Save changes',
-            onPressed: onSave,
-            size: AppButtonSize.md,
-          ),
+        AppPrimaryButton(
+          label: 'Save changes',
+          onPressed: onSave,
+          busy: busy,
+          size: AppButtonSize.md,
+          expand: false,
+        ),
       ],
     );
   }
 }
 
-class _IdentityPanel extends StatelessWidget {
-  const _IdentityPanel({required this.gymName, required this.timezone});
+/// Common IANA zones offered as suggestions. Any other valid IANA name can be
+/// typed; the backend rejects unknown zones.
+const _timezoneSuggestions = <String>[
+  'UTC',
+  'Europe/London',
+  'Europe/Dublin',
+  'Europe/Lisbon',
+  'Europe/Berlin',
+  'Europe/Vienna',
+  'Europe/Zurich',
+  'Europe/Amsterdam',
+  'Europe/Brussels',
+  'Europe/Paris',
+  'Europe/Madrid',
+  'Europe/Rome',
+  'Europe/Copenhagen',
+  'Europe/Stockholm',
+  'Europe/Oslo',
+  'Europe/Helsinki',
+  'Europe/Warsaw',
+  'Europe/Prague',
+  'Europe/Athens',
+  'Europe/Istanbul',
+  'America/New_York',
+  'America/Toronto',
+  'America/Chicago',
+  'America/Denver',
+  'America/Phoenix',
+  'America/Los_Angeles',
+  'America/Vancouver',
+  'America/Mexico_City',
+  'America/Sao_Paulo',
+  'America/Buenos_Aires',
+  'Africa/Johannesburg',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Singapore',
+  'Asia/Hong_Kong',
+  'Asia/Tokyo',
+  'Asia/Seoul',
+  'Australia/Perth',
+  'Australia/Sydney',
+  'Australia/Melbourne',
+  'Pacific/Auckland',
+];
 
-  final String gymName;
-  final String timezone;
+/// Edits the box name, logo and timezone of the active box (owner only).
+class _IdentityPanel extends ConsumerStatefulWidget {
+  const _IdentityPanel({super.key, required this.gym});
+
+  final GymSummary gym;
+
+  @override
+  ConsumerState<_IdentityPanel> createState() => _IdentityPanelState();
+}
+
+class _IdentityPanelState extends ConsumerState<_IdentityPanel> {
+  final _formKey = GlobalKey<FormState>();
+  final _imagePicker = ImagePicker();
+  late final TextEditingController _nameController;
+  late final TextEditingController _timezoneController;
+  late String _logoUrl;
+  Uint8List? _logoPreview;
+  bool _uploadingLogo = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.gym.name)
+      ..addListener(_onChanged);
+    _timezoneController = TextEditingController(text: widget.gym.timezone)
+      ..addListener(_onChanged);
+    _logoUrl = widget.gym.logoUrl;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _timezoneController.dispose();
+    super.dispose();
+  }
+
+  void _onChanged() => setState(() {});
+
+  String get _name => _nameController.text.trim();
+  String get _timezone => _timezoneController.text.trim();
+
+  bool get _nameChanged => _name != widget.gym.name;
+  bool get _logoChanged => _logoUrl != widget.gym.logoUrl;
+  bool get _timezoneChanged => _timezone != widget.gym.timezone;
+  bool get _dirty => _nameChanged || _logoChanged || _timezoneChanged;
+
+  Future<void> _pickLogo() async {
+    if (_uploadingLogo || _saving) return;
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 1200,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      final contentType = switch (picked.mimeType) {
+        final type? when type.trim().isNotEmpty => type,
+        _ when picked.name.toLowerCase().endsWith('.png') => 'image/png',
+        _ when picked.name.toLowerCase().endsWith('.webp') => 'image/webp',
+        _ => 'image/jpeg',
+      };
+      setState(() {
+        _uploadingLogo = true;
+        _error = null;
+      });
+      final logoUrl = await ref
+          .read(gymRepositoryProvider)
+          .uploadGymLogo(
+            bytes: bytes,
+            filename: picked.name,
+            contentType: contentType,
+          );
+      if (!mounted) return;
+      setState(() {
+        _logoUrl = logoUrl;
+        _logoPreview = bytes;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _error = errorMessageFrom(error, fallback: 'Logo upload failed.'),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingLogo = false);
+    }
+  }
+
+  void _removeLogo() => setState(() {
+    _logoUrl = '';
+    _logoPreview = null;
+  });
+
+  void _reset() => setState(() {
+    _nameController.text = widget.gym.name;
+    _timezoneController.text = widget.gym.timezone;
+    _logoUrl = widget.gym.logoUrl;
+    _logoPreview = null;
+    _error = null;
+  });
+
+  Future<void> _save() async {
+    if (!_dirty || _saving) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_timezoneChanged) {
+      final confirmed = await showAppConfirmDialog(
+        context,
+        title: 'Change timezone?',
+        message:
+            'Recurring classes move to the same local time in $_timezone. '
+            'Classes that already have bookings keep their current time and '
+            'become one-off classes.',
+        confirmLabel: 'Change timezone',
+      );
+      if (!confirmed || !mounted) return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final result = await ref
+          .read(gymRepositoryProvider)
+          .updateCurrentGym(
+            name: _nameChanged ? _name : null,
+            logoUrl: _logoChanged ? _logoUrl : null,
+            timezone: _timezoneChanged ? _timezone : null,
+          );
+      ref.invalidate(currentProfileProvider);
+      if (!mounted) return;
+      final detached = result.detachedSessions;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            detached == 0
+                ? 'Box identity saved.'
+                : 'Box identity saved. $detached booked '
+                      '${detached == 1 ? 'class keeps' : 'classes keep'} '
+                      'the old time as one-off.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _error = errorMessageFrom(
+          error,
+          fallback: 'Could not save the box identity.',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final busy = _saving || _uploadingLogo;
+    final displayName = _name.isEmpty ? widget.gym.name : _name;
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _PanelHeader(eyebrow: 'Identity', title: 'Box identity'),
-          const SizedBox(height: appSpaceLg),
-          Row(
-            children: [
-              AppAvatar(displayName: gymName, size: 56),
-              const SizedBox(width: appSpaceLg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      gymName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('Timezone · $timezone',
-                        style: appMono(fontSize: 11, letterSpacing: 0)),
-                  ],
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _PanelHeader(
+              eyebrow: 'Identity',
+              title: 'Box identity',
+              onSave: _dirty && !busy ? _save : null,
+              busy: _saving,
+            ),
+            const SizedBox(height: appSpaceLg),
+            Row(
+              children: [
+                _logoPreview != null
+                    ? ClipOval(
+                        child: Image.memory(
+                          _logoPreview!,
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : AppAvatar(
+                        displayName: displayName,
+                        imageUrl: _logoUrl,
+                        size: 56,
+                      ),
+                const SizedBox(width: appSpaceLg),
+                Expanded(
+                  child: OverflowBar(
+                    spacing: appSpaceSm,
+                    overflowSpacing: appSpaceSm,
+                    children: [
+                      AppSecondaryButton(
+                        label: _uploadingLogo
+                            ? 'Uploading…'
+                            : (_logoUrl.isEmpty
+                                  ? 'Upload logo'
+                                  : 'Change logo'),
+                        icon: Icons.add_photo_alternate_outlined,
+                        size: AppButtonSize.md,
+                        expand: false,
+                        busy: _uploadingLogo,
+                        onPressed: busy ? null : _pickLogo,
+                      ),
+                      if (_logoUrl.isNotEmpty)
+                        TextButton(
+                          onPressed: busy ? null : _removeLogo,
+                          child: const Text('Remove'),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: appSpaceLg),
+            TextFormField(
+              controller: _nameController,
+              enabled: !_saving,
+              maxLength: 80,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Box name',
+                counterText: '',
+              ),
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Box name is required' : null,
+            ),
+            const SizedBox(height: appSpaceMd),
+            _TimezoneField(controller: _timezoneController, enabled: !_saving),
+            const SizedBox(height: appSpaceSm),
+            Text(
+              'Class times follow the box timezone. The box link '
+              '(${widget.gym.slug}) stays the same when you rename it.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: appMutedText, height: 1.5),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: appSpaceMd),
+              Text(
+                _error!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: appDanger),
+              ),
+            ],
+            if (_dirty && !_saving) ...[
+              const SizedBox(height: appSpaceSm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _uploadingLogo ? null : _reset,
+                  child: const Text('Discard changes'),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: appSpaceLg),
-          Text(
-            'Box name, logo and timezone are set during box creation. Inline '
-            'editing here lands alongside logo upload on the roadmap.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: appMutedText, height: 1.5),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+/// Free-text timezone input with IANA suggestions.
+class _TimezoneField extends StatefulWidget {
+  const _TimezoneField({required this.controller, required this.enabled});
+
+  final TextEditingController controller;
+  final bool enabled;
+
+  @override
+  State<_TimezoneField> createState() => _TimezoneFieldState();
+}
+
+class _TimezoneFieldState extends State<_TimezoneField> {
+  final _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<String>(
+      textEditingController: widget.controller,
+      focusNode: _focusNode,
+      optionsBuilder: (value) {
+        final query = value.text.trim().toLowerCase();
+        if (query.isEmpty) return _timezoneSuggestions;
+        return _timezoneSuggestions.where(
+          (zone) => zone.toLowerCase().contains(query),
+        );
+      },
+      fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: widget.enabled,
+          decoration: const InputDecoration(
+            labelText: 'Timezone',
+            hintText: 'e.g. Europe/Berlin',
+            suffixIcon: Icon(Icons.public_rounded),
+          ),
+          validator: (value) =>
+              (value ?? '').trim().isEmpty ? 'Timezone is required' : null,
+          onFieldSubmitted: (_) => onSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            color: appSurface,
+            borderRadius: BorderRadius.circular(appRadiusSm),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 320),
+              child: ListView(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                children: [
+                  for (final zone in options)
+                    ListTile(
+                      dense: true,
+                      title: Text(
+                        zone,
+                        style: appMono(
+                          fontSize: 12,
+                          letterSpacing: 0,
+                          color: appText,
+                        ),
+                      ),
+                      onTap: () => onSelected(zone),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -429,8 +800,10 @@ class _SchedulingPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('CLASS TYPES & DEFAULT CAPACITY',
-                  style: appMono(fontSize: 10, letterSpacing: 1.4)),
+              Text(
+                'CLASS TYPES & DEFAULT CAPACITY',
+                style: appMono(fontSize: 10, letterSpacing: 1.4),
+              ),
               const SizedBox(height: appSpaceLg),
               Wrap(
                 spacing: appSpaceSm,
@@ -479,17 +852,21 @@ class _StepperField extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      color: appText,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14)),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: appText,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
               const SizedBox(height: 3),
-              Text(help,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: appSubtleText)),
+              Text(
+                help,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: appSubtleText),
+              ),
             ],
           ),
         ),
@@ -537,8 +914,7 @@ class _StepButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(appRadiusSm),
             border: Border.all(color: appBorderStrong),
           ),
-          child: Icon(icon,
-              size: 18, color: enabled ? appText : appSubtleText),
+          child: Icon(icon, size: 18, color: enabled ? appText : appSubtleText),
         ),
       ),
     );
@@ -571,25 +947,31 @@ class _ToggleRow extends StatelessWidget {
               Row(
                 children: [
                   Flexible(
-                    child: Text(label,
-                        style: const TextStyle(
-                            color: appText,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14)),
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: appText,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                   if (roadmap) ...[
                     const SizedBox(width: 8),
-                    Text('ROADMAP',
-                        style: appMono(fontSize: 8, letterSpacing: 1.2)),
+                    Text(
+                      'ROADMAP',
+                      style: appMono(fontSize: 8, letterSpacing: 1.2),
+                    ),
                   ],
                 ],
               ),
               const SizedBox(height: 3),
-              Text(help,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: appSubtleText)),
+              Text(
+                help,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: appSubtleText),
+              ),
             ],
           ),
         ),
@@ -618,18 +1000,28 @@ class _ClassTypeChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(type.name,
-              style: const TextStyle(
-                  color: appText, fontWeight: FontWeight.w700, fontSize: 13)),
+          Text(
+            type.name,
+            style: const TextStyle(
+              color: appText,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
           const SizedBox(width: 8),
-          Text('·${type.capacity}',
-              style: appMono(fontSize: 11, letterSpacing: 0, color: appPrimary)),
+          Text(
+            '·${type.capacity}',
+            style: appMono(fontSize: 11, letterSpacing: 0, color: appPrimary),
+          ),
           const SizedBox(width: 6),
           InkWell(
             onTap: onRemove,
             borderRadius: BorderRadius.circular(appRadiusPill),
-            child: const Icon(Icons.close_rounded,
-                size: 15, color: appSubtleText),
+            child: const Icon(
+              Icons.close_rounded,
+              size: 15,
+              color: appSubtleText,
+            ),
           ),
         ],
       ),
@@ -660,11 +1052,14 @@ class _AddTypeChip extends StatelessWidget {
             children: [
               const Icon(Icons.add_rounded, size: 16, color: appPrimary),
               const SizedBox(width: 4),
-              Text('Add type',
-                  style: const TextStyle(
-                      color: appPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13)),
+              Text(
+                'Add type',
+                style: const TextStyle(
+                  color: appPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
             ],
           ),
         ),
@@ -753,19 +1148,24 @@ class _RoadmapPanel extends StatelessWidget {
                 child: Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-              AppPill(label: 'Soon', intent: AppPillIntent.warning, dense: true),
+              AppPill(
+                label: 'Soon',
+                intent: AppPillIntent.warning,
+                dense: true,
+              ),
             ],
           ),
           const SizedBox(height: appSpaceMd),
-          Text(message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: appMutedText, height: 1.5)),
+          Text(
+            message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: appMutedText, height: 1.5),
+          ),
         ],
       ),
     );
@@ -787,16 +1187,17 @@ class _DangerPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('DANGER ZONE',
-              style: appMono(fontSize: 10, letterSpacing: 1.5, color: appDanger)),
+          Text(
+            'DANGER ZONE',
+            style: appMono(fontSize: 10, letterSpacing: 1.5, color: appDanger),
+          ),
           const SizedBox(height: appSpaceMd),
           Text(
             'Archiving hides the box from members while keeping its data. '
             'Deleting is permanent and removes classes, bookings and logs.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: appMutedText, height: 1.5),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: appMutedText, height: 1.5),
           ),
           const SizedBox(height: appSpaceLg),
           Row(
@@ -869,8 +1270,10 @@ class _AddClassTypeSheetState extends State<_AddClassTypeSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('NEW CLASS TYPE',
-              style: appMono(fontSize: 10, letterSpacing: 1.4)),
+          Text(
+            'NEW CLASS TYPE',
+            style: appMono(fontSize: 10, letterSpacing: 1.4),
+          ),
           const SizedBox(height: appSpaceMd),
           TextField(
             controller: _nameController,
