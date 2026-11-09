@@ -244,8 +244,8 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
                   icon: Icons.workspace_premium_outlined,
                   title: 'No plans yet',
                   subtitle:
-                      'Create your first plan, e.g. Unlimited, 2x per week '
-                      'or a 10-class card.',
+                      'Create your first plan, e.g. Unlimited, 12 tokens a '
+                      'month or a 10-token pack.',
                   actionLabel: 'New plan',
                   onAction: _busy ? null : _createPlan,
                   compact: true,
@@ -315,10 +315,9 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          'When on, athletes can only book classes their plan '
-                          'covers: dates, class types, weekly limits and '
-                          'punch-card classes. Owners and trainers are never '
-                          'blocked.',
+                          'When on, each booking spends one of the athlete\'s '
+                          'tokens, on the class types and dates their plan '
+                          'covers. Owners and trainers are never blocked.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: appSubtleText,
                           ),
@@ -421,8 +420,8 @@ class _PlanTile extends StatelessWidget {
           AppAccentBadge(
             icon: switch (plan.type) {
               PlanType.unlimited => Icons.all_inclusive_rounded,
-              PlanType.weekly => Icons.date_range_rounded,
-              PlanType.punchCard => Icons.confirmation_number_outlined,
+              PlanType.tokens => Icons.autorenew_rounded,
+              PlanType.tokenPack => Icons.confirmation_number_outlined,
             },
             color: plan.isArchived ? appSubtleText : appPrimary,
             size: 38,
