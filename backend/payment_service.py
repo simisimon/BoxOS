@@ -1,7 +1,7 @@
 """Payments through Stripe Connect.
 
-Each box links its own Stripe account (a Standard account owned by the box
-owner): members pay the box directly, the box pays Stripe's fees, and BoxOS
+Each box links its own Stripe account (an Accounts v2 merchant account with
+the full Stripe dashboard, owned by the box owner): members pay the box directly, the box pays Stripe's fees, and BoxOS
 only keeps the account ID on ``gyms.stripe_account_id``.
 
 Every Stripe call goes through :data:`client`, so tests swap in a fake and
@@ -29,54 +29,83 @@ def require_configured() -> None:
         raise ApiError(HTTPStatus.SERVICE_UNAVAILABLE, "Online payments are not set up on this server.")
 
 
+def _dig(value: Any, *keys: str) -> Any:
+    """Nested lookup in a Stripe object; None as soon as a level is missing."""
+    for key in keys:
+        if value is None:
+            return None
+        value = value.get(key) if hasattr(value, "get") else getattr(value, key, None)
+    return value
+
+
 class StripeClient:
-    """The few Stripe calls BoxOS makes, on the platform's secret key."""
+    """The few Stripe calls BoxOS makes, on the platform's secret key.
 
-    def _stripe(self) -> Any:
-        import stripe
-
-        return stripe
+    Connected accounts use Stripe's Accounts v2 API (``/v2/core/accounts``),
+    which Stripe requires for new Connect platforms: each box gets a merchant
+    account with the full Stripe dashboard, and Stripe (not BoxOS) collects
+    the fees and covers losses, like a classic Standard account."""
 
     def _call(self, action: Any) -> Any:
-        stripe = self._stripe()
+        import stripe
+
         try:
-            return action(stripe)
+            return action(stripe.StripeClient(settings.STRIPE_SECRET_KEY))
         except stripe.StripeError as error:
             message = getattr(error, "user_message", None) or str(error) or "Stripe request failed."
             raise ApiError(HTTPStatus.BAD_GATEWAY, f"Stripe: {message}") from error
 
     def create_account(self, *, email: str, country: str, business_name: str) -> str:
         account = self._call(
-            lambda stripe: stripe.Account.create(
-                api_key=settings.STRIPE_SECRET_KEY,
-                type="standard",
-                country=country,
-                email=email,
-                business_profile={"name": business_name},
+            lambda stripe_client: stripe_client.v2.core.accounts.create(
+                {
+                    "display_name": business_name,
+                    "contact_email": email,
+                    "identity": {"country": country},
+                    "dashboard": "full",
+                    "defaults": {
+                        "responsibilities": {"fees_collector": "stripe", "losses_collector": "stripe"},
+                    },
+                    "configuration": {
+                        "merchant": {
+                            "capabilities": {
+                                "card_payments": {"requested": True},
+                                "sepa_debit_payments": {"requested": True},
+                            },
+                        },
+                    },
+                }
             )
         )
-        return str(account["id"])
+        return str(account.id)
 
     def account_status(self, account_id: str) -> dict[str, bool]:
         account = self._call(
-            lambda stripe: stripe.Account.retrieve(account_id, api_key=settings.STRIPE_SECRET_KEY)
+            lambda stripe_client: stripe_client.v2.core.accounts.retrieve(
+                account_id, {"include": ["configuration.merchant", "requirements"]}
+            )
         )
+        card_status = _dig(account, "configuration", "merchant", "capabilities", "card_payments", "status")
+        deadline = _dig(account, "requirements", "summary", "minimum_deadline", "status")
         return {
-            "charges_enabled": bool(account.get("charges_enabled")),
-            "details_submitted": bool(account.get("details_submitted")),
+            "charges_enabled": card_status == "active",
+            # Nothing is due now (later requirements may still come).
+            "details_submitted": deadline in (None, "eventually_due"),
         }
 
     def onboarding_link(self, account_id: str, *, refresh_url: str, return_url: str) -> str:
         link = self._call(
-            lambda stripe: stripe.AccountLink.create(
-                api_key=settings.STRIPE_SECRET_KEY,
-                account=account_id,
-                refresh_url=refresh_url,
-                return_url=return_url,
-                type="account_onboarding",
+            lambda stripe_client: stripe_client.v2.core.account_links.create(
+                {
+                    "account": account_id,
+                    "use_case": {
+                        "type": "account_onboarding",
+                        "account_onboarding": {"refresh_url": refresh_url, "return_url": return_url},
+                    },
+                }
             )
         )
-        return str(link["url"])
+        return str(link.url)
 
 
 client: StripeClient = StripeClient()
