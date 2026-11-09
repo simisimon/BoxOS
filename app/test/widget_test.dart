@@ -466,7 +466,7 @@ class RecordingGymRepository implements GymRepository {
   Future<List<GymSummary>> listGyms() async => gyms;
 
   @override
-  Future<void> requestJoin({required int gymId}) async {
+  Future<void> requestJoin({required int gymId, int? planId}) async {
     requestedGymId = gymId;
     final gym = gyms.firstWhere((item) => item.id == gymId);
     myRequests = [

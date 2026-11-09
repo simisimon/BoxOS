@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, plan_service, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
 
 logger = logging.getLogger("boxos.backend")
 
@@ -184,6 +184,65 @@ class UpdateAttendanceRequest(BaseModel):
 
 class GymIdRequest(BaseModel):
     gym_id: int
+
+
+class JoinGymRequest(GymIdRequest):
+    # Optional plan the athlete would like; becomes a plan request the owner
+    # reviews once the join request is approved.
+    plan_id: int | None = None
+
+
+class MembershipPlanRequest(BaseModel):
+    name: str
+    description: str = ""
+    plan_type: str
+    price_cents: int
+    billing_period: str
+    classes_per_week: int | None = None
+    class_count: int | None = None
+    validity_days: int | None = None
+    allowed_class_types: list[str] = []
+
+
+class UpdateMembershipPlanRequest(MembershipPlanRequest):
+    plan_id: int
+
+
+class ArchiveMembershipPlanRequest(BaseModel):
+    plan_id: int
+    archived: bool
+
+
+class MembershipSettingsRequest(BaseModel):
+    currency: str | None = None
+    require_plan_for_booking: bool | None = None
+
+
+class PlanIdRequest(BaseModel):
+    plan_id: int
+
+
+class ReviewPlanRequestBody(BaseModel):
+    request_id: int
+    decision: str
+    starts_on: str | None = None
+    price_cents: int | None = None
+
+
+class AssignPlanRequest(BaseModel):
+    user_id: int
+    plan_id: int
+    starts_on: str | None = None
+    price_cents: int | None = None
+
+
+class UpdateMemberPlanRequest(BaseModel):
+    member_plan_id: int
+    payment_status: str | None = None
+
+
+class MemberPlanIdRequest(BaseModel):
+    member_plan_id: int
 
 
 class UpdateActiveRoleRequest(BaseModel):
@@ -1096,7 +1155,7 @@ def update_current_gym(
 
 @app.post("/gyms/join-requests", status_code=HTTPStatus.CREATED.value)
 def create_join_request(
-    body: GymIdRequest,
+    body: JoinGymRequest,
     session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, str]:
     gym_id = body.gym_id
@@ -1117,12 +1176,20 @@ def create_join_request(
         ).fetchone()
         if existing_request is not None:
             raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="A join request is already pending.")
+        plan = None
+        if body.plan_id is not None:
+            plan = plan_service.get_plan_row(connection, gym_id, body.plan_id)
+            if plan["is_archived"]:
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="This plan is no longer offered.")
         timestamp = security.isoformat(security.now_utc())
         with connection:
             connection.execute(
                 "insert into gym_join_requests (user_id, gym_id, status, created_at, updated_at) values (?, ?, 'pending', ?, ?)",
                 (session["user_id"], gym_id, timestamp, timestamp),
             )
+            if plan is not None:
+                plan_service.cancel_open_requests(connection, gym_id=gym_id, user_id=session["user_id"])
+                plan_service.insert_member_plan(connection, plan=plan, user_id=session["user_id"], status="requested")
         return {"message": "Join request submitted."}
     finally:
         connection.close()
@@ -1136,7 +1203,14 @@ def list_join_requests(
     try:
         rows = connection.execute(
             """
-            select gym_join_requests.id, gym_join_requests.created_at, users.email, users.display_name, users.nickname
+            select gym_join_requests.id, gym_join_requests.created_at, users.email, users.display_name, users.nickname,
+                   (
+                     select member_plans.plan_name from member_plans
+                     where member_plans.gym_id = gym_join_requests.gym_id
+                       and member_plans.user_id = gym_join_requests.user_id
+                       and member_plans.status = 'requested'
+                     order by member_plans.id desc limit 1
+                   ) as requested_plan_name
             from gym_join_requests
             join users on users.id = gym_join_requests.user_id
             where gym_join_requests.gym_id = ? and gym_join_requests.status = 'pending'
@@ -1152,6 +1226,7 @@ def list_join_requests(
                     "display_name": row["display_name"],
                     "nickname": row["nickname"],
                     "created_at": row["created_at"],
+                    "requested_plan_name": row["requested_plan_name"],
                 }
                 for row in rows
             ]
@@ -1236,6 +1311,10 @@ def review_join_request(
                         (join_request["gym_id"], timestamp, join_request["user_id"]),
                     )
                 membership_service.sync_user_context(connection, join_request["user_id"])
+            else:
+                plan_service.cancel_open_requests(
+                    connection, gym_id=join_request["gym_id"], user_id=join_request["user_id"], status="rejected"
+                )
             connection.execute(
                 "update gym_join_requests set status = ?, reviewed_at = ?, reviewed_by_user_id = ?, updated_at = ? where id = ?",
                 ("approved" if decision == "approve" else "rejected", timestamp, session["user_id"], timestamp, request_id),
@@ -1253,6 +1332,14 @@ def review_join_request(
         return {"message": f"Join request {'approved' if decision == 'approve' else 'rejected'}."}
     finally:
         connection.close()
+
+
+def _member_payload_with_plan(row: Any, summaries: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    payload = membership_service.role_managed_member_payload(row)
+    summary = summaries.get(int(row["user_id"]), {})
+    payload["plan"] = summary.get("plan")
+    payload["has_plan_request"] = bool(summary.get("has_plan_request"))
+    return payload
 
 
 @app.get("/roles/users")
@@ -1335,7 +1422,10 @@ def list_role_users(
             """,
             (session["active_gym_id"],),
         ).fetchall()
-        return {"users": [membership_service.role_managed_member_payload(row) for row in rows]}
+        summaries = plan_service.plan_summaries_for_gym(
+            connection, session["active_gym_id"], _gym_timezone(connection, session["active_gym_id"])
+        )
+        return {"users": [_member_payload_with_plan(row, summaries) for row in rows]}
     finally:
         connection.close()
 
@@ -1499,7 +1589,610 @@ def assign_role(
         ).fetchone()
         if user is None:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Gym member not found.")
-        return membership_service.role_managed_member_payload(user)
+        summaries = plan_service.plan_summaries_for_gym(
+            connection, session["active_gym_id"], _gym_timezone(connection, session["active_gym_id"])
+        )
+        return _member_payload_with_plan(user, summaries)
+    finally:
+        connection.close()
+
+
+# --- Membership plans ---------------------------------------------------------
+#
+# Owners define plans and review plan requests; athletes see the box's plans,
+# request one, and see their own plan. Logic lives in backend/plan_service.py.
+
+
+def _is_admin_member(connection: Any, gym_id: int, user_id: int) -> bool:
+    row = connection.execute(
+        "select roles_json from gym_memberships where user_id = ? and gym_id = ? and status = 'active'",
+        (user_id, gym_id),
+    ).fetchone()
+    return row is not None and "admin" in validation.decode_roles(row["roles_json"])
+
+
+def _membership_settings_payload(gym: Any) -> dict[str, Any]:
+    return {
+        "currency": gym["currency"],
+        "require_plan_for_booking": bool(gym["require_plan_for_booking"]),
+        "currencies": list(plan_service.CURRENCIES),
+    }
+
+
+def _member_plan_payloads(connection: Any, gym: Any, rows: list[Any]) -> list[dict[str, Any]]:
+    return [
+        plan_service.member_plan_payload(connection, row, currency=gym["currency"], gym_timezone=gym["timezone"])
+        for row in rows
+    ]
+
+
+@app.get("/membership/settings")
+def get_membership_settings(
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        return _membership_settings_payload(plan_service.gym_plan_settings(connection, session["active_gym_id"]))
+    finally:
+        connection.close()
+
+
+@app.patch("/membership/settings")
+def update_membership_settings(
+    body: MembershipSettingsRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        currency = plan_service.require_currency(body.currency) if body.currency is not None else gym["currency"]
+        require_plan = (
+            int(body.require_plan_for_booking)
+            if body.require_plan_for_booking is not None
+            else int(gym["require_plan_for_booking"])
+        )
+        with connection:
+            connection.execute(
+                "update gyms set currency = ?, require_plan_for_booking = ?, updated_at = ? where id = ?",
+                (currency, require_plan, security.isoformat(security.now_utc()), gym_id),
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                action="membership_settings_updated",
+                entity_type="gym",
+                entity_id=gym_id,
+                details={"currency": currency, "require_plan_for_booking": bool(require_plan)},
+            )
+        return _membership_settings_payload(plan_service.gym_plan_settings(connection, gym_id))
+    finally:
+        connection.close()
+
+
+@app.get("/membership/plans")
+def list_membership_plans(
+    include_archived: bool = False,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        show_archived = include_archived and _is_admin_member(connection, gym_id, session["user_id"])
+        rows = plan_service.list_plan_rows(
+            connection, gym_id, gym_timezone=gym["timezone"], include_archived=show_archived
+        )
+        return {
+            "plans": [plan_service.plan_payload(row, currency=gym["currency"]) for row in rows],
+            "currency": gym["currency"],
+            "require_plan_for_booking": bool(gym["require_plan_for_booking"]),
+        }
+    finally:
+        connection.close()
+
+
+@app.get("/gyms/{gym_id}/plans")
+def list_gym_plans_for_join(
+    gym_id: int,
+    _: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    """The plans a box offers, for athletes choosing one while sending a join request."""
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        rows = plan_service.list_plan_rows(connection, gym_id, gym_timezone=gym["timezone"], include_archived=False)
+        plans = [plan_service.plan_payload(row, currency=gym["currency"]) for row in rows]
+        for plan in plans:
+            plan.pop("active_member_count", None)
+        return {"plans": plans, "currency": gym["currency"]}
+    finally:
+        connection.close()
+
+
+@app.post("/membership/plans", status_code=HTTPStatus.CREATED.value)
+def create_membership_plan(
+    body: MembershipPlanRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    fields = plan_service.require_plan_fields(body.model_dump())
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            cursor = connection.execute(
+                """
+                insert into membership_plans (
+                  gym_id, name, description, plan_type, price_cents, billing_period,
+                  classes_per_week, class_count, validity_days, allowed_class_types_json,
+                  created_by_user_id, created_at, updated_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                returning id
+                """,
+                (
+                    gym_id,
+                    fields["name"],
+                    fields["description"],
+                    fields["plan_type"],
+                    fields["price_cents"],
+                    fields["billing_period"],
+                    fields["classes_per_week"],
+                    fields["class_count"],
+                    fields["validity_days"],
+                    fields["allowed_class_types_json"],
+                    session["user_id"],
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            plan_id = int(cursor.fetchone()["id"])
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                action="membership_plan_created",
+                entity_type="membership_plan",
+                entity_id=plan_id,
+                details={"name": fields["name"], "plan_type": fields["plan_type"], "price_cents": fields["price_cents"]},
+            )
+        row = plan_service.get_plan_row(connection, gym_id, plan_id)
+        return {"plan": plan_service.plan_payload(row, currency=gym["currency"])}
+    finally:
+        connection.close()
+
+
+@app.patch("/membership/plans")
+def update_membership_plan(
+    body: UpdateMembershipPlanRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Edit a plan. Members already on the plan keep the price and limits they
+    were given; the change applies to new requests and assignments."""
+    gym_id = session["active_gym_id"]
+    fields = plan_service.require_plan_fields(body.model_dump())
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        plan_service.get_plan_row(connection, gym_id, body.plan_id)
+        with connection:
+            connection.execute(
+                """
+                update membership_plans
+                set name = ?, description = ?, plan_type = ?, price_cents = ?, billing_period = ?,
+                    classes_per_week = ?, class_count = ?, validity_days = ?, allowed_class_types_json = ?,
+                    updated_at = ?
+                where id = ? and gym_id = ?
+                """,
+                (
+                    fields["name"],
+                    fields["description"],
+                    fields["plan_type"],
+                    fields["price_cents"],
+                    fields["billing_period"],
+                    fields["classes_per_week"],
+                    fields["class_count"],
+                    fields["validity_days"],
+                    fields["allowed_class_types_json"],
+                    security.isoformat(security.now_utc()),
+                    body.plan_id,
+                    gym_id,
+                ),
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                action="membership_plan_updated",
+                entity_type="membership_plan",
+                entity_id=body.plan_id,
+                details={"name": fields["name"], "plan_type": fields["plan_type"], "price_cents": fields["price_cents"]},
+            )
+        rows = plan_service.list_plan_rows(connection, gym_id, gym_timezone=gym["timezone"], include_archived=True)
+        row = next(item for item in rows if item["id"] == body.plan_id)
+        return {"plan": plan_service.plan_payload(row, currency=gym["currency"])}
+    finally:
+        connection.close()
+
+
+@app.patch("/membership/plans/archive")
+def archive_membership_plan(
+    body: ArchiveMembershipPlanRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Archive (stop offering) or restore a plan. Archived plans are hidden from
+    athletes; members already on them keep them."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        plan_service.get_plan_row(connection, gym_id, body.plan_id)
+        with connection:
+            connection.execute(
+                "update membership_plans set is_archived = ?, updated_at = ? where id = ? and gym_id = ?",
+                (int(body.archived), security.isoformat(security.now_utc()), body.plan_id, gym_id),
+            )
+            if body.archived:
+                # Open requests for a plan that is no longer offered cannot be approved sensibly.
+                connection.execute(
+                    "update member_plans set status = 'cancelled', updated_at = ? where plan_id = ? and status = 'requested'",
+                    (security.isoformat(security.now_utc()), body.plan_id),
+                )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                action="membership_plan_archived" if body.archived else "membership_plan_restored",
+                entity_type="membership_plan",
+                entity_id=body.plan_id,
+                details={},
+            )
+        rows = plan_service.list_plan_rows(connection, gym_id, gym_timezone=gym["timezone"], include_archived=True)
+        row = next(item for item in rows if item["id"] == body.plan_id)
+        return {"plan": plan_service.plan_payload(row, currency=gym["currency"])}
+    finally:
+        connection.close()
+
+
+@app.get("/membership/me")
+def get_my_membership(
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        rows = plan_service.member_plan_rows_for_user(connection, gym_id, session["user_id"])
+        return {
+            "plans": _member_plan_payloads(connection, gym, rows),
+            "currency": gym["currency"],
+            "require_plan_for_booking": bool(gym["require_plan_for_booking"]),
+        }
+    finally:
+        connection.close()
+
+
+@app.post("/membership/requests", status_code=HTTPStatus.CREATED.value)
+def request_membership_plan(
+    body: PlanIdRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """Ask the owner for a plan. A newer request replaces an open one."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        plan = plan_service.get_plan_row(connection, gym_id, body.plan_id)
+        if plan["is_archived"]:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="This plan is no longer offered.")
+        with connection:
+            plan_service.cancel_open_requests(connection, gym_id=gym_id, user_id=session["user_id"])
+            member_plan_id = plan_service.insert_member_plan(
+                connection, plan=plan, user_id=session["user_id"], status="requested"
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=session["user_id"],
+                action="membership_plan_requested",
+                entity_type="member_plan",
+                entity_id=member_plan_id,
+                details={"plan_id": plan["id"], "plan_name": plan["name"]},
+            )
+        row = plan_service.get_member_plan_row(connection, gym_id, member_plan_id)
+        return {"plan": _member_plan_payloads(connection, gym, [row])[0]}
+    finally:
+        connection.close()
+
+
+@app.delete("/membership/requests")
+def withdraw_membership_plan_request(
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, str]:
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        if plan_service.pending_request_row(connection, gym_id, session["user_id"]) is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="You have no open plan request.")
+        with connection:
+            plan_service.cancel_open_requests(connection, gym_id=gym_id, user_id=session["user_id"])
+        return {"message": "Plan request withdrawn."}
+    finally:
+        connection.close()
+
+
+@app.get("/membership/requests")
+def list_membership_plan_requests(
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Open plan requests from active members (requests sent with a join request
+    show up here once the join request is approved)."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        rows = connection.execute(
+            """
+            select member_plans.*, users.email, users.display_name, users.nickname, users.profile_image_url
+            from member_plans
+            join users on users.id = member_plans.user_id
+            join gym_memberships on gym_memberships.user_id = member_plans.user_id
+              and gym_memberships.gym_id = member_plans.gym_id
+              and gym_memberships.status in ('active', 'paused')
+            where member_plans.gym_id = ? and member_plans.status = 'requested'
+              and users.deleted_at is null
+            order by member_plans.requested_at asc, member_plans.id asc
+            """,
+            (gym_id,),
+        ).fetchall()
+        requests = []
+        for row in rows:
+            payload = _member_plan_payloads(connection, gym, [row])[0]
+            current = plan_service.plan_for_day(
+                connection, gym_id, row["user_id"], schedule_service.local_today(gym["timezone"])
+            )
+            payload["member"] = {
+                "id": row["user_id"],
+                "email": row["email"],
+                "display_name": row["display_name"],
+                "nickname": row["nickname"],
+                "profile_image_url": row["profile_image_url"],
+            }
+            payload["current_plan_name"] = current["plan_name"] if current is not None else None
+            requests.append(payload)
+        return {"requests": requests}
+    finally:
+        connection.close()
+
+
+def _plan_start_date(value: str | None, gym_timezone: str) -> Any:
+    today = schedule_service.local_today(gym_timezone)
+    if value is None or not str(value).strip():
+        return today
+    starts_on = plan_service.require_date(value)
+    if starts_on < today - timedelta(days=31):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            detail="Start date can be at most a month in the past.",
+        )
+    return starts_on
+
+
+def _require_member(connection: Any, gym_id: int, user_id: int) -> None:
+    member = connection.execute(
+        "select id from gym_memberships where user_id = ? and gym_id = ? and status in ('active', 'paused')",
+        (user_id, gym_id),
+    ).fetchone()
+    if member is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Gym member not found.")
+
+
+@app.patch("/membership/requests")
+def review_membership_plan_request(
+    body: ReviewPlanRequestBody,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Approve (optionally with a start date and an adjusted price) or reject a plan request."""
+    gym_id = session["active_gym_id"]
+    decision = validation.require_join_request_decision(body.decision)
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        request_row = plan_service.get_member_plan_row(connection, gym_id, body.request_id)
+        if request_row["status"] != "requested":
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Plan request not found.")
+        _require_member(connection, gym_id, request_row["user_id"])
+        starts_on = _plan_start_date(body.starts_on, gym["timezone"])
+        price_cents = plan_service.require_price_cents(body.price_cents) if body.price_cents is not None else None
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            if decision == "approve":
+                plan_service.activate_member_plan(
+                    connection,
+                    member_plan=request_row,
+                    starts_on=starts_on,
+                    price_cents=price_cents,
+                    reviewer_user_id=session["user_id"],
+                )
+                title = "Membership plan approved"
+                message = f"{request_row['plan_name']} starts on {starts_on.isoformat()}."
+            else:
+                connection.execute(
+                    """
+                    update member_plans
+                    set status = 'rejected', reviewed_at = ?, reviewed_by_user_id = ?, updated_at = ?
+                    where id = ?
+                    """,
+                    (timestamp, session["user_id"], timestamp, request_row["id"]),
+                )
+                title = "Membership plan request declined"
+                message = f"Your request for {request_row['plan_name']} was declined. Talk to your box for details."
+            notifications_core.create_notification(
+                connection,
+                user_id=request_row["user_id"],
+                gym_id=gym_id,
+                type="membership_plan",
+                title=title,
+                body=message,
+                entity_type="member_plan",
+                entity_id=request_row["id"],
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=request_row["user_id"],
+                action="membership_plan_request_reviewed",
+                entity_type="member_plan",
+                entity_id=request_row["id"],
+                details={
+                    "decision": decision,
+                    "plan_name": request_row["plan_name"],
+                    "starts_on": starts_on.isoformat() if decision == "approve" else None,
+                    "price_cents": price_cents,
+                },
+            )
+        row = plan_service.get_member_plan_row(connection, gym_id, request_row["id"])
+        return {"plan": _member_plan_payloads(connection, gym, [row])[0]}
+    finally:
+        connection.close()
+
+
+@app.get("/membership/members/{user_id}")
+def get_member_plans(
+    user_id: int,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """A member's plan history for the owner's member detail view."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        _require_member(connection, gym_id, user_id)
+        rows = plan_service.member_plan_rows_for_user(connection, gym_id, user_id)
+        return {"plans": _member_plan_payloads(connection, gym, rows), "currency": gym["currency"]}
+    finally:
+        connection.close()
+
+
+@app.post("/membership/assignments", status_code=HTTPStatus.CREATED.value)
+def assign_membership_plan(
+    body: AssignPlanRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Owner gives a member a plan directly. Replaces the member's open request
+    and ends or shortens the plan it overlaps."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        _require_member(connection, gym_id, body.user_id)
+        plan = plan_service.get_plan_row(connection, gym_id, body.plan_id)
+        if plan["is_archived"]:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="This plan is no longer offered.")
+        starts_on = _plan_start_date(body.starts_on, gym["timezone"])
+        price_cents = plan_service.require_price_cents(body.price_cents) if body.price_cents is not None else None
+        with connection:
+            plan_service.cancel_open_requests(connection, gym_id=gym_id, user_id=body.user_id)
+            member_plan_id = plan_service.insert_member_plan(connection, plan=plan, user_id=body.user_id, status="active")
+            plan_service.activate_member_plan(
+                connection,
+                member_plan=plan_service.get_member_plan_row(connection, gym_id, member_plan_id),
+                starts_on=starts_on,
+                price_cents=price_cents,
+                reviewer_user_id=session["user_id"],
+            )
+            notifications_core.create_notification(
+                connection,
+                user_id=body.user_id,
+                gym_id=gym_id,
+                type="membership_plan",
+                title="New membership plan",
+                body=f"You are on {plan['name']} from {starts_on.isoformat()}.",
+                entity_type="member_plan",
+                entity_id=member_plan_id,
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=body.user_id,
+                action="membership_plan_assigned",
+                entity_type="member_plan",
+                entity_id=member_plan_id,
+                details={"plan_id": plan["id"], "plan_name": plan["name"], "starts_on": starts_on.isoformat(), "price_cents": price_cents},
+            )
+        row = plan_service.get_member_plan_row(connection, gym_id, member_plan_id)
+        return {"plan": _member_plan_payloads(connection, gym, [row])[0]}
+    finally:
+        connection.close()
+
+
+@app.patch("/membership/assignments")
+def update_member_plan(
+    body: UpdateMemberPlanRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Track payment by hand (paid / due / overdue) until a payment provider exists."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        row = plan_service.get_member_plan_row(connection, gym_id, body.member_plan_id)
+        if row["status"] != "active":
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Only active plans can be updated.")
+        if body.payment_status is not None:
+            payment_status = plan_service.require_payment_status(body.payment_status)
+            with connection:
+                connection.execute(
+                    "update member_plans set payment_status = ?, updated_at = ? where id = ?",
+                    (payment_status, security.isoformat(security.now_utc()), row["id"]),
+                )
+                audit.write_audit_log(
+                    connection,
+                    gym_id=gym_id,
+                    actor_user_id=session["user_id"],
+                    target_user_id=row["user_id"],
+                    action="member_plan_payment_updated",
+                    entity_type="member_plan",
+                    entity_id=row["id"],
+                    details={"from": row["payment_status"], "to": payment_status},
+                )
+        row = plan_service.get_member_plan_row(connection, gym_id, body.member_plan_id)
+        return {"plan": _member_plan_payloads(connection, gym, [row])[0]}
+    finally:
+        connection.close()
+
+
+@app.post("/membership/assignments/end")
+def end_member_plan(
+    body: MemberPlanIdRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        row = plan_service.get_member_plan_row(connection, gym_id, body.member_plan_id)
+        if row["status"] != "active":
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Only active plans can be ended.")
+        with connection:
+            plan_service.end_member_plan(connection, member_plan=row, gym_timezone=gym["timezone"])
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=row["user_id"],
+                action="member_plan_ended",
+                entity_type="member_plan",
+                entity_id=row["id"],
+                details={"plan_name": row["plan_name"]},
+            )
+        row = plan_service.get_member_plan_row(connection, gym_id, body.member_plan_id)
+        return {"plan": _member_plan_payloads(connection, gym, [row])[0]}
     finally:
         connection.close()
 
@@ -2296,7 +2989,7 @@ def create_class_booking(
     connection = db.get_connection()
     try:
         schedule_row = connection.execute(
-            "select id, gym_id, start_time, capacity from class_schedules where id = ? and gym_id = ?",
+            "select id, gym_id, class_type, start_time, capacity from class_schedules where id = ? and gym_id = ?",
             (schedule_id, session["active_gym_id"]),
         ).fetchone()
         if schedule_row is None:
@@ -2316,10 +3009,19 @@ def create_class_booking(
         booked_count = int(booking_count_row["booked_count"]) if booking_count_row is not None else 0
         if booked_count >= schedule_row["capacity"]:
             raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="This class is already full.")
+        member_plan_id = plan_service.require_booking_allowed(
+            connection,
+            gym_id=schedule_row["gym_id"],
+            user_id=session["user_id"],
+            schedule_row=schedule_row,
+        )
         with connection:
             connection.execute(
-                "insert into class_bookings (class_schedule_id, user_id, attendance_status, created_at) values (?, ?, 'booked', ?)",
-                (schedule_id, session["user_id"], security.isoformat(security.now_utc())),
+                """
+                insert into class_bookings (class_schedule_id, user_id, attendance_status, member_plan_id, created_at)
+                values (?, ?, 'booked', ?, ?)
+                """,
+                (schedule_id, session["user_id"], member_plan_id, security.isoformat(security.now_utc())),
             )
             schedule_service.create_booking_confirmation_notification(
                 connection,
@@ -2359,7 +3061,7 @@ def delete_class_booking(
                 "delete from class_bookings where class_schedule_id = ? and user_id = ?",
                 (schedule_id, session["user_id"]),
             )
-            promoted_user_id = schedule_service.promote_next_waitlisted_user(connection, class_schedule_id=schedule_id)
+            promoted_user_id = plan_service.promote_next_eligible_waitlisted_user(connection, class_schedule_id=schedule_id)
             if promoted_user_id is not None:
                 schedule_service.create_waitlist_promotion_notification(
                     connection,
@@ -2381,7 +3083,7 @@ def create_class_waitlist(
     connection = db.get_connection()
     try:
         schedule_row = connection.execute(
-            "select id, gym_id, start_time, capacity from class_schedules where id = ? and gym_id = ?",
+            "select id, gym_id, class_type, start_time, capacity from class_schedules where id = ? and gym_id = ?",
             (schedule_id, session["active_gym_id"]),
         ).fetchone()
         if schedule_row is None:
@@ -2407,6 +3109,12 @@ def create_class_waitlist(
         booked_count = int(booking_count_row["booked_count"]) if booking_count_row is not None else 0
         if booked_count < schedule_row["capacity"]:
             raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="This class still has open spots.")
+        plan_service.require_booking_allowed(
+            connection,
+            gym_id=schedule_row["gym_id"],
+            user_id=session["user_id"],
+            schedule_row=schedule_row,
+        )
         with connection:
             connection.execute(
                 "insert into class_waitlist_entries (class_schedule_id, user_id, created_at) values (?, ?, ?)",

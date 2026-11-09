@@ -1,6 +1,7 @@
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/home/presentation/widgets/app_shell.dart';
 import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
+import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -31,8 +32,10 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     final hasMembersTab = destinations.any(
       (destination) => destination.branchIndex == kMembersBranch,
     );
+    // Join requests and plan requests share the Requests segment and badge.
     final openJoinRequests = hasMembersTab
-        ? ref.watch(pendingJoinRequestsProvider).value?.length ?? 0
+        ? (ref.watch(pendingJoinRequestsProvider).value?.length ?? 0) +
+              (ref.watch(pendingPlanRequestsProvider).value?.length ?? 0)
         : 0;
 
     // Only the schedule week (My Box) spans the full width; every other view,

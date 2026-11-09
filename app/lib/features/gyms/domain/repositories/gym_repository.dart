@@ -28,7 +28,9 @@ abstract class GymRepository {
     required String contentType,
   });
 
-  Future<void> requestJoin({required int gymId});
+  /// [planId] is the plan the athlete would like; the owner reviews it as a
+  /// plan request once the join request is approved.
+  Future<void> requestJoin({required int gymId, int? planId});
 
   Future<List<MyGymJoinRequest>> fetchMyJoinRequests();
 

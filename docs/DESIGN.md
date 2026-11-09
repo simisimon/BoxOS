@@ -44,8 +44,8 @@ app. Backend checks are the security boundary: owner-only endpoints use
 | Browse own history in the Logbook | [x] | History only, per-WOD scores |
 | Read announcements, like and comment | [x] | |
 | Box chat | [x] | |
-| Buy / see own membership and payment state | [ ] | No plans, no billing |
-| Booking blocked without a valid membership | [ ] | Only `active` gym membership is checked |
+| See own plan, request or change a plan | [x] | Profile → Membership; a plan can also be picked with the join request. No online payment |
+| Booking blocked without a valid plan | [x] | When the box turns it on: plan dates, class types, weekly limit and punch-card classes are checked on booking, waitlist join and waitlist promotion |
 | Booking / cancellation window rules | [ ] | No booking window or cancellation cutoff |
 
 ## Trainer
@@ -73,8 +73,8 @@ app. Backend checks are the security boundary: owner-only endpoints use
 | Dashboard: attendance, fill rate, no-shows, waitlist pressure | [x] | 7 / 14 / 30-day windows |
 | Audit log of critical changes | [~] | Recorded and served by `/audit-logs`; no screen |
 | Box settings: booking and notification rules | [~] | Screen exists, values are kept only for the session (no backend) |
-| Define membership plans and prices | [ ] | |
-| Assign a plan to a member, see who is paid / overdue | [ ] | |
+| Define membership plans and prices | [x] | Box configuration → Memberships: unlimited, N per week, punch card (classes + validity); price, billing period, class types; archive instead of delete |
+| Assign a plan to a member, see who is paid / overdue | [x] | Plan requests in Members → Requests (badge counts them); assign, end and set payment state (paid / due / overdue, by hand) in the member detail |
 | Collect payments (provider integration) | [ ] | `notify_payment_issues` preference exists, nothing uses it |
 | Revenue on the dashboard | [ ] | Depends on payments |
 
@@ -88,12 +88,29 @@ other:
 2. **Persisted box settings.** Booking rules
    (booking window, cancellation cutoff, late-cancel / no-show handling) stored
    on the gym and enforced by `POST/DELETE /schedule/bookings`.
-3. **Memberships and payments.** Plans (unlimited, N per week, punch card),
-   member ↔ plan assignment, payment state on the Members tab, booking gated
-   by an active plan, then a payment provider and revenue on the dashboard.
-   This is the largest missing piece of the core.
+3. **Payments.** Plans, plan requests, manual payment state and the booking
+   gate are in (see "Membership plans" below). Still missing: a payment
+   provider, "pay to activate" for plans, and revenue on the dashboard.
 4. **Push delivery.** Device registration already exists; send the existing
    in-app notifications (booking, waitlist promotion, WOD published) as push.
+
+## Membership plans
+
+- **Plan types:** *unlimited*; *N classes per week* (Monday–Sunday in the box
+  timezone); *punch card* (N classes, optionally valid for X days from the
+  start). Each plan has a price (one currency per box), a billing period
+  (monthly, yearly, one-off) and the class types it includes.
+- **Getting a plan:** the athlete requests a plan (Profile → Membership, or
+  with the join request) and the owner approves it with a start date and,
+  if needed, a different price. The owner can also assign a plan directly.
+  Price and limits are copied onto the member's plan, so editing a plan only
+  affects new members.
+- **One plan at a time:** a new plan ends the current one the day before it
+  starts. Punch-card usage is the number of bookings made on the card, so a
+  cancellation gives the class back.
+- **Booking gate:** off by default (Box configuration → Memberships). Owners
+  and trainers are never checked. Code: `backend/plan_service.py`,
+  `app/lib/features/memberships/`.
 
 Smaller follow-ups: a trainer "My classes" view and an audit-log screen for
 the owner.
