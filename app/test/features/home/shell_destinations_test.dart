@@ -25,7 +25,7 @@ void main() {
       ]);
     });
 
-    test('the owner tab set puts Box Settings between Logbook and Profile', () {
+    test('the owner tab set puts Settings between Logbook and Profile', () {
       // Box settings left the profile for a tab of its own, so the owner set
       // is two over the five-tab bottom-nav budget. One goes when the logbook
       // rebuild moves athlete history into the member detail.
@@ -36,12 +36,12 @@ void main() {
         'Members',
         'Community',
         'Logbook',
-        'Box Settings',
+        'Settings',
         'Profile',
       ]);
     });
 
-    test('only owners get the Box Settings tab', () {
+    test('only owners get the Settings tab', () {
       expect(owner().map((d) => d.branchIndex), contains(kBoxSettingsBranch));
       expect(
         athlete().map((d) => d.branchIndex),
