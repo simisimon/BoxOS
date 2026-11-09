@@ -32,6 +32,9 @@ services:
       BOXOS_PORT: 8080
       BOXOS_DATABASE_URL: postgresql://boxos:boxos@db-dev:5432/boxos
       BOXOS_UPLOADS_ROOT: /app/uploads
+      # Stripe test mode: put the keys in a git-ignored .env next to this file.
+      BOXOS_STRIPE_SECRET_KEY: ${BOXOS_STRIPE_SECRET_KEY:-}
+      BOXOS_STRIPE_WEBHOOK_SECRET: ${BOXOS_STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - ./backend:/app/backend
       - backend_dev_uploads:/app/uploads

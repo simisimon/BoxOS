@@ -464,6 +464,12 @@ create index if not exists token_credits_user_idx on token_credits (gym_id, user
 
 alter table gyms add column if not exists extra_token_price_cents integer;
 
+alter table gyms add column if not exists stripe_account_id text;
+
+alter table gyms add column if not exists stripe_charges_enabled integer not null default 0;
+
+alter table gyms add column if not exists stripe_details_submitted integer not null default 0;
+
 alter table class_bookings add column if not exists token_credit_id integer references token_credits(id) on delete set null;
 
 alter table users add constraint users_active_gym_id_fkey

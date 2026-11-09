@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, plan_service, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
 
 logger = logging.getLogger("boxos.backend")
 
@@ -1703,6 +1703,48 @@ def update_membership_settings(
                 },
             )
         return _membership_settings_payload(plan_service.gym_plan_settings(connection, gym_id))
+    finally:
+        connection.close()
+
+
+# --- Payments (Stripe Connect) -------------------------------------------------
+#
+# Each box connects its own Stripe account; see backend/payment_service.py.
+
+
+@app.get("/payments/stripe")
+def get_stripe_status(
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        return payment_service.stripe_status_payload(connection, session["active_gym_id"])
+    finally:
+        connection.close()
+
+
+@app.post("/payments/stripe/onboarding")
+def create_stripe_onboarding_link(
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """A one-time link to Stripe's sign-up for the box's account (created on
+    first use). The app opens it; Stripe sends the owner back to Settings."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        owner = connection.execute("select email from users where id = ?", (session["user_id"],)).fetchone()
+        url = payment_service.onboarding_link(connection, gym_id, owner_email=owner["email"] if owner else "")
+        with connection:
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                action="stripe_onboarding_started",
+                entity_type="gym",
+                entity_id=gym_id,
+                details={},
+            )
+        return {"url": url}
     finally:
         connection.close()
 

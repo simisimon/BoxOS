@@ -48,7 +48,9 @@ from backend.validation import ApiError, decode_roles
 
 PLAN_TYPES = ("unlimited", "tokens", "token_pack")
 TOKEN_PERIODS = ("week", "month", "year")
-BILLING_PERIODS = ("monthly", "yearly", "one_time")
+# Plans are billed monthly (subscriptions) or once (token packs). ``yearly``
+# is no longer offered; older plans and member plans may still carry it.
+BILLING_PERIODS = ("monthly", "one_time")
 PAYMENT_STATUSES = ("paid", "due", "overdue")
 CLASS_TYPES = ("WOD", "Open Gym", "Skill", "PT")
 CURRENCIES = ("EUR", "USD", "GBP", "CHF")
@@ -97,7 +99,7 @@ def require_plan_fields(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError(HTTPStatus.BAD_REQUEST, "Plan type must be unlimited, tokens, or token_pack.")
     billing_period = str(payload.get("billing_period") or "").strip().lower()
     if billing_period not in BILLING_PERIODS:
-        raise ApiError(HTTPStatus.BAD_REQUEST, "Billing period must be monthly, yearly, or one_time.")
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Billing period must be monthly or one_time.")
     price_cents = require_price_cents(payload.get("price_cents"))
 
     token_count = None

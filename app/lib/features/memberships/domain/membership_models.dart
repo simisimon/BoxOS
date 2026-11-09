@@ -71,6 +71,9 @@ enum BillingPeriod {
     BillingPeriod.oneTime => 'One-off',
   };
 
+  /// What the plan editor offers. [yearly] only remains for older plans.
+  static const offered = [BillingPeriod.monthly, BillingPeriod.oneTime];
+
   /// Suffix after the price, e.g. "€129 / month".
   String get priceSuffix => switch (this) {
     BillingPeriod.monthly => ' / month',
@@ -460,6 +463,24 @@ class MemberPlanSummary {
       endsOn: data['ends_on'] as String?,
     );
   }
+}
+
+/// Whether the box's Stripe account can take payments.
+enum StripeConnectState {
+  /// The server has no Stripe key; payments are hidden.
+  unavailable,
+  notConnected,
+
+  /// Account created, the owner has not finished Stripe's sign-up.
+  onboarding,
+  ready;
+
+  static StripeConnectState fromApi(String? value) => switch (value) {
+    'not_connected' => StripeConnectState.notConnected,
+    'onboarding' => StripeConnectState.onboarding,
+    'ready' => StripeConnectState.ready,
+    _ => StripeConnectState.unavailable,
+  };
 }
 
 class MembershipSettings {

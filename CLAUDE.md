@@ -17,6 +17,10 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 - The container runs `flutter pub get` on start and rewrites
   `app/.dart_tool/package_config.json` to container paths. Run
   `cd app && flutter pub get` before local `flutter test` / `flutter analyze`.
+- Payments (Stripe Connect, test mode): put `BOXOS_STRIPE_SECRET_KEY=sk_test_...`
+  in a git-ignored `.env` next to `docker-compose.yml`. Without it payments are
+  hidden. All Stripe calls go through `backend/payment_service.py` (`client`
+  is swapped for a fake in `backend/tests/test_payments.py`).
 - Demo data: `docker compose exec backend-dev python -m backend.seed_demo`.
   The login screen has a "Demo Owner" quick login for local testing.
 

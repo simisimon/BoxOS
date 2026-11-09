@@ -63,6 +63,25 @@ class MembershipRepository {
     return MembershipSettings.fromJson(response.data);
   }
 
+  Future<StripeConnectState> fetchStripeState() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/payments/stripe',
+      options: await _options(),
+    );
+    return StripeConnectState.fromApi(response.data?['state'] as String?);
+  }
+
+  /// A one-time link to Stripe's sign-up for the box's account.
+  Future<String> createStripeOnboardingLink() async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/payments/stripe/onboarding',
+      options: await _options(),
+    );
+    final url = response.data?['url'] as String?;
+    if (url == null || url.isEmpty) throw Exception('Missing Stripe link.');
+    return url;
+  }
+
   Future<List<MembershipPlan>> fetchPlans({
     bool includeArchived = false,
   }) async {
