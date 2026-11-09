@@ -45,7 +45,7 @@ app. Backend checks are the security boundary: owner-only endpoints use
 | Read announcements, like and comment | [x] | |
 | Box chat | [x] | |
 | See own plan, request or change a plan | [x] | Profile → Membership; a plan can also be picked with the join request. No online payment |
-| Booking blocked without a valid plan | [x] | When the box turns it on: plan dates, class types, weekly limit and punch-card classes are checked on booking, waitlist join and waitlist promotion |
+| Booking blocked without a valid plan | [x] | When the box turns it on, each booking spends a token; plan dates, class types and tokens left are checked on booking, waitlist join and waitlist promotion |
 | Booking / cancellation window rules | [ ] | No booking window or cancellation cutoff |
 
 ## Trainer
@@ -73,7 +73,7 @@ app. Backend checks are the security boundary: owner-only endpoints use
 | Dashboard: attendance, fill rate, no-shows, waitlist pressure | [x] | 7 / 14 / 30-day windows |
 | Audit log of critical changes | [~] | Recorded and served by `/audit-logs`; no screen |
 | Box settings: booking and notification rules | [~] | Screen exists, values are kept only for the session (no backend) |
-| Define membership plans and prices | [x] | Box configuration → Memberships: unlimited, N per week, punch card (classes + validity); price, billing period, class types; archive instead of delete |
+| Define membership plans and prices | [x] | Box configuration → Memberships: token-based (unlimited, N tokens per week/month/year, one-off token pack); price, billing period, class types; archive instead of delete |
 | Assign a plan to a member, see who is paid / overdue | [x] | Plan requests in Members → Requests (badge counts them); assign, end and set payment state (paid / due / overdue, by hand) in the member detail |
 | Collect payments (provider integration) | [ ] | `notify_payment_issues` preference exists, nothing uses it |
 | Revenue on the dashboard | [ ] | Depends on payments |
@@ -96,18 +96,24 @@ other:
 
 ## Membership plans
 
-- **Plan types:** *unlimited*; *N classes per week* (Monday–Sunday in the box
-  timezone); *punch card* (N classes, optionally valid for X days from the
-  start). Each plan has a price (one currency per box), a billing period
-  (monthly, yearly, one-off) and the class types it includes.
+- **Tokens:** plans are token-based. Every booked class spends one token, on
+  any class type the plan includes. Plan types: *unlimited* tokens; *N tokens
+  per week / month / year*; a one-off *token pack* (N tokens, optionally valid
+  for X days from the start). Each plan has a price (one currency per box), a
+  billing period (monthly, yearly, one-off) and the class types its tokens can
+  be spent on.
+- **Periods:** token periods run from the member plan's start date (a plan
+  starting on the 9th refills on the 9th). Unused tokens expire at the end of
+  the period. A class spends a token of the period its date falls in, so
+  booking ahead uses the next period's tokens. Cancelling gives the token back;
+  a no-show keeps it spent.
 - **Getting a plan:** the athlete requests a plan (Profile → Membership, or
   with the join request) and the owner approves it with a start date and,
   if needed, a different price. The owner can also assign a plan directly.
-  Price and limits are copied onto the member's plan, so editing a plan only
+  Price and tokens are copied onto the member's plan, so editing a plan only
   affects new members.
 - **One plan at a time:** a new plan ends the current one the day before it
-  starts. Punch-card usage is the number of bookings made on the card, so a
-  cancellation gives the class back.
+  starts.
 - **Booking gate:** off by default (Box configuration → Memberships). Owners
   and trainers are never checked. Code: `backend/plan_service.py`,
   `app/lib/features/memberships/`.

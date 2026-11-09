@@ -198,8 +198,8 @@ class MembershipPlanRequest(BaseModel):
     plan_type: str
     price_cents: int
     billing_period: str
-    classes_per_week: int | None = None
-    class_count: int | None = None
+    token_count: int | None = None
+    token_period: str | None = None
     validity_days: int | None = None
     allowed_class_types: list[str] = []
 
@@ -1727,7 +1727,7 @@ def create_membership_plan(
                 """
                 insert into membership_plans (
                   gym_id, name, description, plan_type, price_cents, billing_period,
-                  classes_per_week, class_count, validity_days, allowed_class_types_json,
+                  token_count, token_period, validity_days, allowed_class_types_json,
                   created_by_user_id, created_at, updated_at
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 returning id
@@ -1739,8 +1739,8 @@ def create_membership_plan(
                     fields["plan_type"],
                     fields["price_cents"],
                     fields["billing_period"],
-                    fields["classes_per_week"],
-                    fields["class_count"],
+                    fields["token_count"],
+                    fields["token_period"],
                     fields["validity_days"],
                     fields["allowed_class_types_json"],
                     session["user_id"],
@@ -1782,7 +1782,7 @@ def update_membership_plan(
                 """
                 update membership_plans
                 set name = ?, description = ?, plan_type = ?, price_cents = ?, billing_period = ?,
-                    classes_per_week = ?, class_count = ?, validity_days = ?, allowed_class_types_json = ?,
+                    token_count = ?, token_period = ?, validity_days = ?, allowed_class_types_json = ?,
                     updated_at = ?
                 where id = ? and gym_id = ?
                 """,
@@ -1792,8 +1792,8 @@ def update_membership_plan(
                     fields["plan_type"],
                     fields["price_cents"],
                     fields["billing_period"],
-                    fields["classes_per_week"],
-                    fields["class_count"],
+                    fields["token_count"],
+                    fields["token_period"],
                     fields["validity_days"],
                     fields["allowed_class_types_json"],
                     security.isoformat(security.now_utc()),

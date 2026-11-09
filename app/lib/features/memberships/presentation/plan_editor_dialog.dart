@@ -49,10 +49,10 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
   late final TextEditingController _name;
   late final TextEditingController _description;
   late final TextEditingController _price;
-  late final TextEditingController _perWeek;
-  late final TextEditingController _classCount;
+  late final TextEditingController _tokens;
   late final TextEditingController _validity;
   late PlanType _type;
+  late TokenPeriod _tokenPeriod;
   late BillingPeriod _billing;
   late Set<String> _classTypes;
 
@@ -65,14 +65,14 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
     _price = TextEditingController(
       text: plan == null ? '' : priceInputText(plan.priceCents),
     );
-    _perWeek = TextEditingController(text: '${plan?.classesPerWeek ?? 2}');
-    _classCount = TextEditingController(text: '${plan?.classCount ?? 10}');
+    _tokens = TextEditingController(text: '${plan?.tokenCount ?? 12}');
     _validity = TextEditingController(
       text: plan == null
           ? '90'
           : (plan.validityDays == null ? '' : '${plan.validityDays}'),
     );
     _type = plan?.type ?? PlanType.unlimited;
+    _tokenPeriod = plan?.tokenPeriod ?? TokenPeriod.month;
     _billing = plan?.billingPeriod ?? BillingPeriod.monthly;
     // Empty on the server means "all"; show that as every chip selected.
     _classTypes = plan == null || plan.allowedClassTypes.isEmpty
@@ -85,8 +85,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
     _name.dispose();
     _description.dispose();
     _price.dispose();
-    _perWeek.dispose();
-    _classCount.dispose();
+    _tokens.dispose();
     _validity.dispose();
     super.dispose();
   }
@@ -94,8 +93,8 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
   void _setType(PlanType type) {
     setState(() {
       _type = type;
-      // Punch cards are usually paid once; the others usually monthly.
-      if (type == PlanType.punchCard) {
+      // Token packs are usually paid once; the others usually monthly.
+      if (type == PlanType.tokenPack) {
         _billing = BillingPeriod.oneTime;
       } else if (_billing == BillingPeriod.oneTime) {
         _billing = BillingPeriod.monthly;
@@ -122,13 +121,11 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
         type: _type,
         priceCents: parsePriceCents(_price.text)!,
         billingPeriod: _billing,
-        classesPerWeek: _type == PlanType.weekly
-            ? int.parse(_perWeek.text.trim())
-            : null,
-        classCount: _type == PlanType.punchCard
-            ? int.parse(_classCount.text.trim())
-            : null,
-        validityDays: _type == PlanType.punchCard && validityText.isNotEmpty
+        tokenCount: _type == PlanType.unlimited
+            ? null
+            : int.parse(_tokens.text.trim()),
+        tokenPeriod: _type == PlanType.tokens ? _tokenPeriod : null,
+        validityDays: _type == PlanType.tokenPack && validityText.isNotEmpty
             ? int.parse(validityText)
             : null,
         allowedClassTypes: _classTypes.length == planClassTypes.length
@@ -173,7 +170,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Plan name',
-                hintText: 'e.g. Unlimited, 2x per week, 10-class card',
+                hintText: 'e.g. Unlimited, 12 tokens / month, 10-token pack',
                 counterText: '',
               ),
               validator: (value) =>
@@ -198,10 +195,13 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
                   value: PlanType.unlimited,
                   label: Text('Unlimited'),
                 ),
-                ButtonSegment(value: PlanType.weekly, label: Text('Per week')),
                 ButtonSegment(
-                  value: PlanType.punchCard,
-                  label: Text('Punch card'),
+                  value: PlanType.tokens,
+                  label: Text('Tokens / period'),
+                ),
+                ButtonSegment(
+                  value: PlanType.tokenPack,
+                  label: Text('Token pack'),
                 ),
               ],
               selected: {_type},
@@ -209,31 +209,55 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
               onSelectionChanged: (selection) => _setType(selection.first),
             ),
             const SizedBox(height: appSpaceMd),
-            if (_type == PlanType.weekly)
-              TextFormField(
-                controller: _perWeek,
-                keyboardType: TextInputType.number,
-                inputFormatters: digitsOnly,
-                decoration: const InputDecoration(
-                  labelText: 'Classes per week',
-                  helperText: 'Counted Monday to Sunday.',
-                ),
-                validator: (value) => _wholeNumber(value, min: 1, max: 14),
-              ),
-            if (_type == PlanType.punchCard)
+            if (_type == PlanType.tokens)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller: _classCount,
+                      controller: _tokens,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: digitsOnly,
+                      decoration: const InputDecoration(labelText: 'Tokens'),
+                      validator: (value) =>
+                          _wholeNumber(value, min: 1, max: 400),
+                    ),
+                  ),
+                  const SizedBox(width: appSpaceMd),
+                  Expanded(
+                    child: DropdownButtonFormField<TokenPeriod>(
+                      initialValue: _tokenPeriod,
+                      decoration: const InputDecoration(labelText: 'Every'),
+                      items: [
+                        for (final period in TokenPeriod.values)
+                          DropdownMenuItem(
+                            value: period,
+                            child: Text(period.label),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _tokenPeriod = value);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            if (_type == PlanType.tokenPack)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _tokens,
                       keyboardType: TextInputType.number,
                       inputFormatters: digitsOnly,
                       decoration: const InputDecoration(
-                        labelText: 'Classes on the card',
+                        labelText: 'Tokens in the pack',
                       ),
                       validator: (value) =>
-                          _wholeNumber(value, min: 1, max: 200),
+                          _wholeNumber(value, min: 1, max: 400),
                     ),
                   ),
                   const SizedBox(width: appSpaceMd),
@@ -253,9 +277,23 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
                   ),
                 ],
               ),
+            if (_type != PlanType.unlimited) ...[
+              const SizedBox(height: appSpaceSm),
+              Text(
+                _type == PlanType.tokens
+                    ? 'One token per booked class. Tokens refill each period '
+                          'from the member\'s start date; unused tokens expire. '
+                          'Cancelling gives the token back.'
+                    : 'One token per booked class. Cancelling gives the token '
+                          'back.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: appSubtleText,
+                ),
+              ),
+            ],
             if (_type == PlanType.unlimited)
               Text(
-                'Members can book as many classes as they like.',
+                'Unlimited tokens: members book as many classes as they like.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: appSubtleText,
                 ),
@@ -302,7 +340,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
               ],
             ),
             const SizedBox(height: appSpaceLg),
-            const _FieldLabel('Included class types'),
+            const _FieldLabel('Tokens can be spent on'),
             const SizedBox(height: appSpaceSm),
             Wrap(
               spacing: appSpaceSm,

@@ -9,19 +9,20 @@ from backend.tests.support import FastApiTestCase
 BERLIN = ZoneInfo("Europe/Berlin")
 
 UNLIMITED = {"name": "Unlimited", "plan_type": "unlimited", "price_cents": 12900, "billing_period": "monthly"}
-TWICE_A_WEEK = {
-    "name": "2x per week",
-    "plan_type": "weekly",
+TWELVE_A_MONTH = {
+    "name": "12 tokens / month",
+    "plan_type": "tokens",
     "price_cents": 8900,
     "billing_period": "monthly",
-    "classes_per_week": 2,
+    "token_count": 12,
+    "token_period": "month",
 }
-TEN_CARD = {
-    "name": "10-class card",
-    "plan_type": "punch_card",
+TEN_PACK = {
+    "name": "10-token pack",
+    "plan_type": "token_pack",
     "price_cents": 18000,
     "billing_period": "one_time",
-    "class_count": 10,
+    "token_count": 10,
     "validity_days": 90,
 }
 
@@ -85,13 +86,14 @@ class MembershipPlanTests(FastApiTestCase):
 
     def test_owner_creates_edits_and_archives_plans(self) -> None:
         unlimited = self.create_plan(UNLIMITED)
-        weekly = self.create_plan(TWICE_A_WEEK)
-        card = self.create_plan({**TEN_CARD, "allowed_class_types": ["WOD", "Open Gym"]})
+        weekly = self.create_plan(TWELVE_A_MONTH)
+        card = self.create_plan({**TEN_PACK, "allowed_class_types": ["WOD", "Open Gym"]})
 
         self.assertEqual(unlimited["currency"], "EUR")
-        self.assertEqual(weekly["classes_per_week"], 2)
-        self.assertIsNone(weekly["class_count"])
-        self.assertEqual(card["class_count"], 10)
+        self.assertEqual(weekly["token_count"], 12)
+        self.assertEqual(weekly["token_period"], "month")
+        self.assertEqual(card["token_count"], 10)
+        self.assertIsNone(card["token_period"])
         self.assertEqual(card["validity_days"], 90)
         self.assertEqual(card["allowed_class_types"], ["WOD", "Open Gym"])
 
@@ -109,15 +111,19 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(archived.status_code, 200, archived.text)
 
         athlete_view = self.client.get("/membership/plans", headers=self.athlete_headers).json()
-        self.assertEqual([plan["name"] for plan in athlete_view["plans"]], ["2x per week", "Unlimited+"])
+        self.assertEqual([plan["name"] for plan in athlete_view["plans"]], ["12 tokens / month", "Unlimited+"])
         owner_view = self.client.get("/membership/plans?include_archived=true", headers=self.admin_headers).json()
         self.assertEqual(len(owner_view["plans"]), 3)
 
     def test_plan_validation_and_permissions(self) -> None:
-        missing_limit = self.client.post(
-            "/membership/plans", headers=self.admin_headers, json={**TWICE_A_WEEK, "classes_per_week": None}
+        missing_tokens = self.client.post(
+            "/membership/plans", headers=self.admin_headers, json={**TWELVE_A_MONTH, "token_count": None}
         )
-        self.assertEqual(missing_limit.status_code, 400)
+        self.assertEqual(missing_tokens.status_code, 400)
+        bad_period = self.client.post(
+            "/membership/plans", headers=self.admin_headers, json={**TWELVE_A_MONTH, "token_period": "day"}
+        )
+        self.assertEqual(bad_period.status_code, 400)
         bad_type = self.client.post(
             "/membership/plans", headers=self.admin_headers, json={**UNLIMITED, "plan_type": "family"}
         )
@@ -135,7 +141,7 @@ class MembershipPlanTests(FastApiTestCase):
     # --- requests and assignment ---------------------------------------------
 
     def test_member_requests_plan_and_owner_approves(self) -> None:
-        plan = self.create_plan(TWICE_A_WEEK)
+        plan = self.create_plan(TWELVE_A_MONTH)
 
         requested = self.client.post("/membership/requests", headers=self.athlete_headers, json={"plan_id": plan["id"]})
         self.assertEqual(requested.status_code, 201, requested.text)
@@ -161,8 +167,9 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(approved.json()["plan"]["payment_status"], "due")
 
         mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
-        self.assertEqual(mine["plans"][0]["plan_name"], "2x per week")
-        self.assertEqual(mine["plans"][0]["classes_this_week"], 0)
+        self.assertEqual(mine["plans"][0]["plan_name"], "12 tokens / month")
+        self.assertEqual(mine["plans"][0]["tokens_remaining"], 12)
+        self.assertEqual(mine["plans"][0]["period_starts_on"], mine["plans"][0]["starts_on"])
         self.assertEqual(
             self.count_rows("notifications", "user_id = ? and type = 'membership_plan'", (self.athlete_id,)), 1
         )
@@ -180,11 +187,11 @@ class MembershipPlanTests(FastApiTestCase):
 
     def test_new_request_replaces_open_one_and_can_be_withdrawn_or_rejected(self) -> None:
         first = self.create_plan(UNLIMITED)
-        second = self.create_plan(TWICE_A_WEEK)
+        second = self.create_plan(TWELVE_A_MONTH)
         self.client.post("/membership/requests", headers=self.athlete_headers, json={"plan_id": first["id"]})
         self.client.post("/membership/requests", headers=self.athlete_headers, json={"plan_id": second["id"]})
         requests = self.client.get("/membership/requests", headers=self.admin_headers).json()["requests"]
-        self.assertEqual([item["plan_name"] for item in requests], ["2x per week"])
+        self.assertEqual([item["plan_name"] for item in requests], ["12 tokens / month"])
 
         withdrawn = self.client.delete("/membership/requests", headers=self.athlete_headers)
         self.assertEqual(withdrawn.status_code, 200, withdrawn.text)
@@ -200,7 +207,7 @@ class MembershipPlanTests(FastApiTestCase):
 
     def test_assigning_a_plan_replaces_the_current_one(self) -> None:
         unlimited = self.create_plan(UNLIMITED)
-        weekly = self.create_plan(TWICE_A_WEEK)
+        weekly = self.create_plan(TWELVE_A_MONTH)
         first = self.assign(unlimited["id"])
         self.assertEqual(first["state"], "current")
 
@@ -223,20 +230,20 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(ended.json()["plan"]["state"], "ended")
 
     def test_join_request_can_carry_a_plan_choice(self) -> None:
-        plan = self.create_plan(TEN_CARD)
+        plan = self.create_plan(TEN_PACK)
         self.create_verified_user("newbie@boxos.app")
         newbie_headers = self.auth_headers("newbie@boxos.app", "BoxOS123!")
 
         offered = self.client.get(f"/gyms/{self.gym_id}/plans", headers=newbie_headers)
         self.assertEqual(offered.status_code, 200, offered.text)
-        self.assertEqual([item["name"] for item in offered.json()["plans"]], ["10-class card"])
+        self.assertEqual([item["name"] for item in offered.json()["plans"]], ["10-token pack"])
 
         joined = self.client.post(
             "/gyms/join-requests", headers=newbie_headers, json={"gym_id": self.gym_id, "plan_id": plan["id"]}
         )
         self.assertEqual(joined.status_code, 201, joined.text)
         join_requests = self.client.get("/gyms/join-requests", headers=self.admin_headers).json()["requests"]
-        self.assertEqual(join_requests[0]["requested_plan_name"], "10-class card")
+        self.assertEqual(join_requests[0]["requested_plan_name"], "10-token pack")
         # Not a member yet: the plan request waits for the join approval.
         self.assertEqual(self.client.get("/membership/requests", headers=self.admin_headers).json()["requests"], [])
 
@@ -247,7 +254,7 @@ class MembershipPlanTests(FastApiTestCase):
         )
         self.assertEqual(approved.status_code, 200, approved.text)
         plan_requests = self.client.get("/membership/requests", headers=self.admin_headers).json()["requests"]
-        self.assertEqual([item["plan_name"] for item in plan_requests], ["10-class card"])
+        self.assertEqual([item["plan_name"] for item in plan_requests], ["10-token pack"])
 
     # --- booking gate ---------------------------------------------------------
 
@@ -264,10 +271,11 @@ class MembershipPlanTests(FastApiTestCase):
         # Owners and trainers are never checked.
         self.assertEqual(self.book(other_class_id, headers=self.admin_headers).status_code, 201)
 
-    def test_weekly_plan_limits_bookings_per_week(self) -> None:
+    def test_token_plan_refills_each_period_from_the_start_date(self) -> None:
         self.enforce()
-        plan = self.create_plan({**TWICE_A_WEEK, "classes_per_week": 1})
-        self.assign(plan["id"])
+        plan = self.create_plan({**TWELVE_A_MONTH, "token_count": 1, "token_period": "week"})
+        monday = self.next_week_day(0)
+        self.assign(plan["id"], starts_on=monday.isoformat())
         tuesday = self.create_class(self.next_week_day(1))
         thursday = self.create_class(self.next_week_day(3))
         following_week = self.create_class(self.next_week_day(8))
@@ -275,7 +283,7 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(self.book(tuesday).status_code, 201)
         refused = self.book(thursday)
         self.assertEqual(refused.status_code, 403)
-        self.assertIn("for that week", refused.json()["detail"])
+        self.assertIn("all 1 tokens", refused.json()["detail"])
         self.assertEqual(self.book(following_week).status_code, 201)
 
         cancelled = self.client.request(
@@ -284,9 +292,22 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(cancelled.status_code, 200, cancelled.text)
         self.assertEqual(self.book(thursday).status_code, 201)
 
-    def test_punch_card_counts_bookings_and_cancel_gives_the_class_back(self) -> None:
+    def test_monthly_tokens_are_counted_per_month_from_the_start_date(self) -> None:
         self.enforce()
-        plan = self.create_plan({**TEN_CARD, "class_count": 2})
+        plan = self.create_plan({**TWELVE_A_MONTH, "token_count": 2})
+        start = self.next_week_day(0)
+        self.assign(plan["id"], starts_on=start.isoformat())
+        first = [self.create_class(start + timedelta(days=offset)) for offset in (1, 10, 20)]
+        next_month = self.create_class(start + timedelta(days=35))
+
+        self.assertEqual(self.book(first[0]).status_code, 201)
+        self.assertEqual(self.book(first[1]).status_code, 201)
+        self.assertEqual(self.book(first[2]).status_code, 403)
+        self.assertEqual(self.book(next_month).status_code, 201)
+
+    def test_token_pack_counts_bookings_and_cancel_gives_the_token_back(self) -> None:
+        self.enforce()
+        plan = self.create_plan({**TEN_PACK, "token_count": 2})
         self.assign(plan["id"])
         classes = [self.create_class(self.next_week_day(day)) for day in (0, 1, 2)]
 
@@ -294,17 +315,17 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(self.book(classes[1]).status_code, 201)
         refused = self.book(classes[2])
         self.assertEqual(refused.status_code, 403)
-        self.assertIn("no classes left", refused.json()["detail"])
+        self.assertIn("no tokens left", refused.json()["detail"])
 
         mine = self.client.get("/membership/me", headers=self.athlete_headers).json()["plans"][0]
-        self.assertEqual(mine["classes_used"], 2)
-        self.assertEqual(mine["classes_remaining"], 0)
+        self.assertEqual(mine["tokens_used"], 2)
+        self.assertEqual(mine["tokens_remaining"], 0)
 
         self.client.request("DELETE", "/schedule/bookings", headers=self.athlete_headers, json={"class_id": classes[0]})
         self.assertEqual(self.book(classes[2]).status_code, 201)
 
-    def test_punch_card_validity_sets_end_date(self) -> None:
-        plan = self.create_plan(TEN_CARD)
+    def test_token_pack_validity_sets_end_date(self) -> None:
+        plan = self.create_plan(TEN_PACK)
         assigned = self.assign(plan["id"])
         start = date.fromisoformat(assigned["starts_on"])
         self.assertEqual(assigned["ends_on"], (start + timedelta(days=89)).isoformat())
@@ -333,7 +354,7 @@ class MembershipPlanTests(FastApiTestCase):
 
     def test_waitlist_promotion_skips_athletes_whose_plan_no_longer_covers_the_class(self) -> None:
         self.enforce()
-        card = self.create_plan({**TEN_CARD, "class_count": 1})
+        card = self.create_plan({**TEN_PACK, "token_count": 1})
         unlimited = self.create_plan(UNLIMITED)
         waiter_id = self.create_verified_user("waiter@boxos.app")
         self.add_active_membership("waiter@boxos.app", self.gym_id)

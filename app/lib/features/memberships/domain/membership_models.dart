@@ -1,30 +1,56 @@
 /// Membership plans a box offers, and the plans its members are on.
 ///
-/// Mirrors `backend/plan_service.py`: three plan types, prices in cents, and
-/// member plans that copy price and limits at the time they were given.
+/// Mirrors `backend/plan_service.py`: plans are token-based (one booking
+/// spends one token), prices are in cents, and member plans copy price and
+/// tokens at the time they were given.
 library;
 
 enum PlanType {
+  /// Unlimited tokens.
   unlimited,
-  weekly,
-  punchCard;
+
+  /// N tokens every week / month / year, counted from the plan's start date.
+  tokens,
+
+  /// N tokens once, optionally valid for some days.
+  tokenPack;
 
   String get apiValue => switch (this) {
     PlanType.unlimited => 'unlimited',
-    PlanType.weekly => 'weekly',
-    PlanType.punchCard => 'punch_card',
+    PlanType.tokens => 'tokens',
+    PlanType.tokenPack => 'token_pack',
   };
 
   String get label => switch (this) {
     PlanType.unlimited => 'Unlimited',
-    PlanType.weekly => 'Classes per week',
-    PlanType.punchCard => 'Punch card',
+    PlanType.tokens => 'Tokens per period',
+    PlanType.tokenPack => 'Token pack',
   };
 
   static PlanType fromApi(String? value) => switch (value) {
-    'weekly' => PlanType.weekly,
-    'punch_card' => PlanType.punchCard,
+    'tokens' => PlanType.tokens,
+    'token_pack' => PlanType.tokenPack,
     _ => PlanType.unlimited,
+  };
+}
+
+enum TokenPeriod {
+  week,
+  month,
+  year;
+
+  String get apiValue => name;
+
+  String get label => switch (this) {
+    TokenPeriod.week => 'Week',
+    TokenPeriod.month => 'Month',
+    TokenPeriod.year => 'Year',
+  };
+
+  static TokenPeriod fromApi(String? value) => switch (value) {
+    'week' => TokenPeriod.week,
+    'year' => TokenPeriod.year,
+    _ => TokenPeriod.month,
   };
 }
 
@@ -97,23 +123,26 @@ String formatPrice(int cents, String currency) {
   return '$symbol$amount';
 }
 
-/// "2 classes / week", "10 classes · 90 days", "Unlimited classes".
+String tokensLabel(int count) => '$count ${count == 1 ? 'token' : 'tokens'}';
+
+/// "12 tokens / month", "10 tokens · valid 90 days", "Unlimited tokens".
 String planLimitLabel({
   required PlanType type,
-  int? classesPerWeek,
-  int? classCount,
+  int? tokenCount,
+  TokenPeriod? tokenPeriod,
   int? validityDays,
 }) {
   switch (type) {
     case PlanType.unlimited:
-      return 'Unlimited classes';
-    case PlanType.weekly:
-      final count = classesPerWeek ?? 0;
-      return '$count ${count == 1 ? 'class' : 'classes'} / week';
-    case PlanType.punchCard:
-      final count = classCount ?? 0;
-      final classes = '$count ${count == 1 ? 'class' : 'classes'}';
-      return validityDays == null ? classes : '$classes · $validityDays days';
+      return 'Unlimited tokens';
+    case PlanType.tokens:
+      final period = (tokenPeriod ?? TokenPeriod.month).label.toLowerCase();
+      return '${tokensLabel(tokenCount ?? 0)} / $period';
+    case PlanType.tokenPack:
+      final tokens = tokensLabel(tokenCount ?? 0);
+      return validityDays == null
+          ? tokens
+          : '$tokens · valid $validityDays days';
   }
 }
 
@@ -129,8 +158,8 @@ class MembershipPlan {
     required this.priceCents,
     required this.currency,
     required this.billingPeriod,
-    this.classesPerWeek,
-    this.classCount,
+    this.tokenCount,
+    this.tokenPeriod,
     this.validityDays,
     this.allowedClassTypes = const [],
     this.isArchived = false,
@@ -144,8 +173,10 @@ class MembershipPlan {
   final int priceCents;
   final String currency;
   final BillingPeriod billingPeriod;
-  final int? classesPerWeek;
-  final int? classCount;
+  final int? tokenCount;
+
+  /// Only for [PlanType.tokens].
+  final TokenPeriod? tokenPeriod;
   final int? validityDays;
 
   /// Empty = every class type.
@@ -158,8 +189,8 @@ class MembershipPlan {
 
   String get limitLabel => planLimitLabel(
     type: type,
-    classesPerWeek: classesPerWeek,
-    classCount: classCount,
+    tokenCount: tokenCount,
+    tokenPeriod: tokenPeriod,
     validityDays: validityDays,
   );
 
@@ -172,8 +203,10 @@ class MembershipPlan {
       priceCents: (data['price_cents'] as num?)?.toInt() ?? 0,
       currency: data['currency'] as String? ?? 'EUR',
       billingPeriod: BillingPeriod.fromApi(data['billing_period'] as String?),
-      classesPerWeek: (data['classes_per_week'] as num?)?.toInt(),
-      classCount: (data['class_count'] as num?)?.toInt(),
+      tokenCount: (data['token_count'] as num?)?.toInt(),
+      tokenPeriod: data['token_period'] == null
+          ? null
+          : TokenPeriod.fromApi(data['token_period'] as String?),
       validityDays: (data['validity_days'] as num?)?.toInt(),
       allowedClassTypes: [
         for (final item in data['allowed_class_types'] as List<dynamic>? ?? [])
@@ -193,8 +226,8 @@ class MembershipPlanDraft {
     required this.type,
     required this.priceCents,
     required this.billingPeriod,
-    this.classesPerWeek,
-    this.classCount,
+    this.tokenCount,
+    this.tokenPeriod,
     this.validityDays,
     this.allowedClassTypes = const [],
   });
@@ -204,8 +237,10 @@ class MembershipPlanDraft {
   final PlanType type;
   final int priceCents;
   final BillingPeriod billingPeriod;
-  final int? classesPerWeek;
-  final int? classCount;
+  final int? tokenCount;
+
+  /// Only for [PlanType.tokens].
+  final TokenPeriod? tokenPeriod;
   final int? validityDays;
   final List<String> allowedClassTypes;
 
@@ -215,9 +250,9 @@ class MembershipPlanDraft {
     'plan_type': type.apiValue,
     'price_cents': priceCents,
     'billing_period': billingPeriod.apiValue,
-    'classes_per_week': type == PlanType.weekly ? classesPerWeek : null,
-    'class_count': type == PlanType.punchCard ? classCount : null,
-    'validity_days': type == PlanType.punchCard ? validityDays : null,
+    'token_count': type == PlanType.unlimited ? null : tokenCount,
+    'token_period': type == PlanType.tokens ? tokenPeriod?.apiValue : null,
+    'validity_days': type == PlanType.tokenPack ? validityDays : null,
     'allowed_class_types': allowedClassTypes,
   };
 }
@@ -262,16 +297,18 @@ class MemberPlan {
     required this.currency,
     required this.billingPeriod,
     required this.paymentStatus,
-    this.classesPerWeek,
-    this.classCount,
+    this.tokenCount,
+    this.tokenPeriod,
     this.validityDays,
     this.allowedClassTypes = const [],
     this.startsOn,
     this.endsOn,
     this.requestedAt,
-    this.classesUsed,
-    this.classesRemaining,
-    this.classesThisWeek,
+    this.tokensTotal,
+    this.tokensUsed,
+    this.tokensRemaining,
+    this.periodStartsOn,
+    this.periodEndsOn,
     this.memberName,
     this.memberEmail,
     this.currentPlanName,
@@ -287,8 +324,10 @@ class MemberPlan {
   final String currency;
   final BillingPeriod billingPeriod;
   final PaymentStatus paymentStatus;
-  final int? classesPerWeek;
-  final int? classCount;
+  final int? tokenCount;
+
+  /// Only for [PlanType.tokens].
+  final TokenPeriod? tokenPeriod;
   final int? validityDays;
   final List<String> allowedClassTypes;
 
@@ -296,9 +335,16 @@ class MemberPlan {
   final String? startsOn;
   final String? endsOn;
   final DateTime? requestedAt;
-  final int? classesUsed;
-  final int? classesRemaining;
-  final int? classesThisWeek;
+
+  /// Token balance of the current period (the whole pack for token packs);
+  /// null for unlimited plans.
+  final int? tokensTotal;
+  final int? tokensUsed;
+  final int? tokensRemaining;
+
+  /// Gym-local dates of the current token period (inclusive).
+  final String? periodStartsOn;
+  final String? periodEndsOn;
 
   /// Only set on plan requests listed for the owner.
   final String? memberName;
@@ -313,8 +359,8 @@ class MemberPlan {
 
   String get limitLabel => planLimitLabel(
     type: type,
-    classesPerWeek: classesPerWeek,
-    classCount: classCount,
+    tokenCount: tokenCount,
+    tokenPeriod: tokenPeriod,
     validityDays: validityDays,
   );
 
@@ -326,15 +372,15 @@ class MemberPlan {
     return '$startsOn – $endsOn';
   }
 
-  /// "1 of 2 this week", "7 of 10 left".
+  /// "7 of 12 tokens left until 2026-12-08", "3 of 10 tokens left".
   String? get usageLabel {
-    if (type == PlanType.weekly && classesThisWeek != null) {
-      return '$classesThisWeek of ${classesPerWeek ?? 0} booked this week';
+    final remaining = tokensRemaining;
+    if (remaining == null) return null;
+    final left = '$remaining of ${tokensLabel(tokensTotal ?? 0)} left';
+    if (type == PlanType.tokens && periodEndsOn != null) {
+      return '$left until $periodEndsOn';
     }
-    if (type == PlanType.punchCard && classesRemaining != null) {
-      return '$classesRemaining of ${classCount ?? 0} classes left';
-    }
-    return null;
+    return left;
   }
 
   factory MemberPlan.fromJson(Map<String, dynamic> data) {
@@ -352,8 +398,10 @@ class MemberPlan {
       currency: data['currency'] as String? ?? 'EUR',
       billingPeriod: BillingPeriod.fromApi(data['billing_period'] as String?),
       paymentStatus: PaymentStatus.fromApi(data['payment_status'] as String?),
-      classesPerWeek: (data['classes_per_week'] as num?)?.toInt(),
-      classCount: (data['class_count'] as num?)?.toInt(),
+      tokenCount: (data['token_count'] as num?)?.toInt(),
+      tokenPeriod: data['token_period'] == null
+          ? null
+          : TokenPeriod.fromApi(data['token_period'] as String?),
       validityDays: (data['validity_days'] as num?)?.toInt(),
       allowedClassTypes: [
         for (final item in data['allowed_class_types'] as List<dynamic>? ?? [])
@@ -364,9 +412,11 @@ class MemberPlan {
       requestedAt: requestedAtRaw == null
           ? null
           : DateTime.tryParse(requestedAtRaw),
-      classesUsed: (data['classes_used'] as num?)?.toInt(),
-      classesRemaining: (data['classes_remaining'] as num?)?.toInt(),
-      classesThisWeek: (data['classes_this_week'] as num?)?.toInt(),
+      tokensTotal: (data['tokens_total'] as num?)?.toInt(),
+      tokensUsed: (data['tokens_used'] as num?)?.toInt(),
+      tokensRemaining: (data['tokens_remaining'] as num?)?.toInt(),
+      periodStartsOn: data['period_starts_on'] as String?,
+      periodEndsOn: data['period_ends_on'] as String?,
       memberName: member == null
           ? null
           : (memberDisplayName.isEmpty
