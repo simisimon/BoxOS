@@ -4,6 +4,7 @@ import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
+import 'package:app/features/memberships/presentation/extra_tokens_dialogs.dart';
 import 'package:app/features/memberships/presentation/plan_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -144,12 +145,16 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
   Future<void> _updateSettings({
     String? currency,
     bool? requirePlanForBooking,
+    int? extraTokenPriceCents,
+    bool stopSellingExtraTokens = false,
   }) async {
     await _run(
       () async {
         final settings = await _repository.updateSettings(
           currency: currency,
           requirePlanForBooking: requirePlanForBooking,
+          extraTokenPriceCents: extraTokenPriceCents,
+          stopSellingExtraTokens: stopSellingExtraTokens,
         );
         if (mounted) setState(() => _settings = settings);
         // Prices are shown in the box currency.
@@ -157,6 +162,20 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
       },
       done: 'Membership settings saved.',
       failed: 'Could not save membership settings',
+    );
+  }
+
+  Future<void> _editExtraTokenPrice(MembershipSettings settings) async {
+    final choice = await showExtraTokenPriceDialog(
+      context,
+      currentPriceCents: settings.extraTokenPriceCents,
+      currency: settings.currency,
+    );
+    if (choice == null) return;
+    final price = choice.priceCents;
+    await _updateSettings(
+      extraTokenPriceCents: price,
+      stopSellingExtraTokens: price == null,
     );
   }
 
@@ -378,6 +397,51 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
                           child: Text(currency),
                         ),
                     ],
+                  ),
+                ],
+              ),
+              const Divider(height: appSpace2xl),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Extra tokens',
+                          style: TextStyle(
+                            color: appText,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          settings.extraTokenPriceCents == null
+                              ? 'Not offered. Set a price to sell single '
+                                    'tokens on top of a plan, valid for one '
+                                    'month.'
+                              : '${formatPrice(settings.extraTokenPriceCents!, settings.currency)} '
+                                    'per token, valid for one month. Used '
+                                    'when a member\'s plan cannot cover a '
+                                    'class.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: appSubtleText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: appSpaceMd),
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _editExtraTokenPrice(settings),
+                    child: Text(
+                      settings.extraTokenPriceCents == null
+                          ? 'Set price'
+                          : 'Change',
+                    ),
                   ),
                 ],
               ),

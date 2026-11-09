@@ -223,6 +223,15 @@ class ArchiveMembershipPlanRequest(BaseModel):
 class MembershipSettingsRequest(BaseModel):
     currency: str | None = None
     require_plan_for_booking: bool | None = None
+    # null turns selling extra tokens off; leave the field out to keep it.
+    extra_token_price_cents: int | None = None
+
+
+class GrantExtraTokensRequest(BaseModel):
+    user_id: int
+    tokens: int
+    # Total paid for the tokens; defaults to tokens × the box's token price.
+    price_cents: int | None = None
 
 
 class PlanIdRequest(BaseModel):
@@ -1346,6 +1355,7 @@ def _member_payload_with_plan(row: Any, summaries: dict[int, dict[str, Any]]) ->
     summary = summaries.get(int(row["user_id"]), {})
     payload["plan"] = summary.get("plan")
     payload["has_plan_request"] = bool(summary.get("has_plan_request"))
+    payload["extra_tokens_remaining"] = int(summary.get("extra_tokens_remaining") or 0)
     return payload
 
 
@@ -1623,7 +1633,14 @@ def _membership_settings_payload(gym: Any) -> dict[str, Any]:
         "currency": gym["currency"],
         "require_plan_for_booking": bool(gym["require_plan_for_booking"]),
         "currencies": list(plan_service.CURRENCIES),
+        "extra_token_price_cents": gym["extra_token_price_cents"],
     }
+
+
+def _extra_tokens_payload(connection: Any, gym: Any, user_id: int) -> dict[str, Any]:
+    return plan_service.extra_tokens_payload(
+        connection, gym["id"], user_id, currency=gym["currency"], gym_timezone=gym["timezone"]
+    )
 
 
 def _member_plan_payloads(connection: Any, gym: Any, rows: list[Any]) -> list[dict[str, Any]]:
@@ -1659,10 +1676,18 @@ def update_membership_settings(
             if body.require_plan_for_booking is not None
             else int(gym["require_plan_for_booking"])
         )
+        extra_token_price = (
+            plan_service.require_extra_token_price(body.extra_token_price_cents)
+            if "extra_token_price_cents" in body.model_fields_set
+            else gym["extra_token_price_cents"]
+        )
         with connection:
             connection.execute(
-                "update gyms set currency = ?, require_plan_for_booking = ?, updated_at = ? where id = ?",
-                (currency, require_plan, security.isoformat(security.now_utc()), gym_id),
+                """
+                update gyms set currency = ?, require_plan_for_booking = ?, extra_token_price_cents = ?, updated_at = ?
+                where id = ?
+                """,
+                (currency, require_plan, extra_token_price, security.isoformat(security.now_utc()), gym_id),
             )
             audit.write_audit_log(
                 connection,
@@ -1671,7 +1696,11 @@ def update_membership_settings(
                 action="membership_settings_updated",
                 entity_type="gym",
                 entity_id=gym_id,
-                details={"currency": currency, "require_plan_for_booking": bool(require_plan)},
+                details={
+                    "currency": currency,
+                    "require_plan_for_booking": bool(require_plan),
+                    "extra_token_price_cents": extra_token_price,
+                },
             )
         return _membership_settings_payload(plan_service.gym_plan_settings(connection, gym_id))
     finally:
@@ -1872,10 +1901,16 @@ def get_my_membership(
     try:
         gym = plan_service.gym_plan_settings(connection, gym_id)
         rows = plan_service.member_plan_rows_for_user(connection, gym_id, session["user_id"])
+        plans = _member_plan_payloads(connection, gym, rows)
+        for plan in plans:
+            # Payment state is the owner's business: members never see "overdue".
+            plan.pop("payment_status", None)
         return {
-            "plans": _member_plan_payloads(connection, gym, rows),
+            "plans": plans,
             "currency": gym["currency"],
             "require_plan_for_booking": bool(gym["require_plan_for_booking"]),
+            "extra_tokens": _extra_tokens_payload(connection, gym, session["user_id"]),
+            "extra_token_price_cents": gym["extra_token_price_cents"],
         }
     finally:
         connection.close()
@@ -2080,7 +2115,94 @@ def get_member_plans(
         gym = plan_service.gym_plan_settings(connection, gym_id)
         _require_member(connection, gym_id, user_id)
         rows = plan_service.member_plan_rows_for_user(connection, gym_id, user_id)
-        return {"plans": _member_plan_payloads(connection, gym, rows), "currency": gym["currency"]}
+        return {
+            "plans": _member_plan_payloads(connection, gym, rows),
+            "currency": gym["currency"],
+            "extra_tokens": _extra_tokens_payload(connection, gym, user_id),
+            "extra_token_price_cents": gym["extra_token_price_cents"],
+        }
+    finally:
+        connection.close()
+
+
+@app.post("/membership/extra-tokens", status_code=HTTPStatus.CREATED.value)
+def grant_extra_tokens(
+    body: GrantExtraTokensRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Owner adds extra tokens to a member (e.g. bought in cash). They are valid
+    for one month and are spent when the member's plan cannot cover a class."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        _require_member(connection, gym_id, body.user_id)
+        if body.price_cents is not None:
+            price_cents = plan_service.require_price_cents(body.price_cents)
+        else:
+            price_cents = int(gym["extra_token_price_cents"] or 0) * max(int(body.tokens), 0)
+        granted_on = schedule_service.local_today(gym["timezone"])
+        with connection:
+            credit_id = plan_service.grant_token_credit(
+                connection,
+                gym_id=gym_id,
+                user_id=body.user_id,
+                tokens=body.tokens,
+                price_cents=price_cents,
+                granted_on=granted_on,
+                created_by_user_id=session["user_id"],
+            )
+            valid_until = plan_service.extra_token_expiry(granted_on) - timedelta(days=1)
+            notifications_core.create_notification(
+                connection,
+                user_id=body.user_id,
+                gym_id=gym_id,
+                type="membership_plan",
+                title="Extra tokens added",
+                body=f"You got {body.tokens} extra token{'s' if body.tokens != 1 else ''}, valid until {valid_until.isoformat()}.",
+                entity_type="token_credit",
+                entity_id=credit_id,
+            )
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=body.user_id,
+                action="extra_tokens_granted",
+                entity_type="token_credit",
+                entity_id=credit_id,
+                details={"tokens": body.tokens, "price_cents": price_cents},
+            )
+        return {"extra_tokens": _extra_tokens_payload(connection, gym, body.user_id)}
+    finally:
+        connection.close()
+
+
+@app.delete("/membership/extra-tokens/{credit_id}")
+def remove_extra_tokens(
+    credit_id: int,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Owner takes back extra tokens added by mistake. Classes already booked on
+    them stay booked."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        gym = plan_service.gym_plan_settings(connection, gym_id)
+        row = plan_service.get_token_credit_row(connection, gym_id, credit_id)
+        with connection:
+            connection.execute("delete from token_credits where id = ?", (credit_id,))
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=row["user_id"],
+                action="extra_tokens_removed",
+                entity_type="token_credit",
+                entity_id=credit_id,
+                details={"tokens": row["tokens"], "price_cents": row["price_cents"]},
+            )
+        return {"extra_tokens": _extra_tokens_payload(connection, gym, row["user_id"])}
     finally:
         connection.close()
 
@@ -3016,7 +3138,7 @@ def create_class_booking(
         booked_count = int(booking_count_row["booked_count"]) if booking_count_row is not None else 0
         if booked_count >= schedule_row["capacity"]:
             raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="This class is already full.")
-        member_plan_id = plan_service.require_booking_allowed(
+        check = plan_service.require_booking_allowed(
             connection,
             gym_id=schedule_row["gym_id"],
             user_id=session["user_id"],
@@ -3025,10 +3147,17 @@ def create_class_booking(
         with connection:
             connection.execute(
                 """
-                insert into class_bookings (class_schedule_id, user_id, attendance_status, member_plan_id, created_at)
-                values (?, ?, 'booked', ?, ?)
+                insert into class_bookings
+                  (class_schedule_id, user_id, attendance_status, member_plan_id, token_credit_id, created_at)
+                values (?, ?, 'booked', ?, ?, ?)
                 """,
-                (schedule_id, session["user_id"], member_plan_id, security.isoformat(security.now_utc())),
+                (
+                    schedule_id,
+                    session["user_id"],
+                    check.member_plan_id,
+                    check.token_credit_id,
+                    security.isoformat(security.now_utc()),
+                ),
             )
             schedule_service.create_booking_confirmation_notification(
                 connection,

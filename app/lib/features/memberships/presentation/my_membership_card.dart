@@ -300,6 +300,25 @@ class _MyMembershipCardState extends ConsumerState<MyMembershipCard> {
               style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
             ),
           ],
+          if (membership.extraTokens.summaryLabel case final extra?) ...[
+            const SizedBox(height: appSpaceMd),
+            Row(
+              children: [
+                const AppPill(
+                  label: 'Extra',
+                  intent: AppPillIntent.primary,
+                  dense: true,
+                ),
+                const SizedBox(width: appSpaceSm),
+                Expanded(
+                  child: Text(
+                    extra,
+                    style: theme.textTheme.bodySmall?.copyWith(color: appText),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (upcoming != null) ...[
             const SizedBox(height: appSpaceMd),
             Row(

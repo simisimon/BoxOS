@@ -23,6 +23,13 @@ Bookings remember the member plan they were made under
 that plan (in the period): cancelling or deleting a class gives the token back,
 a no-show keeps it spent.
 
+Extra tokens (``token_credits``) sit next to the plan: the owner grants them
+(later: the member buys them), each row holds ``tokens`` valid for classes on
+``granted_on``..``expires_on`` (exclusive, one month). A booking spends an extra
+token only when the plan cannot cover the class (no plan, class type not
+included, or no plan tokens left); it then records ``class_bookings.token_credit_id``
+instead of ``member_plan_id``, so cancelling gives the extra token back.
+
 Plans are only enforced when the box turns on ``gyms.require_plan_for_booking``.
 Owners and trainers are never checked.
 """
@@ -243,7 +250,7 @@ def member_plan_payload(
 
 def gym_plan_settings(connection: ManagedConnection, gym_id: int) -> Row:
     row = connection.execute(
-        "select id, timezone, currency, require_plan_for_booking from gyms where id = ?",
+        "select id, timezone, currency, require_plan_for_booking, extra_token_price_cents from gyms where id = ?",
         (gym_id,),
     ).fetchone()
     if row is None:
@@ -415,8 +422,8 @@ def token_balance(connection: ManagedConnection, member_plan: Row, day: date, gy
 
 
 def plan_summaries_for_gym(connection: ManagedConnection, gym_id: int, gym_timezone: str) -> dict[int, dict[str, Any]]:
-    """Per member: the plan shown on the Members tab (current, else upcoming) and
-    whether a plan request is open."""
+    """Per member: the plan shown on the Members tab (current, else upcoming),
+    whether a plan request is open, and the extra tokens left."""
     today = schedule_service.local_today(gym_timezone).isoformat()
     rows = connection.execute(
         """
@@ -445,6 +452,9 @@ def plan_summaries_for_gym(connection: ManagedConnection, gym_id: int, gym_timez
                 "ends_on": row["ends_on"],
                 "state": "upcoming" if row["starts_on"] and row["starts_on"] > today else "current",
             }
+    for user_id, remaining in extra_tokens_remaining_for_gym(connection, gym_id, gym_timezone).items():
+        summary = summaries.setdefault(user_id, {"plan": None, "has_plan_request": False})
+        summary["extra_tokens_remaining"] = remaining
     return summaries
 
 
@@ -598,42 +608,66 @@ def _is_staff(connection: ManagedConnection, gym_id: int, user_id: int) -> bool:
     return bool(roles & {"admin", "trainer"})
 
 
+class BookingCheck:
+    """Outcome of :func:`booking_plan_check`: what the booking counts against
+    (a member plan, an extra token, or nothing) or why it is refused."""
+
+    __slots__ = ("member_plan_id", "token_credit_id", "refusal")
+
+    def __init__(
+        self,
+        member_plan_id: int | None = None,
+        token_credit_id: int | None = None,
+        refusal: str | None = None,
+    ) -> None:
+        self.member_plan_id = member_plan_id
+        self.token_credit_id = token_credit_id
+        self.refusal = refusal
+
+
+def _plan_refusal(connection: ManagedConnection, plan: Row | None, class_type: str, day: date, gym_timezone: str) -> str | None:
+    if plan is None:
+        return "You need an active membership plan for this date. Request one under Profile → Membership."
+    allowed = _class_types(plan)
+    if allowed and class_type not in allowed:
+        return f"Your plan {plan['plan_name']} does not include {class_type} classes."
+    if plan["plan_type"] in ("tokens", "token_pack"):
+        balance = token_balance(connection, plan, day, gym_timezone)
+        if balance["tokens_remaining"] <= 0:
+            if plan["plan_type"] == "token_pack":
+                return "Your token pack has no tokens left."
+            return (
+                f"You have used all {balance['tokens_total']} tokens for "
+                f"{balance['period_starts_on']} – {balance['period_ends_on']}."
+            )
+    return None
+
+
 def booking_plan_check(
     connection: ManagedConnection,
     *,
     gym_id: int,
     user_id: int,
     schedule_row: Row,
-) -> tuple[int | None, str | None]:
-    """Decide whether ``user_id`` may book ``schedule_row``.
-
-    Returns ``(member_plan_id, refusal)``: the plan the booking counts against
-    (or ``None``) and, when the booking is not allowed, the reason.
-    """
+) -> BookingCheck:
+    """Decide whether ``user_id`` may book ``schedule_row``: on the plan when it
+    covers the class, else on an extra token, else refused with the plan's
+    reason."""
     gym = gym_plan_settings(connection, gym_id)
     if _is_staff(connection, gym_id, user_id):
-        return None, None
+        return BookingCheck()
     start = parse_iso(schedule_row["start_time"])
     local_day = schedule_service.local_for_utc(start, gym["timezone"]).date()
     plan = plan_for_day(connection, gym_id, user_id, local_day)
     if not gym["require_plan_for_booking"]:
-        return (plan["id"] if plan is not None else None), None
-    if plan is None:
-        return None, "You need an active membership plan for this date. Request one under Profile → Membership."
-    allowed = _class_types(plan)
-    class_type = schedule_row["class_type"]
-    if allowed and class_type not in allowed:
-        return None, f"Your plan {plan['plan_name']} does not include {class_type} classes."
-    if plan["plan_type"] in ("tokens", "token_pack"):
-        balance = token_balance(connection, plan, local_day, gym["timezone"])
-        if balance["tokens_remaining"] <= 0:
-            if plan["plan_type"] == "token_pack":
-                return None, "Your token pack has no tokens left."
-            return None, (
-                f"You have used all {balance['tokens_total']} tokens for "
-                f"{balance['period_starts_on']} – {balance['period_ends_on']}."
-            )
-    return plan["id"], None
+        return BookingCheck(member_plan_id=plan["id"] if plan is not None else None)
+    refusal = _plan_refusal(connection, plan, schedule_row["class_type"], local_day, gym["timezone"])
+    if refusal is None:
+        return BookingCheck(member_plan_id=plan["id"])
+    credit_id = usable_token_credit_id(connection, gym_id, user_id, local_day)
+    if credit_id is not None:
+        return BookingCheck(token_credit_id=credit_id)
+    return BookingCheck(refusal=refusal)
 
 
 def require_booking_allowed(
@@ -642,13 +676,11 @@ def require_booking_allowed(
     gym_id: int,
     user_id: int,
     schedule_row: Row,
-) -> int | None:
-    member_plan_id, refusal = booking_plan_check(
-        connection, gym_id=gym_id, user_id=user_id, schedule_row=schedule_row
-    )
-    if refusal is not None:
-        raise ApiError(HTTPStatus.FORBIDDEN, refusal)
-    return member_plan_id
+) -> BookingCheck:
+    check = booking_plan_check(connection, gym_id=gym_id, user_id=user_id, schedule_row=schedule_row)
+    if check.refusal is not None:
+        raise ApiError(HTTPStatus.FORBIDDEN, check.refusal)
+    return check
 
 
 def promote_next_eligible_waitlisted_user(
@@ -674,12 +706,13 @@ def promote_next_eligible_waitlisted_user(
         (class_schedule_id,),
     ).fetchall()
     for entry in entries:
-        member_plan_id, refusal = booking_plan_check(
+        check = booking_plan_check(
             connection,
             gym_id=schedule_row["gym_id"],
             user_id=entry["user_id"],
             schedule_row=schedule_row,
         )
+        refusal = check.refusal
         connection.execute("delete from class_waitlist_entries where id = ?", (entry["id"],))
         if refusal is not None:
             notifications_core.create_notification(
@@ -695,10 +728,143 @@ def promote_next_eligible_waitlisted_user(
             continue
         connection.execute(
             """
-            insert into class_bookings (class_schedule_id, user_id, attendance_status, member_plan_id, created_at)
-            values (?, ?, 'booked', ?, ?)
+            insert into class_bookings
+              (class_schedule_id, user_id, attendance_status, member_plan_id, token_credit_id, created_at)
+            values (?, ?, 'booked', ?, ?, ?)
             """,
-            (class_schedule_id, entry["user_id"], member_plan_id, isoformat(now_utc())),
+            (class_schedule_id, entry["user_id"], check.member_plan_id, check.token_credit_id, isoformat(now_utc())),
         )
         return int(entry["user_id"])
     return None
+
+
+# --- extra tokens -------------------------------------------------------------
+
+EXTRA_TOKEN_VALIDITY_MONTHS = 1
+MAX_EXTRA_TOKENS_PER_GRANT = 50
+
+
+def require_extra_token_price(value: Any) -> int | None:
+    """``None`` turns selling extra tokens off."""
+    if value is None:
+        return None
+    return _int_field(value, "Extra token price", minimum=0, maximum=MAX_PRICE_CENTS)
+
+
+def extra_token_expiry(granted_on: date) -> date:
+    return _add_months(granted_on, EXTRA_TOKEN_VALIDITY_MONTHS, granted_on.day)
+
+
+def _token_credit_rows(connection: ManagedConnection, gym_id: int, user_id: int, *, valid_after: date) -> list[Row]:
+    """Credits that are still valid after ``valid_after`` (``expires_on`` is
+    exclusive), with the bookings spent on each, oldest expiry first."""
+    return connection.execute(
+        """
+        select token_credits.*,
+               (select count(*) from class_bookings where class_bookings.token_credit_id = token_credits.id) as used
+        from token_credits
+        where token_credits.gym_id = ? and token_credits.user_id = ? and token_credits.expires_on > ?
+        order by token_credits.expires_on asc, token_credits.id asc
+        """,
+        (gym_id, user_id, valid_after.isoformat()),
+    ).fetchall()
+
+
+def usable_token_credit_id(connection: ManagedConnection, gym_id: int, user_id: int, day: date) -> int | None:
+    """The extra-token credit a class on ``day`` spends: the one that expires
+    first among those valid on that day with tokens left."""
+    for row in _token_credit_rows(connection, gym_id, user_id, valid_after=day):
+        if row["granted_on"] <= day.isoformat() and int(row["used"]) < int(row["tokens"]):
+            return int(row["id"])
+    return None
+
+
+def extra_tokens_payload(
+    connection: ManagedConnection, gym_id: int, user_id: int, *, currency: str, gym_timezone: str
+) -> dict[str, Any]:
+    today = schedule_service.local_today(gym_timezone)
+    credits = []
+    for row in _token_credit_rows(connection, gym_id, user_id, valid_after=today):
+        remaining = max(int(row["tokens"]) - int(row["used"]), 0)
+        credits.append(
+            {
+                "id": row["id"],
+                "tokens": row["tokens"],
+                "tokens_used": int(row["used"]),
+                "tokens_remaining": remaining,
+                "price_cents": row["price_cents"],
+                "currency": currency,
+                "source": row["source"],
+                "granted_on": row["granted_on"],
+                # Last day the tokens can be used (expires_on is exclusive).
+                "valid_until": (date.fromisoformat(row["expires_on"]) - timedelta(days=1)).isoformat(),
+            }
+        )
+    return {
+        "tokens_remaining": sum(credit["tokens_remaining"] for credit in credits),
+        "credits": credits,
+    }
+
+
+def extra_tokens_remaining_for_gym(connection: ManagedConnection, gym_id: int, gym_timezone: str) -> dict[int, int]:
+    """Per member: unexpired extra tokens left, for the Members tab."""
+    today = schedule_service.local_today(gym_timezone).isoformat()
+    rows = connection.execute(
+        """
+        select token_credits.user_id,
+               sum(greatest(token_credits.tokens - coalesce(spent.used, 0), 0)) as remaining
+        from token_credits
+        left join (
+          select token_credit_id, count(*) as used from class_bookings
+          where token_credit_id is not null group by token_credit_id
+        ) spent on spent.token_credit_id = token_credits.id
+        where token_credits.gym_id = ? and token_credits.expires_on > ?
+        group by token_credits.user_id
+        """,
+        (gym_id, today),
+    ).fetchall()
+    return {int(row["user_id"]): int(row["remaining"] or 0) for row in rows}
+
+
+def grant_token_credit(
+    connection: ManagedConnection,
+    *,
+    gym_id: int,
+    user_id: int,
+    tokens: Any,
+    price_cents: int,
+    granted_on: date,
+    created_by_user_id: int | None,
+    source: str = "manual",
+) -> int:
+    count = _int_field(tokens, "Tokens", minimum=1, maximum=MAX_EXTRA_TOKENS_PER_GRANT)
+    row = connection.execute(
+        """
+        insert into token_credits
+          (gym_id, user_id, tokens, price_cents, source, granted_on, expires_on, created_by_user_id, created_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        returning id
+        """,
+        (
+            gym_id,
+            user_id,
+            count,
+            price_cents,
+            source,
+            granted_on.isoformat(),
+            extra_token_expiry(granted_on).isoformat(),
+            created_by_user_id,
+            isoformat(now_utc()),
+        ),
+    ).fetchone()
+    return int(row["id"])
+
+
+def get_token_credit_row(connection: ManagedConnection, gym_id: int, credit_id: int) -> Row:
+    row = connection.execute(
+        "select * from token_credits where id = ? and gym_id = ?",
+        (credit_id, gym_id),
+    ).fetchone()
+    if row is None:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Extra tokens not found.")
+    return row
