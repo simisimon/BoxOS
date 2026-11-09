@@ -42,23 +42,35 @@ services:
     depends_on:
       - backend-dev
     working_dir: /workspace/app
+    # Offline pub get skips pub.dev when the cache is complete; an online
+    # fetch that stalls is cut off after 5 min and the container restarts.
     command:
       - sh
       - -lc
       - >-
+        rm -f /tmp/flutter-run.log &&
         flutter config --enable-web &&
-        flutter pub get &&
-        flutter run -d web-server
+        (flutter pub get --offline || timeout 300 flutter pub get) &&
+        flutter run -d web-server --no-pub
         --web-hostname 0.0.0.0
         --web-port 3000
         --dart-define=ENV=dev
         --dart-define=API_BASE_URL=http://localhost:8081
         --dart-define=AUTH_REDIRECT_URL=http://localhost:3001/auth/callback
+        2>&1 | tee /tmp/flutter-run.log
+    # Port 3000 answers before the compile is done and a page opened then stays
+    # blank, so "healthy" waits for flutter's own "is being served" line.
+    healthcheck:
+      test: ["CMD", "grep", "-q", "is being served", "/tmp/flutter-run.log"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10m
+      start_interval: 2s
     ports:
       - "3001:3000"
     volumes:
       - ./app:/workspace/app
-      - flutter_pub_cache:/sdks/flutter/.pub-cache
+      - flutter_pub_cache:/root/.pub-cache
 
 volumes:
   backend_dev_db:

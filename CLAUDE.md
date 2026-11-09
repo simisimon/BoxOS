@@ -11,6 +11,9 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 - `frontend-dev` runs `flutter run -d web-server` and does **not** pick up file
   changes. After editing `app/`, run `docker compose restart frontend-dev`, wait
   for "is being served" in its logs, then hard-reload the browser (Cmd+Shift+R).
+- Port 3001 answers before the compile is done; a page opened then stays blank
+  until reloaded. `docker compose up -d --build --wait` returns only once
+  `frontend-dev` is healthy (its healthcheck greps for "is being served").
 - The container runs `flutter pub get` on start and rewrites
   `app/.dart_tool/package_config.json` to container paths. Run
   `cd app && flutter pub get` before local `flutter test` / `flutter analyze`.
