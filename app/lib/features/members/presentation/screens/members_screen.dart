@@ -6,6 +6,9 @@ import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/responsive/responsive_masonry.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/gyms/domain/models/gym_join_request.dart';
+import 'package:app/features/memberships/data/membership_repository.dart';
+import 'package:app/features/memberships/domain/membership_models.dart';
+import 'package:app/features/memberships/presentation/member_plan_widgets.dart';
 import 'package:app/features/members/presentation/widgets/member_roster.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
@@ -14,8 +17,9 @@ import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Owner-facing "Members" tab: pending join requests on top, then the active
-/// member roster as a search-and-filter table with inline-expand editing.
+/// Owner-facing "Members" tab: the active member roster as a search-and-filter
+/// table with inline-expand editing, and a Requests segment with join requests
+/// and membership plan requests.
 /// Renders as a shell branch body (the shell supplies the top header), so
 /// there is no local app bar.
 class MembersScreen extends ConsumerStatefulWidget {
@@ -31,9 +35,11 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   String? _errorText;
 
   List<GymJoinRequest> _requests = const [];
+  List<MemberPlan> _planRequests = const [];
   List<RoleManagedUser> _users = const [];
 
   int? _pendingRequestId;
+  int? _pendingPlanRequestId;
 
   /// Members and join requests share the page as two tabs.
   bool _showRequests = false;
@@ -46,16 +52,23 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     try {
       final gymRepo = ref.read(gymRepositoryProvider);
       final profileRepo = ref.read(profileRepositoryProvider);
-      final results = await Future.wait([
+      final membershipRepo = ref.read(membershipRepositoryProvider);
+      final results = await Future.wait<Object>([
         gymRepo.fetchJoinRequests(),
         profileRepo.fetchRoleManagedUsers(),
+        // Plan requests are an addition to the page; never block it on them.
+        membershipRepo.fetchPlanRequests().catchError(
+          (Object _) => const <MemberPlan>[],
+        ),
       ]);
       if (!mounted) return;
       // Keep the Members tab badge in step with what this screen shows.
       ref.invalidate(pendingJoinRequestsProvider);
+      ref.invalidate(pendingPlanRequestsProvider);
       setState(() {
         _requests = results[0] as List<GymJoinRequest>;
         _users = results[1] as List<RoleManagedUser>;
+        _planRequests = results[2] as List<MemberPlan>;
         _loaded = true;
       });
     } catch (error) {
@@ -106,6 +119,39 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       );
     } finally {
       if (mounted) setState(() => _pendingRequestId = null);
+    }
+  }
+
+  Future<void> _reviewPlanRequest(MemberPlan request, bool approve) async {
+    setState(() => _pendingPlanRequestId = request.id);
+    final handled = await reviewPlanRequest(
+      context,
+      ref,
+      request,
+      approve: approve,
+    );
+    if (!mounted) return;
+    setState(() {
+      _pendingPlanRequestId = null;
+      if (handled) {
+        _planRequests = [
+          for (final r in _planRequests)
+            if (r.id != request.id) r,
+        ];
+      }
+    });
+    if (handled) unawaited(_reloadRoster());
+  }
+
+  Future<void> _reloadPlanRequests() async {
+    try {
+      final requests =
+          await ref.read(membershipRepositoryProvider).fetchPlanRequests();
+      if (!mounted) return;
+      ref.invalidate(pendingPlanRequestsProvider);
+      setState(() => _planRequests = requests);
+    } catch (_) {
+      // Non-fatal: keep the previous list.
     }
   }
 
@@ -225,7 +271,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                 ButtonSegment(
                   value: true,
                   icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: Text('Requests (${_requests.length})'),
+                  label: Text(
+                    'Requests (${_requests.length + _planRequests.length})',
+                  ),
                 ),
               ],
               selected: {_showRequests},
@@ -265,6 +313,17 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             users: _users,
             onSave: _saveDraft,
             onRefresh: _refresh,
+            detailExtra: (user) => MemberPlanSection(
+              key: ValueKey('plan-${user.id}'),
+              userId: user.id,
+              memberName: user.displayName.trim().isEmpty
+                  ? user.email
+                  : user.displayName.trim(),
+              onChanged: () {
+                unawaited(_reloadRoster());
+                unawaited(_reloadPlanRequests());
+              },
+            ),
           ),
         ),
       ],
@@ -282,11 +341,13 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   }
 
   Widget _buildRequests() {
-    if (_requests.isEmpty) {
+    if (_requests.isEmpty && _planRequests.isEmpty) {
       return AppEmptyState(
         icon: Icons.inbox_outlined,
         title: 'No pending requests',
-        subtitle: 'New athletes asking to join your box appear here.',
+        subtitle:
+            'New athletes asking to join your box and members asking for a '
+            'plan appear here.',
         compact: true,
       );
     }
@@ -301,6 +362,13 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             isPending: _pendingRequestId == request.id,
             onApprove: () => _review(request, true),
             onReject: () => _review(request, false),
+          ),
+        for (final request in _planRequests)
+          PlanRequestCard(
+            request: request,
+            isPending: _pendingPlanRequestId == request.id,
+            onApprove: () => _reviewPlanRequest(request, true),
+            onReject: () => _reviewPlanRequest(request, false),
           ),
       ],
     );
@@ -447,6 +515,17 @@ class _RequestCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: appMutedText,
+                        ),
+                      ),
+                    ],
+                    if (request.requestedPlanName != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Wants ${request.requestedPlanName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: appPrimary,
                         ),
                       ),
                     ],

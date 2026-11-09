@@ -5,6 +5,7 @@ import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
+import 'package:app/features/memberships/presentation/membership_plans_panel.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -49,7 +50,6 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
   int _bookingWindowDays = 14;
   int _cancelCutoffHours = 2;
   bool _waitlistAutoPromote = true;
-  bool _blockWithoutMembership = false;
 
   // Notification rules (local session state).
   bool _notifyJoinRequests = true;
@@ -126,14 +126,11 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
           bookingWindowDays: _bookingWindowDays,
           cancelCutoffHours: _cancelCutoffHours,
           waitlistAutoPromote: _waitlistAutoPromote,
-          blockWithoutMembership: _blockWithoutMembership,
           classTypes: _classTypes,
           onBookingWindowChanged: (v) => setState(() => _bookingWindowDays = v),
           onCancelCutoffChanged: (v) => setState(() => _cancelCutoffHours = v),
           onWaitlistAutoPromoteChanged: (v) =>
               setState(() => _waitlistAutoPromote = v),
-          onBlockWithoutMembershipChanged: (v) =>
-              setState(() => _blockWithoutMembership = v),
           onAddClassType: _addClassType,
           onRemoveClassType: (index) => setState(
             () => _classTypes = [
@@ -144,12 +141,7 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
           onSave: () => _save('Scheduling rules'),
         );
       case _SettingsSection.memberships:
-        return const _RoadmapPanel(
-          title: 'Membership plans',
-          message:
-              'Define plans, drop-ins and billing once Memberships & Payments '
-              'ships. Booking rules above will hook into it automatically.',
-        );
+        return const MembershipPlansPanel();
       case _SettingsSection.notifications:
         return _NotificationsPanel(
           notifyJoinRequests: _notifyJoinRequests,
@@ -187,7 +179,7 @@ class _SectionNav extends StatelessWidget {
   static const _items = <(_SettingsSection, String, bool)>[
     (_SettingsSection.identity, 'Box Identity', false),
     (_SettingsSection.scheduling, 'Scheduling', false),
-    (_SettingsSection.memberships, 'Memberships', true),
+    (_SettingsSection.memberships, 'Memberships', false),
     (_SettingsSection.notifications, 'Notifications', false),
     (_SettingsSection.danger, 'Danger Zone', false),
   ];
@@ -720,12 +712,10 @@ class _SchedulingPanel extends StatelessWidget {
     required this.bookingWindowDays,
     required this.cancelCutoffHours,
     required this.waitlistAutoPromote,
-    required this.blockWithoutMembership,
     required this.classTypes,
     required this.onBookingWindowChanged,
     required this.onCancelCutoffChanged,
     required this.onWaitlistAutoPromoteChanged,
-    required this.onBlockWithoutMembershipChanged,
     required this.onAddClassType,
     required this.onRemoveClassType,
     required this.onSave,
@@ -734,12 +724,10 @@ class _SchedulingPanel extends StatelessWidget {
   final int bookingWindowDays;
   final int cancelCutoffHours;
   final bool waitlistAutoPromote;
-  final bool blockWithoutMembership;
   final List<_ClassType> classTypes;
   final ValueChanged<int> onBookingWindowChanged;
   final ValueChanged<int> onCancelCutoffChanged;
   final ValueChanged<bool> onWaitlistAutoPromoteChanged;
-  final ValueChanged<bool> onBlockWithoutMembershipChanged;
   final VoidCallback onAddClassType;
   final ValueChanged<int> onRemoveClassType;
   final VoidCallback onSave;
@@ -783,14 +771,6 @@ class _SchedulingPanel extends StatelessWidget {
                 help: 'Move the next athlete up when a spot frees.',
                 value: waitlistAutoPromote,
                 onChanged: onWaitlistAutoPromoteChanged,
-              ),
-              const Divider(height: appSpace2xl),
-              _ToggleRow(
-                label: 'Block booking without active membership',
-                help: 'Requires Memberships & Payments.',
-                value: blockWithoutMembership,
-                roadmap: true,
-                onChanged: onBlockWithoutMembershipChanged,
               ),
             ],
           ),
@@ -927,14 +907,12 @@ class _ToggleRow extends StatelessWidget {
     required this.help,
     required this.value,
     required this.onChanged,
-    this.roadmap = false,
   });
 
   final String label;
   final String help;
   final bool value;
   final ValueChanged<bool> onChanged;
-  final bool roadmap;
 
   @override
   Widget build(BuildContext context) {
@@ -956,13 +934,6 @@ class _ToggleRow extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (roadmap) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      'ROADMAP',
-                      style: appMono(fontSize: 8, letterSpacing: 1.2),
-                    ),
-                  ],
                 ],
               ),
               const SizedBox(height: 3),
@@ -1118,53 +1089,6 @@ class _NotificationsPanel extends StatelessWidget {
             help: 'Flag classes trending under capacity.',
             value: notifyLowFill,
             onChanged: onLowFillChanged,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoadmapPanel extends StatelessWidget {
-  const _RoadmapPanel({required this.title, required this.message});
-
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const AppAccentBadge(
-                icon: Icons.workspace_premium_outlined,
-                color: appWarning,
-              ),
-              const SizedBox(width: appSpaceMd),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              AppPill(
-                label: 'Soon',
-                intent: AppPillIntent.warning,
-                dense: true,
-              ),
-            ],
-          ),
-          const SizedBox(height: appSpaceMd),
-          Text(
-            message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: appMutedText, height: 1.5),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:app/core/presentation/components/components.dart';
 
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
+import 'package:app/features/memberships/presentation/my_membership_card.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
@@ -102,6 +103,13 @@ class ProfileScreen extends ConsumerWidget {
                   : ref.watch(_trainingSnapshotProvider).value,
             ),
             const SizedBox(height: appSpace2xl),
+            // Athletes see their plan at the active box; owners manage plans
+            // in Box Settings and trainers are never limited by one.
+            if (profile?.activeGym != null &&
+                profile?.role == UserRole.athlete) ...[
+              const MyMembershipCard(),
+              const SizedBox(height: appSpace2xl),
+            ],
             _ActionSection(
               eyebrow: 'Account Settings',
               title: 'Control your account surface',
@@ -145,7 +153,7 @@ class ProfileScreen extends ConsumerWidget {
                     icon: Icons.tune_rounded,
                     title: 'Box Settings',
                     subtitle:
-                        'Scheduling rules, class types, and box configuration.',
+                        'Membership plans, scheduling rules, class types, and box configuration.',
                     enabled: !isLoading,
                     onTap: () => context.go('/box-settings'),
                   ),

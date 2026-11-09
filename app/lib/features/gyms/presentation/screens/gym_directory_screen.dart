@@ -4,6 +4,9 @@ import 'package:app/core/presentation/components/components.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/gyms/domain/models/my_gym_join_request.dart';
+import 'package:app/features/memberships/data/membership_repository.dart';
+import 'package:app/features/memberships/domain/membership_models.dart';
+import 'package:app/features/memberships/presentation/my_membership_card.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,7 +44,32 @@ class _GymDirectoryScreenState extends ConsumerState<GymDirectoryScreen> {
     }
     setState(() => _pendingGymId = gym.id);
     try {
-      await ref.read(gymRepositoryProvider).requestJoin(gymId: gym.id);
+      // Boxes with plans let the athlete pick one with the join request.
+      var plans = const <MembershipPlan>[];
+      try {
+        plans = await ref
+            .read(membershipRepositoryProvider)
+            .fetchGymPlans(gym.id);
+      } catch (_) {
+        // No plans to offer; join without one.
+      }
+      if (!mounted) return;
+      int? planId;
+      if (plans.isNotEmpty) {
+        final choice = await showPlanPickerDialog(
+          context,
+          plans: plans,
+          title: 'Join ${gym.name}',
+          subtitle: 'Pick the plan you would like. You can also decide later.',
+          confirmLabel: 'Request with plan',
+          skipLabel: 'Decide later',
+        );
+        if (choice == null || !mounted) return;
+        planId = choice.plan?.id;
+      }
+      await ref
+          .read(gymRepositoryProvider)
+          .requestJoin(gymId: gym.id, planId: planId);
       if (!mounted) {
         return;
       }

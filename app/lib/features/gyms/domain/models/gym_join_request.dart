@@ -5,6 +5,7 @@ class GymJoinRequest {
     required this.displayName,
     required this.nickname,
     required this.createdAt,
+    this.requestedPlanName,
   });
 
   final int id;
@@ -12,4 +13,8 @@ class GymJoinRequest {
   final String displayName;
   final String nickname;
   final String createdAt;
+
+  /// Plan the athlete picked while asking to join; it becomes a plan request
+  /// once the join request is approved.
+  final String? requestedPlanName;
 }

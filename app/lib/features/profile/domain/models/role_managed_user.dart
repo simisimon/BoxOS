@@ -1,3 +1,4 @@
+import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 
 /// Lifecycle state of a gym membership.
@@ -68,6 +69,8 @@ class RoleManagedUser {
     this.newestPrTitle = '',
     this.newestPrScore = '',
     this.newestPrAt,
+    this.plan,
+    this.hasPlanRequest = false,
   });
 
   final int id;
@@ -96,4 +99,10 @@ class RoleManagedUser {
   final String newestPrTitle;
   final String newestPrScore;
   final DateTime? newestPrAt;
+
+  /// The member's current (or, if none has started, next) membership plan.
+  final MemberPlanSummary? plan;
+
+  /// The member asked for a plan and the owner has not answered yet.
+  final bool hasPlanRequest;
 }

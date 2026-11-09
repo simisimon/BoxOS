@@ -1,5 +1,6 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +53,7 @@ class MemberRoster extends StatefulWidget {
     required this.onSave,
     this.savingUserId,
     this.onRefresh,
+    this.detailExtra,
   });
 
   final List<RoleManagedUser> users;
@@ -67,6 +69,10 @@ class MemberRoster extends StatefulWidget {
 
   /// Pull-to-refresh on the member list; null disables it.
   final Future<void> Function()? onRefresh;
+
+  /// Extra section in the member detail, below the header (e.g. the
+  /// member's plan). The widget owns its own loading and saving.
+  final Widget Function(RoleManagedUser user)? detailExtra;
 
   @override
   State<MemberRoster> createState() => _MemberRosterState();
@@ -152,7 +158,11 @@ class _MemberRosterState extends State<MemberRoster> {
     setState(() => _selectedUserId = user.id);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _MemberDetailPage(user: user, onSave: _save),
+        builder: (_) => _MemberDetailPage(
+          user: user,
+          onSave: _save,
+          detailExtra: widget.detailExtra,
+        ),
       ),
     );
   }
@@ -226,6 +236,7 @@ class _MemberRosterState extends State<MemberRoster> {
                               user: selectedUser,
                               saving: _effectiveSavingId == selectedUser.id,
                               onSave: _save,
+                              detailExtra: widget.detailExtra,
                             ),
                           ),
                         ),
@@ -242,10 +253,15 @@ class _MemberRosterState extends State<MemberRoster> {
 /// Full-screen member detail for phones, with its own saving state; closes
 /// once the save went through.
 class _MemberDetailPage extends StatefulWidget {
-  const _MemberDetailPage({required this.user, required this.onSave});
+  const _MemberDetailPage({
+    required this.user,
+    required this.onSave,
+    this.detailExtra,
+  });
 
   final RoleManagedUser user;
   final Future<void> Function(MemberDraft draft) onSave;
+  final Widget Function(RoleManagedUser user)? detailExtra;
 
   @override
   State<_MemberDetailPage> createState() => _MemberDetailPageState();
@@ -275,6 +291,7 @@ class _MemberDetailPageState extends State<_MemberDetailPage> {
           user: widget.user,
           saving: _saving,
           onSave: _save,
+          detailExtra: widget.detailExtra,
         ),
       ),
     );
@@ -636,6 +653,21 @@ class _MemberHeader extends StatelessWidget {
                   dense: true,
                 ),
               ],
+              if (user.hasPlanRequest) ...[
+                const SizedBox(height: 4),
+                const AppPill(
+                  label: 'Plan request',
+                  intent: AppPillIntent.warning,
+                  dense: true,
+                ),
+              ] else if (user.plan?.paymentStatus == PaymentStatus.overdue) ...[
+                const SizedBox(height: 4),
+                const AppPill(
+                  label: 'Overdue',
+                  intent: AppPillIntent.danger,
+                  dense: true,
+                ),
+              ],
             ],
           ),
           const SizedBox(width: 4),
@@ -677,6 +709,10 @@ class _MemberHeader extends StatelessWidget {
       parts.add('Joined ${_formatDate(user.joinedAt!)}');
     }
     if (user.nickname.isNotEmpty) parts.add('@${user.nickname}');
+    final plan = user.plan;
+    if (plan != null) {
+      parts.add(plan.isUpcoming ? '${plan.planName} (upcoming)' : plan.planName);
+    }
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
@@ -696,11 +732,13 @@ class _MemberDetailPanel extends StatelessWidget {
     required this.user,
     required this.saving,
     required this.onSave,
+    this.detailExtra,
   });
 
   final RoleManagedUser user;
   final bool saving;
   final Future<void> Function(MemberDraft draft) onSave;
+  final Widget Function(RoleManagedUser user)? detailExtra;
 
   @override
   Widget build(BuildContext context) {
@@ -714,6 +752,7 @@ class _MemberDetailPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _MemberDetailHeader(user: user),
+          ?detailExtra?.call(user),
           _MemberRowExpanded(user: user, saving: saving, onSave: onSave),
         ],
       ),

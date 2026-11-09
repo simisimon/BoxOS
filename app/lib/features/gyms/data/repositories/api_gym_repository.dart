@@ -94,10 +94,10 @@ class ApiGymRepository implements GymRepository {
   }
 
   @override
-  Future<void> requestJoin({required int gymId}) async {
+  Future<void> requestJoin({required int gymId, int? planId}) async {
     await _dio.post<void>(
       '/gyms/join-requests',
-      data: {'gym_id': gymId},
+      data: {'gym_id': gymId, 'plan_id': ?planId},
       options: Options(headers: await _authHeaders()),
     );
   }
@@ -176,6 +176,7 @@ class ApiGymRepository implements GymRepository {
       displayName: data['display_name'] as String? ?? '',
       nickname: data['nickname'] as String? ?? '',
       createdAt: data['created_at'] as String? ?? '',
+      requestedPlanName: data['requested_plan_name'] as String?,
     );
   }
 

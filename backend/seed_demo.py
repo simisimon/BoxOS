@@ -14,6 +14,7 @@ Then log in as the owner printed at the end to land on the populated dashboard.
 
 from __future__ import annotations
 
+import json
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -183,6 +184,9 @@ def seed(rng: random.Random | None = None) -> None:
             # --- Classes + bookings + attendance --------------------------
             _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today)
 
+            # --- Membership plans ----------------------------------------
+            n_plans, n_plan_requests = _seed_plans(conn, rng, gym_id, owner_id, member_ids[N_ADMINS + N_TRAINERS:], today)
+
             # --- Programming + athlete progress --------------
             _seed_programming(conn, gym_id, owner_id, today)
             _seed_demo_athlete(conn, rng, gym_id)
@@ -191,9 +195,75 @@ def seed(rng: random.Random | None = None) -> None:
         print("Seeded demo box:")
         print(f"  gym         : {GYM_NAME} (id {gym_id}, {GYM_TIMEZONE})")
         print(f"  members     : {len(member_ids)} active (+ owner), {N_PENDING_REQUESTS} pending requests")
+        print(f"  plans       : {n_plans} assigned, {n_plan_requests} open plan requests")
         print(f"  owner login : {OWNER_EMAIL} / {OWNER_PASSWORD}")
     finally:
         conn.close()
+
+
+_DEMO_PLANS = [
+    # name, type, price_cents, billing, per_week, class_count, validity_days, class types
+    ("Unlimited", "unlimited", 12900, "monthly", None, None, None, []),
+    ("2x per week", "weekly", 8900, "monthly", 2, None, None, ["WOD", "Open Gym", "Skill"]),
+    ("10-class card", "punch_card", 18000, "one_time", None, 10, 90, ["WOD", "Open Gym", "Skill"]),
+]
+
+
+def _seed_plans(conn, rng, gym_id, owner_id, athlete_ids, today):
+    """Three plans; most athletes on one (some overdue), a few open requests."""
+    plans = []
+    for name, plan_type, price, billing, per_week, count, validity, types in _DEMO_PLANS:
+        row = conn.execute(
+            """
+            insert into membership_plans (gym_id, name, description, plan_type, price_cents, billing_period,
+              classes_per_week, class_count, validity_days, allowed_class_types_json,
+              created_by_user_id, created_at, updated_at)
+            values (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning *
+            """,
+            (gym_id, name, plan_type, price, billing, per_week, count, validity,
+             json.dumps(types), owner_id, _ts(), _ts()),
+        ).fetchone()
+        plans.append(row)
+    assigned = 0
+    requests = 0
+    for index, user_id in enumerate(athlete_ids):
+        if index % 9 == 8:
+            continue  # a few athletes without a plan
+        plan = rng.choices(plans, weights=[5, 3, 2])[0]
+        starts_on = today - timedelta(days=rng.randint(5, 200))
+        ends_on = None
+        if plan["validity_days"]:
+            starts_on = today - timedelta(days=rng.randint(1, 60))
+            ends_on = starts_on + timedelta(days=int(plan["validity_days"]) - 1)
+        payment = rng.choices(["paid", "due", "overdue"], weights=[14, 3, 2])[0]
+        conn.execute(
+            """
+            insert into member_plans (gym_id, user_id, plan_id, status, plan_name, plan_type, price_cents,
+              billing_period, classes_per_week, class_count, validity_days, allowed_class_types_json,
+              starts_on, ends_on, payment_status, reviewed_at, reviewed_by_user_id, created_at, updated_at)
+            values (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (gym_id, user_id, plan["id"], plan["name"], plan["plan_type"], plan["price_cents"],
+             plan["billing_period"], plan["classes_per_week"], plan["class_count"], plan["validity_days"],
+             plan["allowed_class_types_json"], starts_on.isoformat(),
+             ends_on.isoformat() if ends_on else None, payment, _ts(), owner_id, _ts(), _ts()),
+        )
+        assigned += 1
+        if index % 23 == 3:
+            upgrade = plans[0]
+            conn.execute(
+                """
+                insert into member_plans (gym_id, user_id, plan_id, status, plan_name, plan_type, price_cents,
+                  billing_period, classes_per_week, class_count, validity_days, allowed_class_types_json,
+                  requested_at, created_at, updated_at)
+                values (?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (gym_id, user_id, upgrade["id"], upgrade["name"], upgrade["plan_type"], upgrade["price_cents"],
+                 upgrade["billing_period"], upgrade["classes_per_week"], upgrade["class_count"],
+                 upgrade["validity_days"], upgrade["allowed_class_types_json"], _ts(), _ts(), _ts()),
+            )
+            requests += 1
+    return assigned, requests
 
 
 def _add_membership(conn, user_id, gym_id, active_role, roles, *, created_at):

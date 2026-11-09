@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
+import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
@@ -298,6 +299,8 @@ class ApiProfileRepository implements ProfileRepository {
       newestPrAt: newestPrAtRaw == null || newestPrAtRaw.isEmpty
           ? null
           : DateTime.tryParse(newestPrAtRaw),
+      plan: MemberPlanSummary.fromJson(data['plan'] as Map<String, dynamic>?),
+      hasPlanRequest: data['has_plan_request'] as bool? ?? false,
     );
   }
 
