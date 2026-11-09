@@ -711,7 +711,9 @@ class _MemberHeader extends StatelessWidget {
     if (user.nickname.isNotEmpty) parts.add('@${user.nickname}');
     final plan = user.plan;
     if (plan != null) {
-      parts.add(plan.isUpcoming ? '${plan.planName} (upcoming)' : plan.planName);
+      parts.add(
+        plan.isUpcoming ? '${plan.planName} (upcoming)' : plan.planName,
+      );
     }
     return parts.isEmpty ? null : parts.join(' · ');
   }

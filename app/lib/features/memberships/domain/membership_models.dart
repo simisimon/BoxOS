@@ -426,7 +426,8 @@ class MembershipSettings {
   factory MembershipSettings.fromJson(Map<String, dynamic>? data) {
     return MembershipSettings(
       currency: data?['currency'] as String? ?? 'EUR',
-      requirePlanForBooking: data?['require_plan_for_booking'] as bool? ?? false,
+      requirePlanForBooking:
+          data?['require_plan_for_booking'] as bool? ?? false,
       currencies: [
         for (final item
             in data?['currencies'] as List<dynamic>? ??
@@ -439,7 +440,10 @@ class MembershipSettings {
 
 /// The signed-in member's plans at the active box.
 class MyMembership {
-  const MyMembership({required this.plans, required this.requirePlanForBooking});
+  const MyMembership({
+    required this.plans,
+    required this.requirePlanForBooking,
+  });
 
   final List<MemberPlan> plans;
   final bool requirePlanForBooking;

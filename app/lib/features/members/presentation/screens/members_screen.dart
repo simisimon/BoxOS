@@ -74,8 +74,10 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorText =
-            errorMessageFrom(error, fallback: 'Failed to load members');
+        _errorText = errorMessageFrom(
+          error,
+          fallback: 'Failed to load members',
+        );
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -103,7 +105,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            approve ? 'Approved ${request.email}.' : 'Rejected ${request.email}.',
+            approve
+                ? 'Approved ${request.email}.'
+                : 'Rejected ${request.email}.',
           ),
         ),
       );
@@ -145,8 +149,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 
   Future<void> _reloadPlanRequests() async {
     try {
-      final requests =
-          await ref.read(membershipRepositoryProvider).fetchPlanRequests();
+      final requests = await ref
+          .read(membershipRepositoryProvider)
+          .fetchPlanRequests();
       if (!mounted) return;
       ref.invalidate(pendingPlanRequestsProvider);
       setState(() => _planRequests = requests);
@@ -157,8 +162,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 
   Future<void> _reloadRoster() async {
     try {
-      final users =
-          await ref.read(profileRepositoryProvider).fetchRoleManagedUsers();
+      final users = await ref
+          .read(profileRepositoryProvider)
+          .fetchRoleManagedUsers();
       if (!mounted) return;
       setState(() => _users = users);
     } catch (_) {
@@ -171,7 +177,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   /// in place; a removed member disappears from the list entirely.
   Future<void> _saveDraft(MemberDraft draft) async {
     try {
-      final updated = await ref.read(profileRepositoryProvider).updateUserRole(
+      final updated = await ref
+          .read(profileRepositoryProvider)
+          .updateUserRole(
             userId: draft.user.id,
             roles: draft.roles.toList(),
             activeRole: draft.activeRole,
@@ -191,9 +199,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         }
         _users = next;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved ${updated.email}.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Saved ${updated.email}.')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -217,9 +225,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       Future.microtask(_load);
     }
 
-    return AppGridBackground(
-      child: _buildBody(profileAsync, hasAccess),
-    );
+    return AppGridBackground(child: _buildBody(profileAsync, hasAccess));
   }
 
   Widget _buildBody(AsyncValue<dynamic> profileAsync, bool hasAccess) {
@@ -472,8 +478,9 @@ class _RequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final displayName =
-        request.displayName.isEmpty ? request.email : request.displayName;
+    final displayName = request.displayName.isEmpty
+        ? request.email
+        : request.displayName;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

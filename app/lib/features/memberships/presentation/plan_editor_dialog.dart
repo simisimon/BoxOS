@@ -65,9 +65,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
     _price = TextEditingController(
       text: plan == null ? '' : priceInputText(plan.priceCents),
     );
-    _perWeek = TextEditingController(
-      text: '${plan?.classesPerWeek ?? 2}',
-    );
+    _perWeek = TextEditingController(text: '${plan?.classesPerWeek ?? 2}');
     _classCount = TextEditingController(text: '${plan?.classCount ?? 10}');
     _validity = TextEditingController(
       text: plan == null
@@ -178,9 +176,8 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
                 hintText: 'e.g. Unlimited, 2x per week, 10-class card',
                 counterText: '',
               ),
-              validator: (value) => (value ?? '').trim().isEmpty
-                  ? 'Give the plan a name'
-                  : null,
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Give the plan a name' : null,
             ),
             const SizedBox(height: appSpaceMd),
             TextFormField(
@@ -197,7 +194,10 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
             const SizedBox(height: appSpaceSm),
             SegmentedButton<PlanType>(
               segments: const [
-                ButtonSegment(value: PlanType.unlimited, label: Text('Unlimited')),
+                ButtonSegment(
+                  value: PlanType.unlimited,
+                  label: Text('Unlimited'),
+                ),
                 ButtonSegment(value: PlanType.weekly, label: Text('Per week')),
                 ButtonSegment(
                   value: PlanType.punchCard,

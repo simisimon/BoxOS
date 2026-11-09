@@ -113,7 +113,8 @@ class _PlanAssignmentDialogState extends State<_PlanAssignmentDialog> {
     return 0;
   }
 
-  String get _currency => widget.fixedPlan?.currency ??
+  String get _currency =>
+      widget.fixedPlan?.currency ??
       (widget.plans.isEmpty ? 'EUR' : widget.plans.first.currency);
 
   Future<void> _pickDate() async {
@@ -167,7 +168,8 @@ class _PlanAssignmentDialogState extends State<_PlanAssignmentDialog> {
               AppCard.inset(
                 child: _PlanSummaryLine(
                   name: fixed.planName,
-                  details: '${fixed.limitLabel} · '
+                  details:
+                      '${fixed.limitLabel} · '
                       '${classTypesLabel(fixed.allowedClassTypes)}',
                   price: fixed.priceLabel,
                 ),
@@ -511,7 +513,8 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
     } catch (error) {
       if (!mounted) return;
       setState(
-        () => _error = errorMessageFrom(error, fallback: 'Could not load plans'),
+        () =>
+            _error = errorMessageFrom(error, fallback: 'Could not load plans'),
       );
     }
   }
@@ -676,18 +679,14 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
                     spacing: appSpaceSm,
                     children: [
                       TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _review(request, false),
+                        onPressed: _busy ? null : () => _review(request, false),
                         child: const Text('Decline'),
                       ),
                       FilledButton(
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(0, 40),
                         ),
-                        onPressed: _busy
-                            ? null
-                            : () => _review(request, true),
+                        onPressed: _busy ? null : () => _review(request, true),
                         child: const Text('Approve'),
                       ),
                     ],
@@ -731,12 +730,7 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        appSpaceLg,
-        0,
-        appSpaceLg,
-        appSpaceMd,
-      ),
+      padding: const EdgeInsets.fromLTRB(appSpaceLg, 0, appSpaceLg, appSpaceMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

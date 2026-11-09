@@ -374,7 +374,10 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
                           },
                     items: [
                       for (final currency in settings.currencies)
-                        DropdownMenuItem(value: currency, child: Text(currency)),
+                        DropdownMenuItem(
+                          value: currency,
+                          child: Text(currency),
+                        ),
                     ],
                   ),
                 ],

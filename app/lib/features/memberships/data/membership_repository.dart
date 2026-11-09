@@ -56,7 +56,9 @@ class MembershipRepository {
     return MembershipSettings.fromJson(response.data);
   }
 
-  Future<List<MembershipPlan>> fetchPlans({bool includeArchived = false}) async {
+  Future<List<MembershipPlan>> fetchPlans({
+    bool includeArchived = false,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/membership/plans',
       queryParameters: {if (includeArchived) 'include_archived': true},
@@ -83,7 +85,10 @@ class MembershipRepository {
     return _plan(response.data);
   }
 
-  Future<MembershipPlan> updatePlan(int planId, MembershipPlanDraft draft) async {
+  Future<MembershipPlan> updatePlan(
+    int planId,
+    MembershipPlanDraft draft,
+  ) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/membership/plans',
       data: {...draft.toJson(), 'plan_id': planId},
@@ -92,7 +97,10 @@ class MembershipRepository {
     return _plan(response.data);
   }
 
-  Future<MembershipPlan> setPlanArchived(int planId, {required bool archived}) async {
+  Future<MembershipPlan> setPlanArchived(
+    int planId, {
+    required bool archived,
+  }) async {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/membership/plans/archive',
       data: {'plan_id': planId, 'archived': archived},
@@ -177,7 +185,10 @@ class MembershipRepository {
     );
   }
 
-  Future<void> updatePaymentStatus(int memberPlanId, PaymentStatus status) async {
+  Future<void> updatePaymentStatus(
+    int memberPlanId,
+    PaymentStatus status,
+  ) async {
     await _dio.patch<void>(
       '/membership/assignments',
       data: {'member_plan_id': memberPlanId, 'payment_status': status.apiValue},

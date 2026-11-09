@@ -154,7 +154,7 @@ class ApiProfileRepository implements ProfileRepository {
         'roles': roles.map((role) => role.apiValue).toList(),
         if (activeRole != null) 'active_role': activeRole.apiValue,
         if (status != null) 'status': status.apiValue,
-        if (adminNote != null) 'admin_note': adminNote,
+        'admin_note': ?adminNote,
       },
       options: Options(headers: await _authHeaders()),
     );
