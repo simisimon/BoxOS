@@ -3,6 +3,8 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/mobile_content.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
+import 'package:app/features/auth/data/repositories/api_auth_repository.dart';
+import 'package:app/features/auth/domain/models/account_deletion_check.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +21,82 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   final _formKey = GlobalKey<FormState>();
   final _currentPasswordController = TextEditingController();
   bool _isSubmitting = false;
+  AccountDeletionCheck? _check;
+  Object? _checkError;
+  int? _handingOverGymId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCheck();
+  }
+
+  Future<void> _loadCheck() async {
+    setState(() => _checkError = null);
+    try {
+      final check = await ref
+          .read(authRepositoryProvider)
+          .fetchAccountDeletionCheck();
+      if (mounted) {
+        setState(() => _check = check);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _checkError = error);
+      }
+    }
+  }
+
+  Future<void> _chooseNewOwner(SoleOwnedGym gym) async {
+    final candidate = await showDialog<OwnerCandidate>(
+      context: context,
+      builder: (_) => _ChooseOwnerDialog(gym: gym),
+    );
+    if (candidate == null || !mounted) {
+      return;
+    }
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Make ${candidate.label} owner?',
+      message:
+          '${candidate.label} gets full owner access to ${gym.name}, '
+          'including members, plans and settings.',
+      confirmLabel: 'Make Owner',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    setState(() => _handingOverGymId = gym.id);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .addGymOwner(gymId: gym.id, userId: candidate.id);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${candidate.label} is now an owner of ${gym.name}.'),
+        ),
+      );
+      await _loadCheck();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Failed to add the new owner'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _handingOverGymId = null);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -35,16 +113,19 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
 
   Future<void> _submit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid || _isSubmitting) {
+    final check = _check;
+    if (!isValid || _isSubmitting || check == null || !check.canDelete) {
       return;
     }
 
+    final emptyGymNames = check.emptyGyms.map((gym) => gym.name).join(', ');
     final confirmed = await showAppConfirmDialog(
       context,
       title: 'Delete Account?',
       message:
           'This will immediately remove your account access, anonymize your '
-          'profile data, and schedule permanent deletion after 30 days.',
+          'profile data, and schedule permanent deletion after 30 days.'
+          '${check.emptyGyms.isEmpty ? '' : '\n\n$emptyGymNames has no other members and will be deleted with all its data.'}',
       confirmLabel: 'Delete',
       destructive: true,
     );
@@ -57,7 +138,10 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
     try {
       await ref
           .read(authControllerProvider.notifier)
-          .deleteAccount(currentPassword: _currentPasswordController.text);
+          .deleteAccount(
+            currentPassword: _currentPasswordController.text,
+            deleteEmptyGyms: check.emptyGyms.isNotEmpty,
+          );
       if (!mounted) {
         return;
       }
@@ -82,6 +166,8 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
           ),
         ),
       );
+      // Ownership may have changed elsewhere; show the current blockers.
+      await _loadCheck();
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -89,8 +175,74 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
     }
   }
 
+  List<Widget> _ownershipSection() {
+    final check = _check;
+    if (_checkError != null) {
+      return [
+        _NoticeCard(
+          icon: Icons.error_outline,
+          color: appDanger,
+          title: 'Could not check your boxes',
+          message: errorMessageFrom(
+            _checkError!,
+            fallback: 'Your box ownership could not be loaded.',
+          ),
+          action: OutlinedButton(
+            onPressed: _loadCheck,
+            child: const Text('Try Again'),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ];
+    }
+    if (check == null) {
+      return const [
+        Center(child: CircularProgressIndicator()),
+        SizedBox(height: 12),
+      ];
+    }
+    return [
+      for (final gym in check.gymsNeedingOwner) ...[
+        _NoticeCard(
+          icon: Icons.key_outlined,
+          color: appWarning,
+          title: 'Hand over ${gym.name}',
+          message:
+              'You are the only owner of ${gym.name}. Make another member '
+              'owner before you delete your account.',
+          action: FilledButton(
+            onPressed: _handingOverGymId == null
+                ? () => _chooseNewOwner(gym)
+                : null,
+            child: _handingOverGymId == gym.id
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Choose New Owner'),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (check.emptyGyms.isNotEmpty) ...[
+        _NoticeCard(
+          icon: Icons.delete_forever_outlined,
+          color: appDanger,
+          title: 'Your box will be deleted',
+          message:
+              '${check.emptyGyms.map((gym) => gym.name).join(', ')} has no '
+              'other members, so nobody can take it over. It is deleted with '
+              'your account, including its schedule, workouts and plans.',
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final canDelete = _check?.canDelete ?? false;
     return Scaffold(
       backgroundColor: appPageBackground,
       body: DecoratedBox(
@@ -131,6 +283,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                   const SizedBox(height: 12),
                   const _WarningCard(),
                   const SizedBox(height: 12),
+                  ..._ownershipSection(),
                   _FieldCard(
                     icon: Icons.lock_outline,
                     title: 'Current Password',
@@ -151,7 +304,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: _isSubmitting ? null : _submit,
+                      onPressed: _isSubmitting || !canDelete ? null : _submit,
                       style: FilledButton.styleFrom(
                         backgroundColor: appDanger,
                         foregroundColor: Colors.white,
@@ -170,6 +323,129 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChooseOwnerDialog extends StatefulWidget {
+  const _ChooseOwnerDialog({required this.gym});
+
+  final SoleOwnedGym gym;
+
+  @override
+  State<_ChooseOwnerDialog> createState() => _ChooseOwnerDialogState();
+}
+
+class _ChooseOwnerDialogState extends State<_ChooseOwnerDialog> {
+  OwnerCandidate? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AppFormDialog(
+      title: 'Choose New Owner',
+      subtitle: 'Pick a member of ${widget.gym.name} to take over as owner.',
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _selected == null
+              ? null
+              : () => Navigator.of(context).pop(_selected),
+          child: const Text('Continue'),
+        ),
+      ],
+      child: RadioGroup<int>(
+        groupValue: _selected?.id,
+        onChanged: (id) => setState(
+          () => _selected = widget.gym.members.firstWhere(
+            (member) => member.id == id,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final member in widget.gym.members)
+              RadioListTile<int>(
+                value: member.id,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  member.label,
+                  style: theme.textTheme.bodyLarge?.copyWith(color: appText),
+                ),
+                subtitle: Text(
+                  member.role == 'trainer'
+                      ? 'Trainer · ${member.email}'
+                      : member.email,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: appSubtleText,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoticeCard extends StatelessWidget {
+  const _NoticeCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppAccentBadge(icon: icon, color: color),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: appMutedText,
+                    height: 1.45,
+                  ),
+                ),
+                if (action != null) ...[const SizedBox(height: 14), action!],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

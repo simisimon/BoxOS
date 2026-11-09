@@ -1,3 +1,5 @@
+import 'package:app/features/auth/domain/models/account_deletion_check.dart';
+
 abstract class AuthRepository {
   Future<bool> hasActiveSession();
 
@@ -25,7 +27,17 @@ abstract class AuthRepository {
     required bool logoutOtherSessions,
   });
 
-  Future<void> deleteAccount({required String currentPassword});
+  Future<AccountDeletionCheck> fetchAccountDeletionCheck();
+
+  /// Makes [userId], an existing member of [gymId], an owner of that box.
+  Future<void> addGymOwner({required int gymId, required int userId});
+
+  /// [deleteEmptyGyms] confirms deleting boxes the user owns alone that have
+  /// no other members.
+  Future<void> deleteAccount({
+    required String currentPassword,
+    bool deleteEmptyGyms = false,
+  });
 
   Future<void> signOut();
 }
