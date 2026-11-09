@@ -140,7 +140,9 @@ String planLimitLabel({
       return '${tokensLabel(tokenCount ?? 0)} / $period';
     case PlanType.tokenPack:
       final tokens = tokensLabel(tokenCount ?? 0);
-      return validityDays == null ? tokens : '$tokens · valid $validityDays days';
+      return validityDays == null
+          ? tokens
+          : '$tokens · valid $validityDays days';
   }
 }
 
@@ -333,6 +335,7 @@ class MemberPlan {
   final String? startsOn;
   final String? endsOn;
   final DateTime? requestedAt;
+
   /// Token balance of the current period (the whole pack for token packs);
   /// null for unlimited plans.
   final int? tokensTotal;
