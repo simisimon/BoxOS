@@ -104,7 +104,7 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: appSpace2xl),
             // Athletes see their plan at the active box; owners manage plans
-            // in the Box Settings tab and trainers are never limited by one.
+            // in the Settings tab and trainers are never limited by one.
             if (profile?.activeGym != null &&
                 profile?.role == UserRole.athlete) ...[
               const MyMembershipCard(),

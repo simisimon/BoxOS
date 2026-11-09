@@ -109,7 +109,7 @@ const List<ShellDestination> _ownerDestinations = [
     branchIndex: kBoxSettingsBranch,
     icon: Icons.tune_outlined,
     activeIcon: Icons.tune_rounded,
-    label: 'Box Settings',
+    label: 'Settings',
   ),
   ShellDestination(
     branchIndex: kProfileBranch,

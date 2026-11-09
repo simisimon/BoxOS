@@ -515,8 +515,8 @@ class _FooterDest extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   label,
-                  // The owner set has seven tabs; let two-word labels such as
-                  // "Box Settings" wrap instead of overflowing on phones.
+                  // The owner set has seven tabs; let longer labels wrap instead of
+                  // overflowing on phones.
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
