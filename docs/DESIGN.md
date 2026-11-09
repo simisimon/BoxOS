@@ -66,7 +66,7 @@ app. Backend checks are the security boundary: owner-only endpoints use
 | Task | Status | Note |
 | --- | --- | --- |
 | Create the box (name, logo, timezone) | [x] | |
-| Edit box identity after creation | [ ] | Settings screen says "lands on the roadmap" |
+| Edit box identity after creation | [x] | Box configuration → Box Identity (name, logo, timezone) via `PATCH /gyms/current`; slug stays fixed, a timezone change re-plans recurring classes |
 | Review join requests (Members → Requests, nav badge) | [x] | |
 | Manage members: roles, status (active / paused / removed), notes | [x] | Paused members lose box access |
 | Everything a trainer can do | [x] | Same endpoints |
@@ -85,7 +85,7 @@ other:
 
 1. **Transactional e-mail.** Verification and password reset do not work for
    real users yet. Small, and a prerequisite for launch.
-2. **Persisted box settings.** Edit box identity, plus booking rules
+2. **Persisted box settings.** Booking rules
    (booking window, cancellation cutoff, late-cancel / no-show handling) stored
    on the gym and enforced by `POST/DELETE /schedule/bookings`.
 3. **Memberships and payments.** Plans (unlimited, N per week, punch card),

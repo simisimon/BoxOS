@@ -30,6 +30,7 @@ import 'package:app/features/calendar/domain/repositories/schedule_repository.da
 import 'package:app/features/calendar/presentation/screens/calendar_screen.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/gyms/domain/models/gym_join_request.dart';
+import 'package:app/features/gyms/domain/models/gym_update_result.dart';
 import 'package:app/features/gyms/domain/models/my_gym_join_request.dart';
 import 'package:app/features/gyms/domain/repositories/gym_repository.dart';
 import 'package:app/features/gyms/presentation/screens/create_gym_screen.dart';
@@ -408,6 +409,24 @@ class RecordingGymRepository implements GymRepository {
       createdAt: '2026-04-13T10:00:00Z',
     ),
   ];
+
+  @override
+  Future<GymUpdateResult> updateCurrentGym({
+    String? name,
+    String? logoUrl,
+    String? timezone,
+  }) async {
+    final current = gyms.first;
+    final gym = GymSummary(
+      id: current.id,
+      name: name ?? current.name,
+      slug: current.slug,
+      logoUrl: logoUrl ?? current.logoUrl,
+      timezone: timezone ?? current.timezone,
+    );
+    gyms = [gym, ...gyms.skip(1)];
+    return GymUpdateResult(gym: gym, detachedSessions: 0);
+  }
 
   @override
   Future<GymSummary> createGym({
