@@ -129,7 +129,10 @@ class AuthController extends AsyncNotifier<AuthStatus> {
     );
   }
 
-  Future<void> deleteAccount({required String currentPassword}) async {
+  Future<void> deleteAccount({
+    required String currentPassword,
+    bool deleteEmptyGyms = false,
+  }) async {
     final authRepository = ref.read(authRepositoryProvider);
     final deviceRegistrationService = ref.read(
       deviceRegistrationServiceProvider,
@@ -139,7 +142,10 @@ class AuthController extends AsyncNotifier<AuthStatus> {
     } catch (_) {
       // Account deletion should continue even if device cleanup fails.
     }
-    await authRepository.deleteAccount(currentPassword: currentPassword);
+    await authRepository.deleteAccount(
+      currentPassword: currentPassword,
+      deleteEmptyGyms: deleteEmptyGyms,
+    );
     ref.invalidate(currentProfileProvider);
     state = const AsyncValue.data(AuthStatus.unauthenticated);
   }

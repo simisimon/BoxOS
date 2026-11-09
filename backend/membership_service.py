@@ -4,7 +4,7 @@ from typing import Any, TYPE_CHECKING
 
 from backend.db import get_connection
 from backend.security import isoformat, now_utc
-from backend.validation import decode_roles
+from backend.validation import decode_roles, encode_roles
 
 if TYPE_CHECKING:
     from backend.db import ManagedConnection, Row
@@ -181,3 +181,126 @@ def profile_payload(row: Row) -> dict[str, Any]:
         "active_gym": active_gym_payload(active_membership),
         "memberships": [membership_payload(membership) for membership in memberships],
     }
+
+
+OWNER_ROLES_FILTER = "gym_memberships.roles_json like '%\"admin\"%'"
+
+
+def is_gym_owner(connection: ManagedConnection, user_id: int, gym_id: int) -> bool:
+    row = connection.execute(
+        f"""
+        select gym_memberships.id
+        from gym_memberships
+        join users on users.id = gym_memberships.user_id
+        where gym_memberships.user_id = ? and gym_memberships.gym_id = ?
+          and gym_memberships.status = 'active'
+          and users.deleted_at is null
+          and {OWNER_ROLES_FILTER}
+        """,
+        (user_id, gym_id),
+    ).fetchone()
+    return row is not None
+
+
+def sole_owned_gyms(connection: ManagedConnection, user_id: int) -> list[dict[str, Any]]:
+    """Gyms the user owns where no other (non-deleted) owner is left.
+
+    Each entry lists the other members who could take over ownership. An empty
+    ``members`` list means nobody else belongs to the gym.
+    """
+    gyms = connection.execute(
+        f"""
+        select gyms.id, gyms.name
+        from gym_memberships
+        join gyms on gyms.id = gym_memberships.gym_id
+        where gym_memberships.user_id = ?
+          and gym_memberships.status = 'active'
+          and {OWNER_ROLES_FILTER}
+          and not exists (
+            select 1
+            from gym_memberships as other
+            join users as other_user on other_user.id = other.user_id
+            where other.gym_id = gym_memberships.gym_id
+              and other.user_id <> gym_memberships.user_id
+              and other.status = 'active'
+              and other_user.deleted_at is null
+              and other.roles_json like '%"admin"%'
+          )
+        order by lower(gyms.name) asc, gyms.id asc
+        """,
+        (user_id,),
+    ).fetchall()
+    result: list[dict[str, Any]] = []
+    for gym in gyms:
+        members = connection.execute(
+            """
+            select users.id, users.email, users.display_name, users.nickname, users.profile_image_url,
+                   gym_memberships.active_role, gym_memberships.status
+            from gym_memberships
+            join users on users.id = gym_memberships.user_id
+            where gym_memberships.gym_id = ?
+              and gym_memberships.user_id <> ?
+              and gym_memberships.status in ('active', 'paused')
+              and users.deleted_at is null
+            order by case gym_memberships.active_role when 'trainer' then 0 else 1 end,
+                     lower(coalesce(nullif(users.display_name, ''), users.email)) asc
+            """,
+            (gym["id"], user_id),
+        ).fetchall()
+        result.append(
+            {
+                "id": gym["id"],
+                "name": gym["name"],
+                "members": [
+                    {
+                        "id": member["id"],
+                        "email": member["email"],
+                        "display_name": member["display_name"],
+                        "nickname": member["nickname"],
+                        "profile_image_url": member["profile_image_url"],
+                        "role": member["active_role"],
+                        "status": member["status"],
+                    }
+                    for member in members
+                ],
+            }
+        )
+    return result
+
+
+def make_gym_owner(connection: ManagedConnection, *, gym_id: int, user_id: int) -> bool:
+    """Give an existing (active or paused) member the owner role in a gym.
+
+    The member keeps their other roles, becomes active, and switches to the
+    owner role. Returns False when the user is not a member of the gym.
+    """
+    membership = connection.execute(
+        """
+        select gym_memberships.id, gym_memberships.roles_json
+        from gym_memberships
+        join users on users.id = gym_memberships.user_id
+        where gym_memberships.user_id = ? and gym_memberships.gym_id = ?
+          and gym_memberships.status in ('active', 'paused')
+          and users.deleted_at is null
+        """,
+        (user_id, gym_id),
+    ).fetchone()
+    if membership is None:
+        return False
+    roles = ["admin"] + [role for role in decode_roles(membership["roles_json"]) if role != "admin"]
+    timestamp = isoformat(now_utc())
+    connection.execute(
+        """
+        update gym_memberships
+        set active_role = 'admin', roles_json = ?, status = 'active', updated_at = ?
+        where id = ?
+        """,
+        (encode_roles(roles), timestamp, membership["id"]),
+    )
+    # Owner screens need the owner account type as well as the owner role.
+    connection.execute(
+        "update users set account_type = 'admin', updated_at = ? where id = ?",
+        (timestamp, user_id),
+    )
+    sync_user_context(connection, user_id)
+    return True

@@ -1,6 +1,7 @@
 import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
+import 'package:app/features/auth/domain/models/account_deletion_check.dart';
 import 'package:app/features/auth/domain/models/auth_tokens.dart';
 import 'package:app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:dio/dio.dart';
@@ -133,11 +134,37 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({required String currentPassword}) async {
+  Future<AccountDeletionCheck> fetchAccountDeletionCheck() async {
+    final tokens = await _requireTokens();
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/auth/account/deletion-check',
+      options: Options(headers: _authHeaders(tokens.accessToken)),
+    );
+    return AccountDeletionCheck.fromJson(response.data ?? const {});
+  }
+
+  @override
+  Future<void> addGymOwner({required int gymId, required int userId}) async {
+    final tokens = await _requireTokens();
+    await _dio.post<void>(
+      '/gyms/$gymId/owners',
+      data: {'user_id': userId},
+      options: Options(headers: _authHeaders(tokens.accessToken)),
+    );
+  }
+
+  @override
+  Future<void> deleteAccount({
+    required String currentPassword,
+    bool deleteEmptyGyms = false,
+  }) async {
     final tokens = await _requireTokens();
     await _dio.delete<void>(
       '/auth/account',
-      data: {'current_password': currentPassword},
+      data: {
+        'current_password': currentPassword,
+        'delete_empty_gyms': deleteEmptyGyms,
+      },
       options: Options(headers: _authHeaders(tokens.accessToken)),
     );
     await _tokenStorage.clearTokens();

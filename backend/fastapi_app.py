@@ -109,6 +109,13 @@ class ChangePasswordRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     current_password: str
+    # Required to delete boxes the user owns alone and that have no other
+    # members; those boxes are deleted together with the account.
+    delete_empty_gyms: bool = False
+
+
+class AddGymOwnerRequest(BaseModel):
+    user_id: int
 
 
 class DeviceRegisterRequest(BaseModel):
@@ -3375,6 +3382,56 @@ def change_password(body: ChangePasswordRequest, session: dict[str, Any] = Depen
         connection.close()
 
 
+@app.get("/auth/account/deletion-check")
+def account_deletion_check(session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    """List what blocks deleting the account.
+
+    ``gyms_needing_owner`` are boxes the user owns alone that still have other
+    members: one of them must be made owner first. ``empty_gyms`` are boxes the
+    user owns alone with no other members: they are deleted with the account.
+    """
+    connection = db.get_connection()
+    try:
+        gyms = membership_service.sole_owned_gyms(connection, session["user_id"])
+        return {
+            "gyms_needing_owner": [gym for gym in gyms if gym["members"]],
+            "empty_gyms": [{"id": gym["id"], "name": gym["name"]} for gym in gyms if not gym["members"]],
+        }
+    finally:
+        connection.close()
+
+
+@app.post("/gyms/{gym_id}/owners")
+def add_gym_owner(
+    gym_id: int,
+    body: AddGymOwnerRequest,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    user_id = validation.require_user_id(body.user_id)
+    connection = db.get_connection()
+    try:
+        if not membership_service.is_gym_owner(connection, session["user_id"], gym_id):
+            raise HTTPException(status_code=HTTPStatus.FORBIDDEN.value, detail="The owner role is required for this action.")
+        if user_id == session["user_id"]:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="You are already an owner of this box.")
+        with connection:
+            if not membership_service.make_gym_owner(connection, gym_id=gym_id, user_id=user_id):
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Gym member not found.")
+            audit.write_audit_log(
+                connection,
+                gym_id=gym_id,
+                actor_user_id=session["user_id"],
+                target_user_id=user_id,
+                action="gym_owner_added",
+                entity_type="gym",
+                entity_id=gym_id,
+                details={},
+            )
+        return {"message": "Owner added."}
+    finally:
+        connection.close()
+
+
 @app.delete("/auth/account")
 def delete_account(body: DeleteAccountRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
     current_password = validation.require_password(body.current_password, label="Current password")
@@ -3386,8 +3443,57 @@ def delete_account(body: DeleteAccountRequest, session: dict[str, Any] = Depends
         ).fetchone()
         if user is None or not security.verify_password(current_password, user["password_hash"]):
             raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED.value, detail="Current password is incorrect.")
+        sole_owned = membership_service.sole_owned_gyms(connection, user["id"])
+        gyms_needing_owner = [gym for gym in sole_owned if gym["members"]]
+        if gyms_needing_owner:
+            names = ", ".join(gym["name"] for gym in gyms_needing_owner)
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT.value,
+                detail=f"You are the only owner of {names}. Make another member owner before deleting your account.",
+            )
+        empty_gyms = [gym for gym in sole_owned if not gym["members"]]
+        if empty_gyms and not body.delete_empty_gyms:
+            names = ", ".join(gym["name"] for gym in empty_gyms)
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT.value,
+                detail=f"{names} has no other members and will be deleted with your account. Confirm to continue.",
+            )
         with connection:
             now = security.now_utc()
+            for gym in empty_gyms:
+                connection.execute("delete from gyms where id = ?", (gym["id"],))
+            # gyms.created_by_user_id cascades on delete, so the purge of this
+            # user would take the boxes they created with it. Hand the
+            # reference to a remaining owner.
+            connection.execute(
+                """
+                update gyms
+                set created_by_user_id = (
+                  select gym_memberships.user_id
+                  from gym_memberships
+                  join users on users.id = gym_memberships.user_id
+                  where gym_memberships.gym_id = gyms.id
+                    and gym_memberships.user_id <> gyms.created_by_user_id
+                    and gym_memberships.status = 'active'
+                    and users.deleted_at is null
+                    and gym_memberships.roles_json like '%"admin"%'
+                  order by gym_memberships.created_at asc, gym_memberships.id asc
+                  limit 1
+                ), updated_at = ?
+                where created_by_user_id = ?
+                  and exists (
+                    select 1
+                    from gym_memberships
+                    join users on users.id = gym_memberships.user_id
+                    where gym_memberships.gym_id = gyms.id
+                      and gym_memberships.user_id <> gyms.created_by_user_id
+                      and gym_memberships.status = 'active'
+                      and users.deleted_at is null
+                      and gym_memberships.roles_json like '%"admin"%'
+                  )
+                """,
+                (security.isoformat(now), user["id"]),
+            )
             connection.execute(
                 """
                 update users

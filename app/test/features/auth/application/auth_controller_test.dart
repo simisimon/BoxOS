@@ -5,6 +5,7 @@ import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/application/auth_state.dart';
 import 'package:app/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
+import 'package:app/features/auth/domain/models/account_deletion_check.dart';
 import 'package:app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:app/features/auth/domain/models/auth_tokens.dart';
 import 'package:app/features/devices/data/device_registration_service.dart';
@@ -114,7 +115,17 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({required String currentPassword}) async {
+  Future<AccountDeletionCheck> fetchAccountDeletionCheck() async =>
+      const AccountDeletionCheck();
+
+  @override
+  Future<void> addGymOwner({required int gymId, required int userId}) async {}
+
+  @override
+  Future<void> deleteAccount({
+    required String currentPassword,
+    bool deleteEmptyGyms = false,
+  }) async {
     lastDeleteCurrentPassword = currentPassword;
     _hasSession = false;
   }

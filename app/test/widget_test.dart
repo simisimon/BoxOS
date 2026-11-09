@@ -8,6 +8,7 @@ import 'package:app/app.dart';
 import 'package:app/core/routing/router.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/data/repositories/api_auth_repository.dart';
+import 'package:app/features/auth/domain/models/account_deletion_check.dart';
 import 'package:app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
@@ -142,7 +143,17 @@ class RecordingAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({required String currentPassword}) async {
+  Future<AccountDeletionCheck> fetchAccountDeletionCheck() async =>
+      const AccountDeletionCheck();
+
+  @override
+  Future<void> addGymOwner({required int gymId, required int userId}) async {}
+
+  @override
+  Future<void> deleteAccount({
+    required String currentPassword,
+    bool deleteEmptyGyms = false,
+  }) async {
     deleteCurrentPassword = currentPassword;
     isSignedIn = false;
   }
