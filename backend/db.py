@@ -473,6 +473,7 @@ alter table gyms add column if not exists stripe_details_submitted integer not n
 alter table member_plans add column if not exists stripe_checkout_session_id text;
 
 alter table member_plans add column if not exists stripe_subscription_id text;
+alter table member_plans add column if not exists stripe_paid_invoice_id text;
 
 create index if not exists member_plans_stripe_subscription_idx on member_plans (stripe_subscription_id);
 
