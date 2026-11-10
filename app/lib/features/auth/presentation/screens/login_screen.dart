@@ -145,6 +145,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 foregroundColor: Colors.purple,
               ),
             ),
+            const SizedBox(height: 8),
+            // Seeded by backend/db.py (seed_default_users) and joined to the
+            // demo box by `python -m backend.seed_demo`.
+            OutlinedButton.icon(
+              onPressed: isLoading
+                  ? null
+                  : () => _quickLogin('demo@boxos.app', 'BoxOS123!'),
+              icon: const Icon(Icons.fitness_center_rounded, size: 18),
+              label: const Text('Demo Member'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.teal,
+              ),
+            ),
           ],
         ),
       ),
