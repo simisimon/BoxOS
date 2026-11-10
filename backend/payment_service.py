@@ -324,7 +324,6 @@ def subscription_checkout_url(
         {
             "mode": "subscription",
             "customer": customer_id,
-            "payment_method_types": ["sepa_debit", "card"],
             "line_items": [
                 {
                     "quantity": 1,
