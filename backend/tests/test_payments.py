@@ -181,7 +181,8 @@ class SubscriptionTests(FastApiTestCase):
         self.assertEqual(params["mode"], "subscription")
         self.assertEqual(params["line_items"][0]["price_data"]["unit_amount"], 8900)
         self.assertEqual(params["line_items"][0]["price_data"]["recurring"], {"interval": "month"})
-        self.assertIn("sepa_debit", params["payment_method_types"])
+        # Payment methods come from the connected account's dashboard settings.
+        self.assertNotIn("payment_method_types", params)
         self.assertEqual(self.fake.customers[0]["email"], settings.DEMO_EMAIL)
 
         self.send("evt_1", "checkout.session.completed", {
