@@ -216,6 +216,30 @@ class SubscriptionTests(FastApiTestCase):
         self.send("evt_5", "customer.subscription.deleted", {"id": "sub_1"})
         self.assertEqual(self.owner_plan()["state"], "ended")
 
+    def test_invoice_events_before_checkout_completed_still_count(self) -> None:
+        # Stripe does not order webhooks: the first invoice is often paid
+        # before checkout.session.completed arrives.
+        member_plan = self.assign()
+        self.assertEqual(self.checkout(member_plan["id"]).status_code, 200)
+        metadata = {"boxos_member_plan_id": str(member_plan["id"]), "boxos_gym_id": str(self.gym_id)}
+        invoice = {"id": "in_1", "parent": {"subscription_details": {"subscription": "sub_1", "metadata": metadata}},
+                   "amount_paid": 8900, "amount_due": 8900, "currency": "eur", "number": "ABC-0001"}
+        self.assertEqual(self.send("evt_1", "invoice.paid", invoice).json()["result"], "paid")
+        # Late events for the same, already paid invoice keep it paid.
+        self.assertEqual(self.send("evt_2", "invoice.finalized", invoice).json()["result"], "ignored")
+        self.send("evt_3", "checkout.session.completed", {
+            "mode": "subscription", "subscription": "sub_1", "metadata": metadata,
+        })
+        plan = self.owner_plan()
+        self.assertTrue(plan["paid_online"])
+        self.assertEqual(plan["payment_status"], "paid")
+        self.assertEqual(
+            self.count_rows("notifications", "user_id = ? and title = 'Payment received'", (self.athlete_id,)), 1
+        )
+        # Next month's invoice is due again.
+        self.send("evt_4", "invoice.finalized", {**invoice, "id": "in_2", "amount_paid": 0})
+        self.assertEqual(self.owner_plan()["payment_status"], "due")
+
     def test_webhook_rejects_bad_signatures(self) -> None:
         self.assertEqual(self.send("evt_x", "invoice.paid", {}, signature="forged").status_code, 400)
 

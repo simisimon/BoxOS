@@ -388,6 +388,38 @@ def _invoice_subscription(invoice: Any) -> str | None:
     return _dig(invoice, "parent", "subscription_details", "subscription") or _dig(invoice, "subscription")
 
 
+def _plan_for_invoice(connection: ManagedConnection, invoice: Any) -> Row | None:
+    """The member plan an invoice bills. Stripe does not order webhooks: the
+    first invoice.paid often arrives before checkout.session.completed has
+    linked the subscription, so fall back to the plan id in the
+    subscription's metadata (copied onto the invoice) and link it here."""
+    subscription_id = _invoice_subscription(invoice)
+    member_plan = _plan_for_subscription(connection, subscription_id)
+    if member_plan is not None or not subscription_id:
+        return member_plan
+    metadata = _dig(invoice, "parent", "subscription_details", "metadata") or _dig(
+        invoice, "subscription_details", "metadata"
+    )
+    member_plan_id = _dig(metadata, "boxos_member_plan_id")
+    gym_id = _dig(metadata, "boxos_gym_id")
+    if not member_plan_id or not gym_id:
+        return None
+    member_plan = connection.execute(
+        "select * from member_plans where id = ? and gym_id = ?", (int(member_plan_id), int(gym_id))
+    ).fetchone()
+    if member_plan is None or member_plan["stripe_subscription_id"] not in (None, str(subscription_id)):
+        return None
+    _link_subscription(connection, member_plan["id"], str(subscription_id))
+    return _plan_for_subscription(connection, str(subscription_id))
+
+
+def _link_subscription(connection: ManagedConnection, member_plan_id: int, subscription_id: str) -> None:
+    connection.execute(
+        "update member_plans set stripe_subscription_id = ?, updated_at = ? where id = ?",
+        (subscription_id, isoformat(now_utc()), member_plan_id),
+    )
+
+
 def _set_payment_status(connection: ManagedConnection, member_plan: Row, status: str) -> None:
     connection.execute(
         "update member_plans set payment_status = ?, updated_at = ? where id = ?",
@@ -424,15 +456,17 @@ def _apply_event(connection: ManagedConnection, event_type: str, data: Any) -> s
         subscription_id = _dig(data, "subscription")
         if not member_plan_id or not subscription_id:
             return "ignored"
-        connection.execute(
-            "update member_plans set stripe_subscription_id = ?, updated_at = ? where id = ?",
-            (str(subscription_id), isoformat(now_utc()), int(member_plan_id)),
-        )
+        _link_subscription(connection, int(member_plan_id), str(subscription_id))
         return "subscription_linked"
 
     if event_type in ("invoice.paid", "invoice.payment_failed", "invoice.finalized"):
-        member_plan = _plan_for_subscription(connection, _invoice_subscription(data))
+        member_plan = _plan_for_invoice(connection, data)
         if member_plan is None:
+            return "ignored"
+        invoice_id = _dig(data, "id")
+        # An invoice already paid stays paid, even if its finalized or a
+        # failed attempt's event is delivered after invoice.paid.
+        if event_type != "invoice.paid" and invoice_id and invoice_id == member_plan["stripe_paid_invoice_id"]:
             return "ignored"
         amount = int(_dig(data, "amount_paid") or _dig(data, "amount_due") or 0)
         currency = str(_dig(data, "currency") or "eur")
@@ -444,6 +478,11 @@ def _apply_event(connection: ManagedConnection, event_type: str, data: Any) -> s
             return "due"
         if event_type == "invoice.paid":
             _set_payment_status(connection, member_plan, "paid")
+            if invoice_id:
+                connection.execute(
+                    "update member_plans set stripe_paid_invoice_id = ? where id = ?",
+                    (str(invoice_id), member_plan["id"]),
+                )
             if amount > 0:
                 notifications_core.create_notification(
                     connection,
