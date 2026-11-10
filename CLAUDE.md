@@ -21,6 +21,8 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   in a git-ignored `.env` next to `docker-compose.yml`. Without it payments are
   hidden. All Stripe calls go through `backend/payment_service.py` (`client`
   is swapped for a fake in `backend/tests/test_payments.py`).
+  Webhooks locally: `stripe listen --forward-connect-to localhost:8081/stripe/webhook`
+  and put the printed `whsec_...` in `.env` as `BOXOS_STRIPE_WEBHOOK_SECRET`.
 - Demo data: `docker compose exec backend-dev python -m backend.seed_demo`.
   The login screen has a "Demo Owner" quick login for local testing.
 

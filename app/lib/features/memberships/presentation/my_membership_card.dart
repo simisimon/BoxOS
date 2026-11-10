@@ -1,10 +1,12 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/platform/open_external_url.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Null when the box cannot be reached; the card then hides itself instead of
@@ -225,6 +227,37 @@ class _MyMembershipCardState extends ConsumerState<MyMembershipCard> {
     }
   }
 
+  Future<void> _setUpPayment(MemberPlan plan) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      final url = await ref
+          .read(membershipRepositoryProvider)
+          .createMembershipCheckout(plan.id);
+      final opened = await openExternalUrl(url);
+      if (!opened) {
+        await Clipboard.setData(ClipboardData(text: url));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Payment link copied. Open it in your browser to continue.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Could not open the payment'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _withdraw(MemberPlan request) async {
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showAppConfirmDialog(
@@ -259,6 +292,16 @@ class _MyMembershipCardState extends ConsumerState<MyMembershipCard> {
     final current = membership.current;
     final upcoming = membership.upcoming;
     final request = membership.request;
+    final payable = current ?? upcoming;
+    // The plan the member can still set up a monthly Stripe payment for.
+    final toPay =
+        membership.onlinePayments &&
+            payable != null &&
+            payable.billingPeriod == BillingPeriod.monthly &&
+            payable.priceCents > 0 &&
+            !payable.paidOnline
+        ? payable
+        : null;
 
     return AppCard(
       child: Column(
@@ -359,6 +402,34 @@ class _MyMembershipCardState extends ConsumerState<MyMembershipCard> {
                   child: const Text('Withdraw'),
                 ),
               ],
+            ),
+          ],
+          if (payable != null && payable.paidOnline) ...[
+            const SizedBox(height: appSpaceMd),
+            Text(
+              '${payable.priceLabel} is paid monthly via Stripe. Invoices '
+              'arrive by email.',
+              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+            ),
+          ],
+          if (toPay != null) ...[
+            const SizedBox(height: appSpaceLg),
+            Text(
+              'Pay ${toPay.priceLabel} by SEPA direct debit or card, '
+              'charged on your plan\'s start day each month.',
+              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+            ),
+            const SizedBox(height: appSpaceSm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppPrimaryButton(
+                label: 'Set up payment',
+                icon: Icons.credit_card_rounded,
+                onPressed: _busy ? null : () => _setUpPayment(toPay),
+                busy: _busy,
+                size: AppButtonSize.md,
+                expand: false,
+              ),
             ),
           ],
           const SizedBox(height: appSpaceLg),

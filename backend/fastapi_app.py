@@ -261,6 +261,13 @@ class MemberPlanIdRequest(BaseModel):
     member_plan_id: int
 
 
+class EndMemberPlanRequest(BaseModel):
+    member_plan_id: int
+    # Keep the plan until the end of the current (paid) month and stop the
+    # next debit, instead of ending it today.
+    at_period_end: bool = False
+
+
 class UpdateActiveRoleRequest(BaseModel):
     role: str
 
@@ -1749,6 +1756,39 @@ def create_stripe_onboarding_link(
         connection.close()
 
 
+@app.post("/membership/me/checkout")
+def create_membership_checkout(
+    body: MemberPlanIdRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """Member sets up the monthly payment for their plan: a Stripe Checkout
+    link on the box's account. The webhook marks the plan paid."""
+    connection = db.get_connection()
+    try:
+        url = payment_service.subscription_checkout_url(
+            connection,
+            gym_id=session["active_gym_id"],
+            user_id=session["user_id"],
+            member_plan_id=body.member_plan_id,
+        )
+        return {"url": url}
+    finally:
+        connection.close()
+
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request) -> dict[str, Any]:
+    """Events from the boxes' connected Stripe accounts (signed by Stripe).
+    Locally: ``stripe listen --forward-connect-to localhost:8081/stripe/webhook``."""
+    payload = await request.body()
+    event = payment_service.client.construct_event(payload, request.headers.get("stripe-signature"))
+    connection = db.get_connection()
+    try:
+        return {"result": payment_service.handle_event(connection, event)}
+    finally:
+        connection.close()
+
+
 @app.get("/membership/plans")
 def list_membership_plans(
     include_archived: bool = False,
@@ -1953,6 +1993,7 @@ def get_my_membership(
             "require_plan_for_booking": bool(gym["require_plan_for_booking"]),
             "extra_tokens": _extra_tokens_payload(connection, gym, session["user_id"]),
             "extra_token_price_cents": gym["extra_token_price_cents"],
+            "online_payments": payment_service.gym_accepts_payments(connection, gym_id),
         }
     finally:
         connection.close()
@@ -2340,7 +2381,7 @@ def update_member_plan(
 
 @app.post("/membership/assignments/end")
 def end_member_plan(
-    body: MemberPlanIdRequest,
+    body: EndMemberPlanRequest,
     session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     gym_id = session["active_gym_id"]
@@ -2351,7 +2392,9 @@ def end_member_plan(
         if row["status"] != "active":
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Only active plans can be ended.")
         with connection:
-            plan_service.end_member_plan(connection, member_plan=row, gym_timezone=gym["timezone"])
+            payment_service.end_subscribed_plan(
+                connection, member_plan=row, gym_timezone=gym["timezone"], at_period_end=body.at_period_end
+            )
             audit.write_audit_log(
                 connection,
                 gym_id=gym_id,
@@ -2360,7 +2403,22 @@ def end_member_plan(
                 action="member_plan_ended",
                 entity_type="member_plan",
                 entity_id=row["id"],
-                details={"plan_name": row["plan_name"]},
+                details={"plan_name": row["plan_name"], "at_period_end": body.at_period_end},
+            )
+            notifications_core.create_notification(
+                connection,
+                user_id=row["user_id"],
+                gym_id=gym_id,
+                type="membership_plan",
+                title="Membership plan ending" if body.at_period_end else "Membership plan ended",
+                body=(
+                    f"Your box ended {row['plan_name']}. It stays valid until the end of the current month; "
+                    "no further payments are taken."
+                    if body.at_period_end
+                    else f"Your box ended {row['plan_name']} as of today. No further payments are taken."
+                ),
+                entity_type="member_plan",
+                entity_id=row["id"],
             )
         row = plan_service.get_member_plan_row(connection, gym_id, body.member_plan_id)
         return {"plan": _member_plan_payloads(connection, gym, [row])[0]}

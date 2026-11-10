@@ -14,7 +14,9 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Any
 
-from backend import settings
+from datetime import date, datetime, time, timedelta, timezone
+
+from backend import notifications_core, plan_service, schedule_service, settings
 from backend.db import ManagedConnection, Row
 from backend.security import isoformat, now_utc
 from backend.validation import ApiError
@@ -54,6 +56,10 @@ class StripeClient:
         except stripe.StripeError as error:
             message = getattr(error, "user_message", None) or str(error) or "Stripe request failed."
             raise ApiError(HTTPStatus.BAD_GATEWAY, f"Stripe: {message}") from error
+        except ApiError:
+            raise
+        except Exception as error:  # e.g. an outdated stripe package
+            raise ApiError(HTTPStatus.BAD_GATEWAY, f"Stripe request failed: {error}") from error
 
     def create_account(self, *, email: str, country: str, business_name: str) -> str:
         account = self._call(
@@ -106,6 +112,48 @@ class StripeClient:
             )
         )
         return str(link.url)
+
+    # --- calls on a box's connected account (direct charges) ----------------
+
+    def create_customer(self, account_id: str, *, email: str, name: str, metadata: dict[str, str]) -> str:
+        customer = self._call(
+            lambda stripe_client: stripe_client.v1.customers.create(
+                {"email": email, "name": name, "metadata": metadata},
+                {"stripe_account": account_id},
+            )
+        )
+        return str(customer.id)
+
+    def create_subscription_checkout(self, account_id: str, params: dict[str, Any]) -> dict[str, str]:
+        session = self._call(
+            lambda stripe_client: stripe_client.v1.checkout.sessions.create(params, {"stripe_account": account_id})
+        )
+        return {"id": str(session.id), "url": str(session.url)}
+
+    def cancel_subscription(self, account_id: str, subscription_id: str, *, at_period_end: bool) -> None:
+        if at_period_end:
+            self._call(
+                lambda stripe_client: stripe_client.v1.subscriptions.update(
+                    subscription_id, {"cancel_at_period_end": True}, {"stripe_account": account_id}
+                )
+            )
+        else:
+            self._call(
+                lambda stripe_client: stripe_client.v1.subscriptions.cancel(
+                    subscription_id, {}, {"stripe_account": account_id}
+                )
+            )
+
+    def construct_event(self, payload: bytes, signature: str | None) -> Any:
+        """Verify the webhook signature and parse the event."""
+        import stripe
+
+        if not settings.STRIPE_WEBHOOK_SECRET:
+            raise ApiError(HTTPStatus.SERVICE_UNAVAILABLE, "Stripe webhooks are not set up on this server.")
+        try:
+            return stripe.Webhook.construct_event(payload, signature, settings.STRIPE_WEBHOOK_SECRET)
+        except (ValueError, stripe.SignatureVerificationError) as error:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Invalid Stripe webhook.") from error
 
 
 client: StripeClient = StripeClient()
@@ -189,3 +237,251 @@ def onboarding_link(connection: ManagedConnection, gym_id: int, *, owner_email: 
         refresh_url=f"{settings_url}?stripe=refresh",
         return_url=f"{settings_url}?stripe=return",
     )
+
+
+# --- monthly subscriptions -----------------------------------------------------
+#
+# A member pays a monthly member plan through Stripe Checkout on the box's
+# account. The subscription bills on the plan's start day each month: a plan
+# starting later is free until then, a plan that already started charges the
+# rest of the current month now (pro rata) and the full price from the next
+# start day on. Webhooks (below) keep ``member_plans.payment_status`` in sync.
+
+
+def gym_accepts_payments(connection: ManagedConnection, gym_id: int) -> bool:
+    if not is_configured():
+        return False
+    gym = _gym_row(connection, gym_id)
+    return bool(gym["stripe_account_id"]) and bool(gym["stripe_charges_enabled"])
+
+
+def can_pay_online(member_plan: Row) -> bool:
+    return member_plan["status"] == "active" and member_plan["billing_period"] == "monthly"
+
+
+def _customer_id(connection: ManagedConnection, gym: Row, user_id: int) -> str:
+    row = connection.execute(
+        "select customer_id from stripe_customers where gym_id = ? and user_id = ?",
+        (gym["id"], user_id),
+    ).fetchone()
+    if row is not None:
+        return str(row["customer_id"])
+    user = connection.execute("select email, display_name from users where id = ?", (user_id,)).fetchone()
+    customer_id = client.create_customer(
+        gym["stripe_account_id"],
+        email=user["email"],
+        name=user["display_name"] or user["email"],
+        metadata={"boxos_user_id": str(user_id), "boxos_gym_id": str(gym["id"])},
+    )
+    with connection:
+        connection.execute(
+            "insert into stripe_customers (gym_id, user_id, customer_id, created_at) values (?, ?, ?, ?)",
+            (gym["id"], user_id, customer_id, isoformat(now_utc())),
+        )
+    return customer_id
+
+
+def _epoch(day: date) -> int:
+    """Noon UTC of ``day``: safely on that calendar day in European time zones."""
+    return int(datetime.combine(day, time(12, 0), tzinfo=timezone.utc).timestamp())
+
+
+def billing_schedule(starts_on: date, today: date) -> dict[str, Any]:
+    """Checkout ``subscription_data`` that bills on ``starts_on``'s day."""
+    if starts_on > today:
+        return {"billing_cycle_anchor": _epoch(starts_on), "proration_behavior": "none"}
+    period_start, next_start = plan_service.token_period_bounds(starts_on, "month", today)
+    if period_start == today:
+        return {}
+    return {"billing_cycle_anchor": _epoch(next_start), "proration_behavior": "create_prorations"}
+
+
+def subscription_checkout_url(
+    connection: ManagedConnection, *, gym_id: int, user_id: int, member_plan_id: int
+) -> str:
+    require_configured()
+    gym = _gym_row(connection, gym_id)
+    if not gym_accepts_payments(connection, gym_id):
+        raise ApiError(HTTPStatus.CONFLICT, "Your box does not take online payments yet.")
+    member_plan = plan_service.get_member_plan_row(connection, gym_id, member_plan_id)
+    if member_plan["user_id"] != user_id:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Membership plan not found.")
+    gym_settings = plan_service.gym_plan_settings(connection, gym_id)
+    today = schedule_service.local_today(gym_settings["timezone"])
+    state = plan_service.member_plan_state(member_plan, today)
+    if not can_pay_online(member_plan) or state not in ("current", "upcoming"):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Only current or upcoming monthly plans can be paid online.")
+    if member_plan["stripe_subscription_id"]:
+        raise ApiError(HTTPStatus.CONFLICT, "Payment for this plan is already set up.")
+    if member_plan["price_cents"] <= 0:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "This plan is free.")
+    customer_id = _customer_id(connection, gym, user_id)
+    starts_on = date.fromisoformat(member_plan["starts_on"]) if member_plan["starts_on"] else today
+    metadata = {"boxos_member_plan_id": str(member_plan["id"]), "boxos_gym_id": str(gym_id)}
+    profile_url = f"{settings.APP_BASE_URL}/#/profile"
+    session = client.create_subscription_checkout(
+        gym["stripe_account_id"],
+        {
+            "mode": "subscription",
+            "customer": customer_id,
+            "payment_method_types": ["sepa_debit", "card"],
+            "line_items": [
+                {
+                    "quantity": 1,
+                    "price_data": {
+                        "currency": gym_settings["currency"].lower(),
+                        "unit_amount": member_plan["price_cents"],
+                        "recurring": {"interval": "month"},
+                        "product_data": {"name": member_plan["plan_name"]},
+                    },
+                }
+            ],
+            "subscription_data": {**billing_schedule(starts_on, today), "metadata": metadata},
+            "metadata": metadata,
+            "client_reference_id": str(member_plan["id"]),
+            "success_url": f"{profile_url}?payment=success",
+            "cancel_url": f"{profile_url}?payment=cancelled",
+        },
+    )
+    with connection:
+        connection.execute(
+            "update member_plans set stripe_checkout_session_id = ?, updated_at = ? where id = ?",
+            (session["id"], isoformat(now_utc()), member_plan["id"]),
+        )
+    return session["url"]
+
+
+def end_subscribed_plan(
+    connection: ManagedConnection, *, member_plan: Row, gym_timezone: str, at_period_end: bool
+) -> None:
+    """Owner ends a plan. With a Stripe subscription, ``at_period_end`` keeps
+    the plan until the end of the paid month and stops the next debit;
+    otherwise the plan (and subscription) ends today."""
+    gym = _gym_row(connection, member_plan["gym_id"])
+    subscription_id = member_plan["stripe_subscription_id"]
+    if subscription_id and gym["stripe_account_id"]:
+        client.cancel_subscription(gym["stripe_account_id"], subscription_id, at_period_end=at_period_end)
+    if not at_period_end:
+        plan_service.end_member_plan(connection, member_plan=member_plan, gym_timezone=gym_timezone)
+        return
+    today = schedule_service.local_today(gym_timezone)
+    starts_on = date.fromisoformat(member_plan["starts_on"]) if member_plan["starts_on"] else today
+    _, period_end = plan_service.token_period_bounds(starts_on, "month", max(today, starts_on))
+    connection.execute(
+        "update member_plans set ends_on = ?, updated_at = ? where id = ?",
+        ((period_end - timedelta(days=1)).isoformat(), isoformat(now_utc()), member_plan["id"]),
+    )
+
+
+# --- webhooks ------------------------------------------------------------------
+
+
+def _plan_for_subscription(connection: ManagedConnection, subscription_id: str | None) -> Row | None:
+    if not subscription_id:
+        return None
+    return connection.execute(
+        "select * from member_plans where stripe_subscription_id = ? order by id desc limit 1",
+        (subscription_id,),
+    ).fetchone()
+
+
+def _invoice_subscription(invoice: Any) -> str | None:
+    return _dig(invoice, "parent", "subscription_details", "subscription") or _dig(invoice, "subscription")
+
+
+def _set_payment_status(connection: ManagedConnection, member_plan: Row, status: str) -> None:
+    connection.execute(
+        "update member_plans set payment_status = ?, updated_at = ? where id = ?",
+        (status, isoformat(now_utc()), member_plan["id"]),
+    )
+
+
+def _money(cents: int, currency: str) -> str:
+    symbol = {"eur": "€", "usd": "$", "gbp": "£"}.get(currency.lower(), f"{currency.upper()} ")
+    return f"{symbol}{cents / 100:.2f}"
+
+
+def handle_event(connection: ManagedConnection, event: Any) -> str:
+    """Apply one Stripe event. Returns what was done (for logs and tests).
+    Events already seen are skipped, so Stripe's retries are harmless."""
+    event_id = str(_dig(event, "id"))
+    event_type = str(_dig(event, "type"))
+    seen = connection.execute("select 1 from stripe_events where id = ?", (event_id,)).fetchone()
+    if seen is not None:
+        return "duplicate"
+    data = _dig(event, "data", "object")
+    with connection:
+        result = _apply_event(connection, event_type, data)
+        connection.execute(
+            "insert into stripe_events (id, type, received_at) values (?, ?, ?)",
+            (event_id, event_type, isoformat(now_utc())),
+        )
+    return result
+
+
+def _apply_event(connection: ManagedConnection, event_type: str, data: Any) -> str:
+    if event_type == "checkout.session.completed" and _dig(data, "mode") == "subscription":
+        member_plan_id = _dig(data, "metadata", "boxos_member_plan_id") or _dig(data, "client_reference_id")
+        subscription_id = _dig(data, "subscription")
+        if not member_plan_id or not subscription_id:
+            return "ignored"
+        connection.execute(
+            "update member_plans set stripe_subscription_id = ?, updated_at = ? where id = ?",
+            (str(subscription_id), isoformat(now_utc()), int(member_plan_id)),
+        )
+        return "subscription_linked"
+
+    if event_type in ("invoice.paid", "invoice.payment_failed", "invoice.finalized"):
+        member_plan = _plan_for_subscription(connection, _invoice_subscription(data))
+        if member_plan is None:
+            return "ignored"
+        amount = int(_dig(data, "amount_paid") or _dig(data, "amount_due") or 0)
+        currency = str(_dig(data, "currency") or "eur")
+        number = _dig(data, "number") or ""
+        if event_type == "invoice.finalized":
+            if amount <= 0 or member_plan["payment_status"] == "overdue":
+                return "ignored"
+            _set_payment_status(connection, member_plan, "due")
+            return "due"
+        if event_type == "invoice.paid":
+            _set_payment_status(connection, member_plan, "paid")
+            if amount > 0:
+                notifications_core.create_notification(
+                    connection,
+                    user_id=member_plan["user_id"],
+                    gym_id=member_plan["gym_id"],
+                    type="membership_plan",
+                    title="Payment received",
+                    body=(
+                        f"{member_plan['plan_name']}: {_money(amount, currency)} paid"
+                        f"{f' (invoice {number})' if number else ''}. Your invoice was sent by email."
+                    ),
+                    entity_type="member_plan",
+                    entity_id=member_plan["id"],
+                )
+            return "paid"
+        _set_payment_status(connection, member_plan, "overdue")
+        notifications_core.create_notification(
+            connection,
+            user_id=member_plan["user_id"],
+            gym_id=member_plan["gym_id"],
+            type="membership_plan",
+            title="Payment failed",
+            body=(
+                f"The payment for {member_plan['plan_name']} did not go through. "
+                "Stripe will try again; you can update your bank details from the email Stripe sent."
+            ),
+            entity_type="member_plan",
+            entity_id=member_plan["id"],
+        )
+        return "overdue"
+
+    if event_type == "customer.subscription.deleted":
+        member_plan = _plan_for_subscription(connection, _dig(data, "id"))
+        if member_plan is None or member_plan["status"] != "active" or member_plan["ends_on"]:
+            return "ignored"
+        gym = plan_service.gym_plan_settings(connection, member_plan["gym_id"])
+        plan_service.end_member_plan(connection, member_plan=member_plan, gym_timezone=gym["timezone"])
+        return "plan_ended"
+
+    return "ignored"

@@ -470,6 +470,26 @@ alter table gyms add column if not exists stripe_charges_enabled integer not nul
 
 alter table gyms add column if not exists stripe_details_submitted integer not null default 0;
 
+alter table member_plans add column if not exists stripe_checkout_session_id text;
+
+alter table member_plans add column if not exists stripe_subscription_id text;
+
+create index if not exists member_plans_stripe_subscription_idx on member_plans (stripe_subscription_id);
+
+create table if not exists stripe_customers (
+  gym_id integer not null references gyms(id) on delete cascade,
+  user_id integer not null references users(id) on delete cascade,
+  customer_id text not null,
+  created_at text not null,
+  primary key (gym_id, user_id)
+);
+
+create table if not exists stripe_events (
+  id text primary key,
+  type text not null,
+  received_at text not null
+);
+
 alter table class_bookings add column if not exists token_credit_id integer references token_credits(id) on delete set null;
 
 alter table users add constraint users_active_gym_id_fkey

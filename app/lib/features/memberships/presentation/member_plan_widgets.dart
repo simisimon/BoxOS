@@ -580,6 +580,15 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
   }
 
   Future<void> _end(MemberPlan plan) async {
+    if (plan.paidOnline) {
+      final atPeriodEnd = await _askWhenToEnd(plan);
+      if (atPeriodEnd == null) return;
+      await _act(
+        () => _repository.endMemberPlan(plan.id, atPeriodEnd: atPeriodEnd),
+        'Could not end the plan',
+      );
+      return;
+    }
     final confirmed = await showAppConfirmDialog(
       context,
       title: 'End ${plan.planName}?',
@@ -593,6 +602,42 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
     await _act(
       () => _repository.endMemberPlan(plan.id),
       'Could not end the plan',
+    );
+  }
+
+  /// For a plan paid by Stripe subscription: true = end at the end of the
+  /// paid month, false = end today, null = cancelled.
+  Future<bool?> _askWhenToEnd(MemberPlan plan) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AppFormDialog(
+        title: 'End ${plan.planName}?',
+        fitContent: true,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('End today'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('End at month end'),
+          ),
+        ],
+        child: Text(
+          '${widget.memberName} pays this plan monthly through Stripe. Either '
+          'way no further payment is taken and they get a notification.\n\n'
+          'At month end: the plan keeps covering classes until the paid month '
+          'is over.\nToday: the plan stops covering classes now; the paid '
+          'month is not refunded.',
+          style: Theme.of(
+            dialogContext,
+          ).textTheme.bodyMedium?.copyWith(color: appText, height: 1.45),
+        ),
+      ),
     );
   }
 
@@ -902,6 +947,7 @@ class _ActivePlanTile extends StatelessWidget {
       plan.limitLabel,
       ?plan.periodLabel,
       ?plan.usageLabel,
+      if (plan.paidOnline) 'Paid via Stripe',
     ].join(' · ');
     return AppCard.inset(
       child: Column(

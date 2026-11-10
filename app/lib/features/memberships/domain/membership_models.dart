@@ -315,6 +315,7 @@ class MemberPlan {
     this.memberName,
     this.memberEmail,
     this.currentPlanName,
+    this.paidOnline = false,
   });
 
   final int id;
@@ -353,6 +354,9 @@ class MemberPlan {
   final String? memberName;
   final String? memberEmail;
   final String? currentPlanName;
+
+  /// Paid by a monthly Stripe subscription (debit or card).
+  final bool paidOnline;
 
   bool get isActive =>
       state == MemberPlanState.current || state == MemberPlanState.upcoming;
@@ -427,6 +431,7 @@ class MemberPlan {
                 : memberDisplayName),
       memberEmail: member?['email'] as String?,
       currentPlanName: data['current_plan_name'] as String?,
+      paidOnline: data['paid_online'] as bool? ?? false,
     );
   }
 }
@@ -613,11 +618,15 @@ class MyMembership {
     required this.plans,
     required this.requirePlanForBooking,
     this.extraTokens = const ExtraTokens(),
+    this.onlinePayments = false,
   });
 
   final List<MemberPlan> plans;
   final bool requirePlanForBooking;
   final ExtraTokens extraTokens;
+
+  /// The box takes payments through Stripe.
+  final bool onlinePayments;
 
   MemberPlan? get current => _first(MemberPlanState.current);
   MemberPlan? get upcoming => _first(MemberPlanState.upcoming);

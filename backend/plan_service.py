@@ -230,6 +230,8 @@ def member_plan_payload(
         "starts_on": row["starts_on"],
         "ends_on": row["ends_on"],
         "payment_status": row["payment_status"],
+        # Paid by a Stripe subscription (monthly debit) rather than by hand.
+        "paid_online": bool(row["stripe_subscription_id"]),
         "requested_at": row["requested_at"],
         "reviewed_at": row["reviewed_at"],
         # Token balance: of the current period (or the first one for an
