@@ -229,6 +229,9 @@ Future<void> _openTomorrowClass(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Next week'));
     await tester.pumpAndSettle();
   }
+  // The managers' hour grid scrolls sideways on phones.
+  await tester.ensureVisible(find.text('CrossFit'));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('CrossFit'));
   await tester.pumpAndSettle();
   _expectNoException(tester);
@@ -239,7 +242,8 @@ void main() {
     testWidgets('Week view shows WODs per day and switches weeks at $size', (
       tester,
     ) async {
-      await _pumpSchedule(tester, size);
+      // The day columns with WODs are the athletes' view.
+      await _pumpSchedule(tester, size, profile: _athlete);
       _expectNoException(tester);
       // Today's WOD shows on its day slip; tapping it opens the full card.
       expect(find.text('Fran'), findsOneWidget);
@@ -274,7 +278,9 @@ void main() {
       final repository = await _pumpSchedule(tester, size);
 
       // Past days offer no "Add class", so the first one is today's.
-      await tester.tap(find.text('Add class').first);
+      await tester.ensureVisible(find.byTooltip('Add class').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(find.byType(AppSidePanel), findsOneWidget);
@@ -334,7 +340,9 @@ void main() {
       await tester.tap(find.byTooltip('Next week'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Add class').first);
+      await tester.ensureVisible(find.byTooltip('Add class').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(find.byType(AppSidePanel), findsOneWidget);

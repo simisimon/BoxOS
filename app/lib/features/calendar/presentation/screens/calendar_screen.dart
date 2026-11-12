@@ -11,6 +11,7 @@ import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:app/features/calendar/domain/models/schedule_trainer.dart';
 import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
 import 'package:app/features/calendar/presentation/widgets/class_template_dialog.dart';
+import 'package:app/features/calendar/presentation/widgets/schedule_hour_grid.dart';
 import 'package:app/features/calendar/presentation/widgets/schedule_week_view.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -278,18 +279,24 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     List<ScheduleClass> items,
     bool canManage,
   ) {
+    // Owners and trainers plan in the hour grid; athletes keep the day
+    // columns with each day's WOD.
+    if (canManage) {
+      return ScheduleHourGrid(
+        weekStart: _weekStart,
+        onWeekChanged: (monday) => setState(() => _weekStart = monday),
+        selectedClassId: _selectedClassId,
+        onOpenClass: (item) => _openClass(item, canManage),
+        onAddClass: (date) => _showClassFormDialog(context, date: date),
+        onCreateSchedule: () => showClassTemplateDialog(context, ref),
+      );
+    }
     return ScheduleWeekView(
       weekStart: _weekStart,
       onWeekChanged: (monday) => setState(() => _weekStart = monday),
-      canManage: canManage,
+      canManage: false,
       selectedClassId: _selectedClassId,
       onOpenClass: (item) => _openClass(item, canManage),
-      onAddClass: canManage
-          ? (date) => _showClassFormDialog(context, date: date)
-          : null,
-      onCreateSchedule: canManage
-          ? () => showClassTemplateDialog(context, ref)
-          : null,
     );
   }
 
@@ -468,7 +475,8 @@ class _ClassSidePanel extends ConsumerWidget {
         AppPanelTab(
           'Program',
           child: item.type.showsWod
-              ? WodDaySection(date: date, canManage: false)
+              // Managers can still edit the day's WOD from a class.
+              ? WodDaySection(date: date, canManage: canManage)
               : Text(
                   '${item.type.label} classes have no program.',
                   style: const TextStyle(color: appSubtleText),
