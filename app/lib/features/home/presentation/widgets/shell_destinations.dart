@@ -32,6 +32,9 @@ const int kProgramsBranch = 9;
 /// Owner reports (docs/admin-ui-reference.md §8); Attendance for now.
 const int kReportsBranch = 10;
 
+/// Owner messages: the box's announcements (docs/admin-ui-reference.md §5).
+const int kMessagesBranch = 11;
+
 const _programsDestination = ShellDestination(
   branchIndex: kProgramsBranch,
   icon: Icons.view_week_outlined,
@@ -116,6 +119,12 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.insert_chart_outlined_rounded,
     activeIcon: Icons.insert_chart_rounded,
     label: 'Reports',
+  ),
+  ShellDestination(
+    branchIndex: kMessagesBranch,
+    icon: Icons.mail_outline_rounded,
+    activeIcon: Icons.mail_rounded,
+    label: 'Messages',
   ),
   ShellDestination(
     branchIndex: kMembershipsBranch,

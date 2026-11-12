@@ -1,4 +1,5 @@
 import 'package:app/features/admin_analytics/presentation/screens/reports_screen.dart';
+import 'package:app/features/announcements/presentation/screens/messages_screen.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/application/auth_state.dart';
 import 'package:app/features/auth/presentation/screens/auth_loading_screen.dart';
@@ -213,6 +214,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/reports',
                 name: 'reports',
                 builder: (context, state) => const ReportsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/messages',
+                name: 'messages',
+                builder: (context, state) => const MessagesScreen(),
               ),
             ],
           ),

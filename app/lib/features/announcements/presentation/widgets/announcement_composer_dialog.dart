@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
@@ -168,8 +168,8 @@ class _AnnouncementComposerDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AppFormDialog(
-      title: _isEditing ? 'Edit Announcement' : 'Create Announcement',
+    return AppSidePanel(
+      title: _isEditing ? 'Edit message' : 'Compose',
       actions: [
         TextButton(
           onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),

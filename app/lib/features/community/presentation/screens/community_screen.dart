@@ -11,6 +11,7 @@ import 'package:app/features/community/domain/models/chat_message.dart';
 import 'package:app/features/community/domain/models/community_dashboard.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
+import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -308,6 +309,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     required int activeGymId,
     required bool isModerator,
   }) {
+    final profile = ref.read(currentProfileProvider).value;
+    final isOwner = isOwnerView(
+      accountType: profile?.accountType,
+      role: profile?.role,
+    );
     final children = <Widget>[
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
@@ -335,12 +341,12 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         ),
       ),
       // Box news lives next to box chat: both are "what the box is saying".
-      // Moved here when home was reduced to today's WOD, the next booking and
-      // the weekly stat.
-      const Padding(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, 18),
-        child: AnnouncementFeedSection(),
-      ),
+      // Owners write and manage it on the Messages page instead.
+      if (!isOwner)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 18),
+          child: AnnouncementFeedSection(),
+        ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: _ChatHeader(

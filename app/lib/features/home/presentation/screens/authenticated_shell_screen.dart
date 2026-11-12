@@ -49,6 +49,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
           kMembershipsBranch,
           kProgramsBranch,
           kReportsBranch,
+          kMessagesBranch,
         }.contains(navigationShell.currentIndex) ||
         // The owner dashboard is migrated; the athlete home is not yet.
         (navigationShell.currentIndex == kHomeBranch &&

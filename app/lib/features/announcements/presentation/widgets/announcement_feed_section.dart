@@ -1,4 +1,5 @@
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
@@ -48,9 +49,8 @@ class _AnnouncementFeedSectionState
 
   Future<void> _openAnnouncementComposer() async {
     final repository = ref.read(announcementRepositoryProvider);
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
+    final saved = await showAppSidePanel<bool>(
+      context,
       builder: (context) => AnnouncementComposerDialog(repository: repository),
     );
     if (saved == true) {
@@ -60,9 +60,8 @@ class _AnnouncementFeedSectionState
 
   Future<void> _openAnnouncementEditor(Announcement announcement) async {
     final repository = ref.read(announcementRepositoryProvider);
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
+    final saved = await showAppSidePanel<bool>(
+      context,
       builder: (context) => AnnouncementComposerDialog(
         existing: announcement,
         repository: repository,
@@ -212,7 +211,8 @@ class _AnnouncementFeedSectionState
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final hasActiveGym = profile?.activeGym != null;
-    final canManageAnnouncements = hasActiveGym &&
+    final canManageAnnouncements =
+        hasActiveGym &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
 
     return Column(
