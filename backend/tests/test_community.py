@@ -5,9 +5,9 @@ from backend.tests.support import FastApiTestCase
 
 
 class CommunityChatTests(FastApiTestCase):
-    def test_dashboard_returns_stats_and_newest_prs_for_members(self) -> None:
+    def test_dashboard_returns_stats_for_members(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Dashboard Box")
-        athlete_id = self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
         self.create_verified_user("trainer@boxos.app")
         trainer_id = self.add_active_membership(
             "trainer@boxos.app",
@@ -22,38 +22,6 @@ class CommunityChatTests(FastApiTestCase):
         connection = db.get_connection()
         try:
             with connection:
-                workout_id = int(
-                    connection.execute(
-                        """
-                        insert into daily_workouts (
-                          gym_id, scheduled_date, title, status, published_at,
-                          published_by_user_id, created_by_user_id, updated_by_user_id,
-                          created_at, updated_at
-                        )
-                        values (?, '2026-06-16', 'Fran', 'published', ?, ?, ?, ?, ?, ?)
-                        returning id
-                        """,
-                        (
-                            gym_id,
-                            timestamp,
-                            trainer_id,
-                            trainer_id,
-                            trainer_id,
-                            timestamp,
-                            timestamp,
-                        ),
-                    ).fetchone()["id"]
-                )
-                connection.execute(
-                    """
-                    insert into workout_logs (
-                      user_id, gym_id, daily_workout_id, score_type, score_value,
-                      score_label, notes_text, is_pr, pr_rank, created_at, updated_at
-                    )
-                    values (?, ?, ?, 'time', 321, '5:21', '', 1, 1, ?, ?)
-                    """,
-                    (athlete_id, gym_id, workout_id, timestamp, timestamp),
-                )
                 connection.execute(
                     """
                     insert into chat_messages (gym_id, user_id, body, created_at, updated_at)
@@ -70,11 +38,7 @@ class CommunityChatTests(FastApiTestCase):
         self.assertEqual(payload["stats"]["active_members"], 3)
         self.assertEqual(payload["stats"]["active_trainers"], 1)
         self.assertEqual(payload["stats"]["owners"], 1)
-        self.assertEqual(payload["stats"]["prs_last_30_days"], 1)
         self.assertEqual(payload["stats"]["messages_last_7_days"], 1)
-        self.assertEqual(len(payload["newest_prs"]), 1)
-        self.assertEqual(payload["newest_prs"][0]["workout_title"], "Fran")
-        self.assertEqual(payload["newest_prs"][0]["score_label"], "5:21")
 
     def test_send_and_list_messages_in_active_gym(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Chat Box")

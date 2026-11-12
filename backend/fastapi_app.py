@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
@@ -18,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation
 
 logger = logging.getLogger("boxos.backend")
 
@@ -343,29 +342,6 @@ class AvatarUploadRequest(BaseModel):
     data_base64: str
 
 
-class ReactionRequest(BaseModel):
-    reaction: str
-
-
-class PersonalWorkoutRequest(BaseModel):
-    title: str
-    type: str
-    structure: Any
-
-
-class PersonalWorkoutDeleteRequest(BaseModel):
-    id: int
-
-
-class TrackingSessionRequest(BaseModel):
-    source_kind: str
-    source_key: str
-    workout_title: str
-    score_type: str
-    score_value: Any
-    notes_text: str | None = None
-
-
 class DailyWorkoutSetPayload(BaseModel):
     reps: int
     value: float | None = None
@@ -413,14 +389,6 @@ class DailyWorkoutPublishRequest(BaseModel):
 class DailyWorkoutDuplicateRequest(BaseModel):
     source_date: str
     target_date: str
-
-
-class WorkoutLogRequest(BaseModel):
-    workout_id: int
-    class_id: int | None = None
-    score_type: str
-    score_value: Any
-    notes_text: str | None = None
 
 
 class ChatMessageCreateRequest(BaseModel):
@@ -1419,35 +1387,7 @@ def list_role_users(
                      join class_schedules on class_schedules.id = class_bookings.class_schedule_id
                      where class_bookings.user_id = gym_memberships.user_id
                        and class_schedules.gym_id = gym_memberships.gym_id
-                   ) as last_booking_at,
-                   (
-                     select daily_workouts.title
-                     from workout_logs
-                     join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_title,
-                   (
-                     select workout_logs.score_label
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_score,
-                   (
-                     select workout_logs.updated_at
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_at
+                   ) as last_booking_at
             from gym_memberships
             join users on users.id = gym_memberships.user_id
             where gym_memberships.gym_id = ?
@@ -1588,35 +1528,7 @@ def assign_role(
                      join class_schedules on class_schedules.id = class_bookings.class_schedule_id
                      where class_bookings.user_id = gym_memberships.user_id
                        and class_schedules.gym_id = gym_memberships.gym_id
-                   ) as last_booking_at,
-                   (
-                     select daily_workouts.title
-                     from workout_logs
-                     join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_title,
-                   (
-                     select workout_logs.score_label
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_score,
-                   (
-                     select workout_logs.updated_at
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_at
+                   ) as last_booking_at
             from gym_memberships
             join users on users.id = gym_memberships.user_id
             where gym_memberships.id = ? and users.deleted_at is null
@@ -4311,370 +4223,6 @@ def import_daily_workouts(
         connection.close()
 
 
-@app.get("/logbook/entries")
-def list_workout_logs(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select
-              workout_logs.id,
-              workout_logs.daily_workout_id,
-              workout_logs.class_schedule_id,
-              workout_logs.score_type,
-              workout_logs.score_value,
-              workout_logs.score_label,
-              workout_logs.notes_text,
-              workout_logs.created_at,
-              workout_logs.updated_at,
-              daily_workouts.scheduled_date,
-              daily_workouts.title as workout_title,
-              class_schedules.title as class_title,
-              class_schedules.start_time as class_start_time,
-              workout_logs.is_pr,
-              workout_logs.pr_rank
-            from workout_logs
-            join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-            left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
-            where workout_logs.user_id = ? and workout_logs.gym_id = ?
-            order by daily_workouts.scheduled_date desc, workout_logs.updated_at desc
-            """,
-            (session["user_id"], session["active_gym_id"]),
-        ).fetchall()
-        entries = [programming_service.workout_log_payload(row) for row in rows]
-        summary = workout_service.list_reaction_summary(
-            connection,
-            workout_log_ids=[row["id"] for row in entries],
-            viewer_user_id=session["user_id"],
-        )
-        workout_service.attach_reaction_summary(entries, summary)
-        return {"entries": entries}
-    finally:
-        connection.close()
-
-
-@app.post("/logbook/entries/{entry_id}/reactions", status_code=HTTPStatus.CREATED.value)
-def set_workout_log_reaction(
-    entry_id: int,
-    body: ReactionRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    reaction = (body.reaction or "").strip().lower()
-    if reaction not in workout_service.SUPPORTED_REACTIONS:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value,
-            detail="Unsupported reaction.",
-        )
-    connection = db.get_connection()
-    try:
-        entry = connection.execute(
-            "select id, gym_id from workout_logs where id = ?",
-            (entry_id,),
-        ).fetchone()
-        if entry is None or entry["gym_id"] != session["active_gym_id"]:
-            # Same-gym scope: scoped lookup keeps members from reacting to logs
-            # in gyms they don't belong to.
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Log not found.")
-        timestamp = security.isoformat(security.now_utc())
-        with connection:
-            # Upsert: a single user's reaction is replaced rather than stacked
-            # so the kind always reflects their latest choice.
-            connection.execute(
-                """
-                insert into workout_log_reactions (workout_log_id, user_id, gym_id, reaction, created_at)
-                values (?, ?, ?, ?, ?)
-                on conflict (workout_log_id, user_id) do update set
-                  reaction = excluded.reaction
-                """,
-                (entry_id, session["user_id"], session["active_gym_id"], reaction, timestamp),
-            )
-        summary = workout_service.list_reaction_summary(
-            connection,
-            workout_log_ids=[entry_id],
-            viewer_user_id=session["user_id"],
-        )
-        return {"summary": summary.get(entry_id, {"reaction_count": 0, "reactions": {}, "my_reaction": reaction})}
-    finally:
-        connection.close()
-
-
-@app.delete("/logbook/entries/{entry_id}/reactions")
-def clear_workout_log_reaction(
-    entry_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        entry = connection.execute(
-            "select id, gym_id from workout_logs where id = ?",
-            (entry_id,),
-        ).fetchone()
-        if entry is None or entry["gym_id"] != session["active_gym_id"]:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Log not found.")
-        with connection:
-            connection.execute(
-                "delete from workout_log_reactions where workout_log_id = ? and user_id = ?",
-                (entry_id, session["user_id"]),
-            )
-        summary = workout_service.list_reaction_summary(
-            connection,
-            workout_log_ids=[entry_id],
-            viewer_user_id=session["user_id"],
-        )
-        return {"summary": summary.get(entry_id, {"reaction_count": 0, "reactions": {}, "my_reaction": None})}
-    finally:
-        connection.close()
-
-
-@app.post("/logbook/entries")
-def submit_workout_log(
-    body: WorkoutLogRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    workout_id = validation.require_user_id(body.workout_id)
-    class_id = validation.require_optional_user_id(body.class_id)
-    score_type, score_value, score_label = validation.require_score(body.score_type, body.score_value)
-    notes_text = validation.require_result_notes(body.notes_text)
-    connection = db.get_connection()
-    try:
-        workout = connection.execute(
-            "select id, gym_id, scheduled_date, title, status from daily_workouts where id = ? and gym_id = ?",
-            (workout_id, session["active_gym_id"]),
-        ).fetchone()
-        if workout is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-        if workout["status"] != "published" and not programming_service.can_view_drafts(session["role"]):
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-        if class_id is not None:
-            class_row = connection.execute(
-                "select id from class_schedules where id = ? and gym_id = ?",
-                (class_id, session["active_gym_id"]),
-            ).fetchone()
-            if class_row is None:
-                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class not found.")
-        timestamp = security.isoformat(security.now_utc())
-        with connection:
-            existing = connection.execute(
-                "select id from workout_logs where user_id = ? and daily_workout_id = ?",
-                (session["user_id"], workout_id),
-            ).fetchone()
-            if existing is None:
-                connection.execute(
-                    """
-                    insert into workout_logs (
-                      user_id, gym_id, daily_workout_id, class_schedule_id, score_type,
-                      score_value, score_label, notes_text, created_at, updated_at
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (session["user_id"], session["active_gym_id"], workout_id, class_id, score_type, score_value, score_label, notes_text, timestamp, timestamp),
-                )
-                action = "workout_log_created"
-            else:
-                connection.execute(
-                    """
-                    update workout_logs
-                    set class_schedule_id = ?, score_type = ?, score_value = ?, score_label = ?, notes_text = ?, updated_at = ?
-                    where id = ?
-                    """,
-                    (class_id, score_type, score_value, score_label, notes_text, timestamp, existing["id"]),
-                )
-                action = "workout_log_updated"
-            programming_service.refresh_pr_flags_for_workout_title(connection, user_id=session["user_id"], gym_id=session["active_gym_id"], workout_title=workout["title"], score_type=score_type)
-            row = connection.execute(
-                """
-                select
-                  workout_logs.id,
-                  workout_logs.daily_workout_id,
-                  workout_logs.class_schedule_id,
-                  workout_logs.score_type,
-                  workout_logs.score_value,
-                  workout_logs.score_label,
-                  workout_logs.notes_text,
-                  workout_logs.created_at,
-                  workout_logs.updated_at,
-                  daily_workouts.scheduled_date,
-                  daily_workouts.title as workout_title,
-                  class_schedules.title as class_title,
-                  class_schedules.start_time as class_start_time,
-                  workout_logs.is_pr,
-                  workout_logs.pr_rank
-                from workout_logs
-                join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-                left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
-                where workout_logs.user_id = ? and workout_logs.daily_workout_id = ?
-                """,
-                (session["user_id"], workout_id),
-            ).fetchone()
-            if row is not None and row["is_pr"]:
-                programming_service.create_pr_achievement_notification(connection, user_id=session["user_id"], gym_id=session["active_gym_id"], workout_id=workout_id, workout_title=workout["title"], score_label=score_label)
-            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], target_user_id=session["user_id"], action=action, entity_type="workout_log", entity_id=row["id"] if row is not None else None, details={"workout_id": workout_id, "score_type": score_type, "score_label": score_label})
-        if row is None:
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Workout log could not be saved.")
-        return {"entry": programming_service.workout_log_payload(row)}
-    finally:
-        connection.close()
-
-
-@app.get("/personal-workouts")
-def list_personal_workouts(session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select id, type, title, structure_json, created_at, updated_at
-            from personal_workouts
-            where user_id = ?
-            order by updated_at desc
-            """,
-            (session["user_id"],),
-        ).fetchall()
-        return {"workouts": [programming_service.personal_workout_payload(row) for row in rows]}
-    finally:
-        connection.close()
-
-
-@app.post("/personal-workouts")
-def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    title = validation.require_personal_workout_title(body.title)
-    workout_type = validation.require_personal_workout_type(body.type)
-    structure = validation.require_personal_workout_structure(body.structure)
-    timestamp = security.isoformat(security.now_utc())
-    connection = db.get_connection()
-    try:
-        with connection:
-            cursor = connection.execute(
-                """
-                insert into personal_workouts (
-                  user_id, type, title, structure_json, created_at, updated_at
-                ) values (?, ?, ?, ?, ?, ?)
-                returning id
-                """,
-                (
-                    session["user_id"],
-                    workout_type,
-                    title,
-                    json.dumps(structure),
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            new_workout_id = int(cursor.fetchone()["id"])
-            row = connection.execute(
-                """
-                select id, type, title, structure_json, created_at, updated_at
-                from personal_workouts
-                where id = ?
-                """,
-                (new_workout_id,),
-            ).fetchone()
-        return {"workout": programming_service.personal_workout_payload(row)}
-    finally:
-        connection.close()
-
-
-@app.delete("/personal-workouts")
-def delete_personal_workout(body: PersonalWorkoutDeleteRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    workout_id = validation.require_personal_workout_id(body.id)
-    connection = db.get_connection()
-    try:
-        with connection:
-            existing = connection.execute(
-                "select id from personal_workouts where id = ? and user_id = ?",
-                (workout_id, session["user_id"]),
-            ).fetchone()
-            if existing is None:
-                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-            connection.execute("delete from personal_workouts where id = ?", (workout_id,))
-        return {"deleted": True}
-    finally:
-        connection.close()
-
-
-def _tracking_session_payload(row: Any) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "source_kind": row["source_kind"],
-        "source_key": row["source_key"],
-        "workout_title": row["workout_title"],
-        "score_type": row["score_type"],
-        "score_value": row["score_value"],
-        "score_label": row["score_label"],
-        "notes_text": row["notes_text"],
-        "created_at": row["created_at"],
-    }
-
-
-@app.get("/tracking-sessions")
-def list_tracking_sessions(
-    source_kind: str,
-    source_key: str,
-    limit: int = 20,
-    session: dict[str, Any] = Depends(require_session),
-) -> dict[str, Any]:
-    kind = validation.require_tracking_source_kind(source_kind)
-    key = validation.require_tracking_source_key(source_key)
-    capped_limit = max(1, min(limit, 100))
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select id, source_kind, source_key, workout_title, score_type,
-                   score_value, score_label, notes_text, created_at
-            from tracking_sessions
-            where user_id = ? and source_kind = ? and source_key = ?
-            order by created_at desc, id desc
-            limit ?
-            """,
-            (session["user_id"], kind, key, capped_limit),
-        ).fetchall()
-        return {"sessions": [_tracking_session_payload(row) for row in rows]}
-    finally:
-        connection.close()
-
-
-@app.post("/tracking-sessions", status_code=HTTPStatus.CREATED.value)
-def create_tracking_session(
-    body: TrackingSessionRequest,
-    session: dict[str, Any] = Depends(require_session),
-) -> dict[str, Any]:
-    kind = validation.require_tracking_source_kind(body.source_kind)
-    key = validation.require_tracking_source_key(body.source_key)
-    title = validation.require_tracking_workout_title(body.workout_title)
-    score_type, score_value, score_label = validation.require_tracking_score(
-        body.score_type, body.score_value
-    )
-    notes = validation.require_tracking_notes(body.notes_text)
-    timestamp = security.isoformat(security.now_utc())
-    connection = db.get_connection()
-    try:
-        with connection:
-            cursor = connection.execute(
-                """
-                insert into tracking_sessions (
-                  user_id, source_kind, source_key, workout_title,
-                  score_type, score_value, score_label, notes_text, created_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                returning id, source_kind, source_key, workout_title, score_type,
-                          score_value, score_label, notes_text, created_at
-                """,
-                (
-                    session["user_id"],
-                    kind,
-                    key,
-                    title,
-                    score_type,
-                    score_value,
-                    score_label,
-                    notes,
-                    timestamp,
-                ),
-            )
-            row = cursor.fetchone()
-        return {"session": _tracking_session_payload(row)}
-    finally:
-        connection.close()
-
-
 @app.get("/exercises")
 def list_exercises(
     query: str = "",
@@ -4709,22 +4257,6 @@ def list_exercises(
                 (normalized_limit,),
             ).fetchall()
         return {"exercises": [programming_service.exercise_payload(row) for row in rows]}
-    finally:
-        connection.close()
-
-
-@app.get("/benchmark-workouts")
-def list_benchmark_workouts(_: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select id, name, category, structure_json
-            from benchmark_workouts
-            order by sort_order, name
-            """
-        ).fetchall()
-        return {"workouts": [programming_service.benchmark_workout_payload(row) for row in rows]}
     finally:
         connection.close()
 
@@ -5097,7 +4629,6 @@ def get_community_dashboard(
     because the community view is a shared owner/trainer/member space.
     """
     now = security.now_utc()
-    thirty_days_ago = security.isoformat(now - timedelta(days=30))
     seven_days_ago = security.isoformat(now - timedelta(days=7))
     connection = db.get_connection()
     try:
@@ -5120,16 +4651,6 @@ def get_community_dashboard(
             """,
             (session["active_gym_id"],),
         ).fetchone()
-        pr_count_row = connection.execute(
-            """
-            select count(*) as count
-            from workout_logs
-            where gym_id = ?
-              and is_pr = 1
-              and updated_at >= ?
-            """,
-            (session["active_gym_id"], thirty_days_ago),
-        ).fetchone()
         message_count_row = connection.execute(
             """
             select count(*) as count
@@ -5140,50 +4661,15 @@ def get_community_dashboard(
             """,
             (session["active_gym_id"], seven_days_ago),
         ).fetchone()
-        pr_rows = connection.execute(
-            """
-            select
-              workout_logs.user_id,
-              users.display_name,
-              users.nickname,
-              daily_workouts.title as workout_title,
-              workout_logs.score_label,
-              workout_logs.updated_at
-            from workout_logs
-            join users on users.id = workout_logs.user_id
-            join gym_memberships on gym_memberships.user_id = workout_logs.user_id
-              and gym_memberships.gym_id = workout_logs.gym_id
-            join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-            where workout_logs.gym_id = ?
-              and workout_logs.is_pr = 1
-              and users.deleted_at is null
-              and gym_memberships.status = 'active'
-            order by workout_logs.updated_at desc, workout_logs.id desc
-            limit 5
-            """,
-            (session["active_gym_id"],),
-        ).fetchall()
         return {
             "stats": {
                 "active_members": int(stats_row["active_members"] if stats_row else 0),
                 "active_trainers": int(stats_row["active_trainers"] if stats_row else 0),
                 "owners": int(stats_row["owners"] if stats_row else 0),
-                "prs_last_30_days": int(pr_count_row["count"] if pr_count_row else 0),
                 "messages_last_7_days": int(
                     message_count_row["count"] if message_count_row else 0
                 ),
             },
-            "newest_prs": [
-                {
-                    "user_id": int(row["user_id"]),
-                    "display_name": row["display_name"],
-                    "nickname": row["nickname"],
-                    "workout_title": row["workout_title"],
-                    "score_label": row["score_label"],
-                    "updated_at": row["updated_at"],
-                }
-                for row in pr_rows
-            ],
         }
     finally:
         connection.close()

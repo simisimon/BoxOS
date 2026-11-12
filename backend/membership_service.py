@@ -158,9 +158,6 @@ def role_managed_member_payload(row: Row) -> dict[str, Any]:
         "no_show_bookings": int(row["no_show_bookings"]) if "no_show_bookings" in row.keys() else 0,
         "booking_rate": 0.0 if total_bookings <= 0 else round((attended_bookings / total_bookings) * 100, 1),
         "last_booking_at": row["last_booking_at"] if "last_booking_at" in row.keys() else None,
-        "newest_pr_title": row["newest_pr_title"] if "newest_pr_title" in row.keys() else "",
-        "newest_pr_score": row["newest_pr_score"] if "newest_pr_score" in row.keys() else "",
-        "newest_pr_at": row["newest_pr_at"] if "newest_pr_at" in row.keys() else None,
     }
 
 

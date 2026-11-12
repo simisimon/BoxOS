@@ -47,7 +47,7 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   with `git checkout -- app/test/preview/failures/`.
 - Backend: `python3 -m unittest discover -s backend -p "test_*.py"` (needs
   `backend/requirements-dev.txt`; testcontainers starts its own Postgres).
-  `test_dashboard_returns_stats_and_newest_prs_for_members` is known red.
+  `test_dashboard_returns_stats_for_members` is known red.
 
 ## Conventions
 

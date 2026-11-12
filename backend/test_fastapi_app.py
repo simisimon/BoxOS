@@ -492,7 +492,7 @@ class FastApiBackendTests(unittest.TestCase):
         )
         self.assertEqual(deleted.status_code, 200)
 
-    def test_programming_personal_workouts_and_analytics_flow(self) -> None:
+    def test_programming_and_analytics_flow(self) -> None:
         admin_login = self.client.post(
             "/auth/login",
             json={"email": settings.ADMIN_EMAIL, "password": settings.ADMIN_PASSWORD},
@@ -547,7 +547,6 @@ class FastApiBackendTests(unittest.TestCase):
             },
         )
         self.assertEqual(created_workout.status_code, 200)
-        workout_id = created_workout.json()["workout"]["id"]
 
         athlete_login = self.client.post(
             "/auth/login",
@@ -559,36 +558,9 @@ class FastApiBackendTests(unittest.TestCase):
         self.assertEqual(workouts.status_code, 200)
         self.assertEqual(workouts.json()["workouts"][0]["title"], "Fran")
 
-        log_entry = self.client.post(
-            "/logbook/entries",
-            headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "time", "score_value": "5:55", "notes_text": "PR!"},
-        )
-        self.assertEqual(log_entry.status_code, 200)
-        self.assertTrue(log_entry.json()["entry"]["is_pr"])
-
-        logs = self.client.get("/logbook/entries", headers=athlete_headers)
-        self.assertEqual(logs.status_code, 200)
-        self.assertEqual(len(logs.json()["entries"]), 1)
-
-        personal = self.client.post(
-            "/personal-workouts",
-            headers=athlete_headers,
-            json={"title": "Accessory Day", "type": "amrap", "structure": {"rounds": 5, "movements": ["row", "situp"]}},
-        )
-        self.assertEqual(personal.status_code, 200)
-        personal_id = personal.json()["workout"]["id"]
-
-        listed_personal = self.client.get("/personal-workouts", headers=athlete_headers)
-        self.assertEqual(listed_personal.status_code, 200)
-        self.assertEqual(len(listed_personal.json()["workouts"]), 1)
-
         exercises = self.client.get("/exercises?limit=5", headers=athlete_headers)
         self.assertEqual(exercises.status_code, 200)
         self.assertLessEqual(len(exercises.json()["exercises"]), 5)
-
-        benchmarks = self.client.get("/benchmark-workouts", headers=athlete_headers)
-        self.assertEqual(benchmarks.status_code, 200)
 
         audit_logs = self.client.get("/audit-logs", headers=admin_headers)
         self.assertEqual(audit_logs.status_code, 200)
@@ -597,14 +569,6 @@ class FastApiBackendTests(unittest.TestCase):
         analytics = self.client.get("/admin/analytics?window_days=14", headers=admin_headers)
         self.assertEqual(analytics.status_code, 200)
         self.assertEqual(analytics.json()["overview"]["window_days"], 14)
-
-        deleted_personal = self.client.request(
-            "DELETE",
-            "/personal-workouts",
-            headers=athlete_headers,
-            json={"id": personal_id},
-        )
-        self.assertEqual(deleted_personal.status_code, 200)
 
     def test_validation_error_is_handled_globally(self) -> None:
         response = self.client.post(

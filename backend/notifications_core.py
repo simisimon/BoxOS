@@ -435,33 +435,6 @@ def create_wod_notifications(
         )
 
 
-def create_pr_achievement_notification(
-    connection: ManagedConnection,
-    *,
-    user_id: int,
-    gym_id: int,
-    workout_id: int,
-    workout_title: str,
-    score_label: str,
-) -> None:
-    user = connection.execute(
-        "select notify_pr_achievements from users where id = ? and deleted_at is null",
-        (user_id,),
-    ).fetchone()
-    if user is None or not bool(user["notify_pr_achievements"]):
-        return
-    create_notification(
-        connection,
-        user_id=user_id,
-        gym_id=gym_id,
-        type="pr_achieved",
-        title="New personal record",
-        body=f"{workout_title}: {score_label}",
-        entity_type="daily_workout",
-        entity_id=workout_id,
-    )
-
-
 def create_announcement_like_notification(
     connection: ManagedConnection,
     *,
