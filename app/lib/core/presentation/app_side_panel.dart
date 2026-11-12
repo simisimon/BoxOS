@@ -181,7 +181,11 @@ class AppSidePanel extends StatelessWidget {
               const Divider(height: 1, color: appBorder),
               Expanded(
                 child: TabBarView(
-                  children: [for (final tab in tabs!) scroll(tab.child)],
+                  // Keep each tab alive so unsaved input survives a tab switch.
+                  children: [
+                    for (final tab in tabs!)
+                      _KeepAlive(child: scroll(tab.child)),
+                  ],
                 ),
               ),
             ],
@@ -228,5 +232,26 @@ class AppSidePanel extends StatelessWidget {
           ? panel
           : DefaultTabController(length: tabs!.length, child: panel),
     );
+  }
+}
+
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

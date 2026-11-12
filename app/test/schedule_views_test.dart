@@ -1,4 +1,4 @@
-import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
@@ -252,12 +252,12 @@ void main() {
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsNothing);
-      expect(find.text('This week'), findsNothing);
+      expect(find.text('Today'), findsNothing);
 
       await tester.tap(find.byTooltip('Next week'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.text('This week'), findsOneWidget);
+      expect(find.text('Today'), findsOneWidget);
 
       // Every day of next week is in the future, so each offers "Add WOD".
       await tester.tap(find.text('Add WOD').first);
@@ -267,10 +267,10 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('This week'));
+      await tester.tap(find.text('Today'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.text('This week'), findsNothing);
+      expect(find.text('Today'), findsNothing);
     });
 
     testWidgets('Week adds a weekly class right in the day at $size', (
@@ -282,8 +282,8 @@ void main() {
       await tester.tap(find.text('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('New class'), findsOneWidget);
+      expect(find.byType(AppSidePanel), findsOneWidget);
+      expect(find.text('Create class'), findsOneWidget);
 
       await tester.ensureVisible(find.byType(Switch));
       await tester.tap(find.byType(Switch));
@@ -301,30 +301,30 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
 
-      expect(find.byType(Dialog), findsNothing);
+      expect(find.byType(AppSidePanel), findsNothing);
       final draft = repository.lastCreatedTemplate;
       expect(draft, isNotNull);
       expect(draft!.weekdays, [DateTime.now().weekday]);
       expect(draft.classType, 'WOD');
     });
 
-    testWidgets('Editing a weekly session asks for the scope at $size', (
+    testWidgets('A weekly session edits this date or its schedule at $size', (
       tester,
     ) async {
       await _pumpSchedule(tester, size);
-      expect(find.text('Edit'), findsNothing);
       await _openTomorrowClass(tester);
+      expect(find.byType(AppSidePanel), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Edit'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Edit'));
-      await tester.pumpAndSettle();
-      expect(find.text('Only this date'), findsOneWidget);
-
-      await tester.tap(find.text('All upcoming dates'));
+      // Details edits this date; the link opens the weekly schedule.
+      await tester.tap(find.text('Details'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.text('Edit class'), findsOneWidget);
+      expect(find.text('Changes apply to this class only.'), findsOneWidget);
+      await tester.tap(find.text('Edit schedule'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(find.byType(AppSidePanel), findsOneWidget);
+      expect(find.text('Edit schedule'), findsOneWidget);
       expect(
         find.text(
           'Changes apply to all upcoming dates. Booked dates keep their time.',
@@ -333,9 +333,7 @@ void main() {
       );
     });
 
-    testWidgets('Add class and Add WOD open the same window at $size', (
-      tester,
-    ) async {
+    testWidgets('Add class opens the create panel at $size', (tester) async {
       await _pumpSchedule(tester, size);
       // Next week: every day is in the future, so both buttons exist.
       await tester.tap(find.byTooltip('Next week'));
@@ -344,14 +342,16 @@ void main() {
       await tester.tap(find.text('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      final classWindow = tester.getRect(find.byType(AppFormDialog));
+      expect(find.byType(AppSidePanel), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
+      expect(find.byType(AppSidePanel), findsNothing);
 
-      await tester.tap(find.text('Add WOD').first);
+      // The header's + creates recurring classes.
+      await tester.tap(find.byTooltip('Create recurring classes'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(tester.getRect(find.byType(AppFormDialog)), classWindow);
+      expect(find.text('Create recurring classes'), findsOneWidget);
     });
 
     testWidgets('Athletes book a class from the week at $size', (tester) async {
@@ -366,7 +366,8 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(repository.lastBookedClassId, _seriesSession.id);
-      expect(find.text('Edit'), findsNothing);
+      // Athletes get no Details tab.
+      expect(find.text('Details'), findsNothing);
     });
   }
 }

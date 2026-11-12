@@ -1,6 +1,7 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
@@ -19,8 +20,8 @@ Future<void> showClassTemplateDialog(
   ClassTemplate? existing,
   int? initialWeekday,
 }) async {
-  final message = await showDialog<String>(
-    context: context,
+  final message = await showAppSidePanel<String>(
+    context,
     builder: (_) =>
         ClassTemplateDialog(existing: existing, initialWeekday: initialWeekday),
   );
@@ -205,8 +206,8 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AppFormDialog(
-      title: _isCreating ? 'Add class' : 'Edit class',
+    return AppSidePanel(
+      title: _isCreating ? 'Create recurring classes' : 'Edit schedule',
       subtitle: _isCreating
           ? null
           : 'Changes apply to all upcoming dates. Booked dates keep their time.',

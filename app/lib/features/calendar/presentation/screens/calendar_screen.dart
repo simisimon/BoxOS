@@ -1,6 +1,8 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
 import 'package:app/features/calendar/domain/repositories/schedule_repository.dart';
@@ -242,59 +244,61 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     );
   }
 
+  /// Class detail (docs/admin-ui-reference.md §2.1) as a right-side panel
+  /// over the week; the week keeps the opened class highlighted meanwhile.
+  Future<void> _openClass(ScheduleClass item, bool canManage) async {
+    setState(() => _selectedClassId = item.id);
+    await showAppSidePanel<void>(
+      context,
+      width: 600,
+      builder: (_) => _ClassSidePanel(
+        classId: item.id,
+        canManage: canManage,
+        onToggleBooking: _toggleBooking,
+        onToggleWaitlist: _toggleWaitlist,
+        onUpdateAttendance: (item, booking, status) => _updateAttendance(
+          item: item,
+          booking: booking,
+          attendanceStatus: status,
+        ),
+        onDelete: (item) => _deleteClass(item, canManage),
+        onEditSchedule: _editSchedule,
+      ),
+    );
+    if (mounted) setState(() => _selectedClassId = null);
+  }
+
+  /// "Edit schedule" in a class's Details tab: close the class panel, then
+  /// open its weekly series.
+  Future<void> _editSchedule(int templateId) async {
+    final templates = await ref.read(classTemplatesProvider.future);
+    final template = templates.where((t) => t.id == templateId).firstOrNull;
+    if (!mounted) return;
+    if (template == null) {
+      _showSnackBar('This weekly schedule no longer exists.');
+      return;
+    }
+    await showClassTemplateDialog(context, ref, existing: template);
+  }
+
   Widget _buildScheduleBody(
     BuildContext context,
     List<ScheduleClass> items,
     bool canManage,
   ) {
-    final selected = items
-        .where((item) => item.id == _selectedClassId)
-        .firstOrNull;
-    final week = ScheduleWeekView(
+    return ScheduleWeekView(
       weekStart: _weekStart,
       onWeekChanged: (monday) => setState(() => _weekStart = monday),
       canManage: canManage,
-      selectedClassId: selected?.id,
-      onOpenClass: (item) => setState(() => _selectedClassId = item.id),
+      selectedClassId: _selectedClassId,
+      onOpenClass: (item) => _openClass(item, canManage),
       onAddClass: canManage
           ? (date) => _showClassFormDialog(context, date: date)
           : null,
       onImport: canManage ? _openImport : null,
-    );
-
-    // A deleted class simply drops out of [items], which closes the panel.
-    if (selected == null) {
-      return week;
-    }
-
-    final panel = _ClassPanel(
-      key: ValueKey(selected.id),
-      item: selected,
-      canManage: canManage,
-      onClose: () => setState(() => _selectedClassId = null),
-      onToggleBooking: _toggleBooking,
-      onToggleWaitlist: _toggleWaitlist,
-      onUpdateAttendance: (item, booking, status) => _updateAttendance(
-        item: item,
-        booking: booking,
-        attendanceStatus: status,
-      ),
-      onDelete: (item) => _deleteClass(item, canManage),
-    );
-
-    // Wide windows show the class panel inline on the left, next to the week;
-    // narrow windows swap the week out for the full-width panel.
-    final isWide = MediaQuery.sizeOf(context).width >= 640;
-    if (!isWide) {
-      return panel;
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(width: 360, child: panel),
-        const SizedBox(width: 12),
-        Expanded(child: week),
-      ],
+      onCreateSchedule: canManage
+          ? () => showClassTemplateDialog(context, ref)
+          : null,
     );
   }
 
@@ -366,14 +370,14 @@ class _CalendarStateCard extends StatelessWidget {
   }
 }
 
-/// Class form in a dialog: a new class on [date], or edits [existing].
+/// Create class panel: a new class on [date] (once or weekly).
 Future<void> _showClassFormDialog(
   BuildContext context, {
   required DateTime date,
   ScheduleClass? existing,
 }) {
-  return showDialog<void>(
-    context: context,
+  return showAppSidePanel<void>(
+    context,
     builder: (dialogContext) => _ClassForm(
       date: date,
       existing: existing,
@@ -383,23 +387,23 @@ Future<void> _showClassFormDialog(
   );
 }
 
-/// Side panel for one class, next to the week: booking for athletes,
-/// edit/delete and attendance for managers.
-class _ClassPanel extends ConsumerWidget {
-  const _ClassPanel({
-    super.key,
-    required this.item,
+/// Class detail panel: header with title, state pill and the class's meta,
+/// tabs Overview (booking, registrations, attendance) | Program (the day's
+/// WOD) | Details (managers edit this date). Follows [scheduleListProvider],
+/// and closes when the class disappears (e.g. deleted).
+class _ClassSidePanel extends ConsumerWidget {
+  const _ClassSidePanel({
+    required this.classId,
     required this.canManage,
-    required this.onClose,
     required this.onToggleBooking,
     required this.onToggleWaitlist,
     required this.onUpdateAttendance,
     required this.onDelete,
+    required this.onEditSchedule,
   });
 
-  final ScheduleClass item;
+  final int classId;
   final bool canManage;
-  final VoidCallback onClose;
   final void Function(ScheduleClass item) onToggleBooking;
   final void Function(ScheduleClass item) onToggleWaitlist;
   final Future<void> Function(
@@ -409,40 +413,23 @@ class _ClassPanel extends ConsumerWidget {
   )
   onUpdateAttendance;
   final void Function(ScheduleClass item) onDelete;
-
-  Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
-    if (item.classTemplateId != null) {
-      final scope = await _askSeriesScope(context, action: 'Edit');
-      if (scope == null || !context.mounted) {
-        return;
-      }
-      if (scope == _SeriesScope.series) {
-        final templates = await ref.read(classTemplatesProvider.future);
-        if (!context.mounted) {
-          return;
-        }
-        final template = templates
-            .where((candidate) => candidate.id == item.classTemplateId)
-            .firstOrNull;
-        if (template != null) {
-          await showClassTemplateDialog(context, ref, existing: template);
-          return;
-        }
-      }
-    }
-    if (!context.mounted) {
-      return;
-    }
-    await _showClassFormDialog(
-      context,
-      date: _dateOnly(item.startTime),
-      existing: item,
-    );
-  }
+  final ValueChanged<int> onEditSchedule;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+    final item = (ref.watch(scheduleListProvider).value ?? const [])
+        .where((candidate) => candidate.id == classId)
+        .firstOrNull;
+    if (item == null) {
+      // Close this panel's own route (not whatever menu is on top), once.
+      final route = ModalRoute.of(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (route != null && route.isActive) {
+          route.navigator?.removeRoute(route);
+        }
+      });
+      return const SizedBox.shrink();
+    }
     final date = _dateOnly(item.startTime);
     String? wodTitle;
     for (final workout
@@ -452,78 +439,64 @@ class _ClassPanel extends ConsumerWidget {
         break;
       }
     }
+    final localizations = MaterialLocalizations.of(context);
+    final end = item.startTime.add(Duration(minutes: item.durationMinutes));
+    String time(DateTime t) =>
+        localizations.formatTimeOfDay(TimeOfDay.fromDateTime(t));
+    final (status, intent) = end.isBefore(DateTime.now())
+        ? ('Ended', AppPillIntent.neutral)
+        : item.isFull
+        ? ('Full', AppPillIntent.warning)
+        : ('Open', AppPillIntent.success);
 
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'CLASS',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: appPrimary,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        MaterialLocalizations.of(context).formatFullDate(date),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: appText,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
+    return AppSidePanel(
+      title: item.title,
+      status: AppPill(label: status, intent: intent, dense: true),
+      subtitle: [
+        '${localizations.formatMediumDate(date)} · '
+            '${time(item.startTime)} – ${time(end)}',
+        item.type.label,
+        'Limit ${item.capacity}',
+        if (item.assignedTrainer != null) item.assignedTrainer!.label,
+      ].join(' · '),
+      menu: [if (canManage) ('Delete class', () => onDelete(item))],
+      tabs: [
+        AppPanelTab(
+          'Overview',
+          count: item.bookedCount,
+          child: _ScheduleClassCard(
+            item: item,
+            wodTitle: wodTitle,
+            canManage: canManage,
+            onToggleBooking: () => onToggleBooking(item),
+            onToggleWaitlist: () => onToggleWaitlist(item),
+            onUpdateAttendance: (booking, status) =>
+                onUpdateAttendance(item, booking, status),
+          ),
+        ),
+        AppPanelTab(
+          'Program',
+          child: item.type.showsWod
+              ? WodDaySection(date: date, canManage: false)
+              : Text(
+                  '${item.type.label} classes have no program.',
+                  style: const TextStyle(color: appSubtleText),
                 ),
-                IconButton(
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close_rounded, color: appText),
-                  tooltip: 'Close',
-                ),
-              ],
+        ),
+        if (canManage)
+          AppPanelTab(
+            'Details',
+            child: _ClassForm(
+              key: ValueKey('details-${item.id}'),
+              date: date,
+              existing: item,
+              embedded: true,
+              onEditSchedule: onEditSchedule,
+              onSaved: () {},
+              onCancel: () {},
             ),
           ),
-          const Divider(height: 1, color: appBorder),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _ScheduleClassCard(
-                  item: item,
-                  wodTitle: wodTitle,
-                  canManage: canManage,
-                  onToggleBooking: () => onToggleBooking(item),
-                  onToggleWaitlist: () => onToggleWaitlist(item),
-                  onUpdateAttendance: (booking, status) =>
-                      onUpdateAttendance(item, booking, status),
-                  onEdit: () => _openEdit(context, ref),
-                  onDelete: () => onDelete(item),
-                ),
-                // Athletes read the WOD here; managers program it in the week.
-                if (!canManage && item.type.showsWod) ...[
-                  const SizedBox(height: 18),
-                  WodDaySection(date: date, canManage: false),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -536,8 +509,6 @@ class _ScheduleClassCard extends StatelessWidget {
     required this.onToggleBooking,
     required this.onToggleWaitlist,
     required this.onUpdateAttendance,
-    required this.onEdit,
-    required this.onDelete,
   });
 
   final ScheduleClass item;
@@ -549,8 +520,6 @@ class _ScheduleClassCard extends StatelessWidget {
   final VoidCallback onToggleWaitlist;
   final Future<void> Function(ScheduleBooking booking, String attendanceStatus)
   onUpdateAttendance;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -669,16 +638,6 @@ class _ScheduleClassCard extends StatelessWidget {
                             item.isFull ? 'Join Waitlist' : 'Book Class',
                           ),
                         ),
-                      if (canManage) ...[
-                        OutlinedButton(
-                          onPressed: onEdit,
-                          child: const Text('Edit'),
-                        ),
-                        OutlinedButton(
-                          onPressed: onDelete,
-                          child: const Text('Delete'),
-                        ),
-                      ],
                     ],
                   ),
                 ],
@@ -1087,15 +1046,24 @@ class _AttendanceRow extends StatelessWidget {
 /// panel list and the calendar refresh), then calls [onSaved].
 class _ClassForm extends ConsumerStatefulWidget {
   const _ClassForm({
+    super.key,
+    this.onEditSchedule,
     required this.date,
     this.existing,
     required this.onSaved,
     required this.onCancel,
+    this.embedded = false,
   });
 
   /// The day this class belongs to (from the tapped calendar cell).
   final DateTime date;
   final ScheduleClass? existing;
+
+  /// Rendered inside the class panel's Details tab instead of its own panel.
+  final bool embedded;
+
+  /// Opens the weekly series (template id) this class belongs to.
+  final ValueChanged<int>? onEditSchedule;
   final VoidCallback onSaved;
   final VoidCallback onCancel;
 
@@ -1277,204 +1245,243 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
     final theme = Theme.of(context);
     final localizations = MaterialLocalizations.of(context);
     final dateLabel = localizations.formatFullDate(_baseDate);
-    return AppFormDialog(
-      title: _isCreating ? 'New class' : 'Edit class',
-      subtitle: widget.existing?.classTemplateId != null
-          ? '$dateLabel · changes apply to this date only'
-          : dateLabel,
+    final saveButton = FilledButton(
+      onPressed: _isSaving ? null : _submit,
+      style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+      child: _isSaving
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(_isCreating ? 'Create' : 'Save'),
+    );
+    final form = Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final type in ClassType.values)
+                ChoiceChip(
+                  label: Text(type.label),
+                  selected: _type == type,
+                  onSelected: (_) => _selectType(type),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _titleController,
+            decoration: const InputDecoration(labelText: 'Title'),
+            validator: (value) =>
+                (value ?? '').trim().isEmpty ? 'Enter a title' : null,
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<ScheduleTrainer>>(
+            future: _trainersFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                );
+              }
+              final current = widget.existing?.assignedTrainer;
+              final fetched = snapshot.data ?? const <ScheduleTrainer>[];
+              // A coach who lost the trainer role stays selectable on their
+              // own classes; otherwise the dropdown asserts on the value.
+              final trainers = [
+                ...fetched,
+                if (current != null && !fetched.any((t) => t.id == current.id))
+                  current,
+              ];
+              return DropdownButtonFormField<int>(
+                initialValue: _selectedTrainerId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Trainer'),
+                items: [
+                  for (final trainer in trainers)
+                    DropdownMenuItem<int>(
+                      value: trainer.id,
+                      child: Text(trainer.label),
+                    ),
+                ],
+                validator: (value) => value == null ? 'Select a trainer' : null,
+                onChanged: (value) =>
+                    setState(() => _selectedTrainerId = value),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _selectedHour,
+                  decoration: const InputDecoration(labelText: 'Hour'),
+                  items: [
+                    for (var hour = 0; hour < 24; hour++)
+                      DropdownMenuItem(
+                        value: hour,
+                        child: Text(hour.toString().padLeft(2, '0')),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _selectedHour = value);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _selectedMinute,
+                  decoration: const InputDecoration(labelText: 'Minute'),
+                  items: [
+                    for (final minute in _minuteOptions)
+                      DropdownMenuItem(
+                        value: minute,
+                        child: Text(minute.toString().padLeft(2, '0')),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _selectedMinute = value);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            initialValue: _selectedDuration,
+            decoration: const InputDecoration(labelText: 'Duration (minutes)'),
+            items: [
+              for (final duration in _durationOptions)
+                DropdownMenuItem(value: duration, child: Text('$duration min')),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _selectedDuration = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _capacityController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Capacity'),
+            validator: (value) {
+              final parsed = int.tryParse((value ?? '').trim());
+              if (parsed == null || parsed <= 0) {
+                return 'Enter a valid capacity';
+              }
+              return null;
+            },
+          ),
+          if (_isCreating) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Repeats weekly',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: appText,
+                        ),
+                      ),
+                      Text(
+                        _repeatsWeekly
+                            ? 'Runs every week on the selected days, '
+                                  'starting this week.'
+                            : 'Happens once on this date.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: appSubtleText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _repeatsWeekly,
+                  onChanged: (value) => setState(() => _repeatsWeekly = value),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_repeatsWeekly)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (var day = 1; day <= 7; day++)
+                    FilterChip(
+                      label: Text(_weekdayShortLabels[day - 1]),
+                      selected: _weekdays.contains(day),
+                      onSelected: (selected) => setState(
+                        () => selected
+                            ? _weekdays.add(day)
+                            : _weekdays.remove(day),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ],
+      ),
+    );
+    if (widget.embedded) {
+      final templateId = widget.existing?.classTemplateId;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          form,
+          const SizedBox(height: appSpaceLg),
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'Changes apply to this class only.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: appSubtleText,
+                      ),
+                    ),
+                    if (templateId != null && widget.onEditSchedule != null)
+                      TextButton(
+                        onPressed: () {
+                          // Close the class panel first; the screen then
+                          // opens the weekly schedule.
+                          Navigator.of(context).pop();
+                          widget.onEditSchedule!(templateId);
+                        },
+                        child: const Text('Edit schedule'),
+                      ),
+                  ],
+                ),
+              ),
+              saveButton,
+            ],
+          ),
+        ],
+      );
+    }
+    return AppSidePanel(
+      title: _isCreating ? 'Create class' : 'Edit class',
+      subtitle: dateLabel,
       actions: [
         TextButton(
           onPressed: _isSaving ? null : widget.onCancel,
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _isSaving ? null : _submit,
-          child: _isSaving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(_isCreating ? 'Create' : 'Save'),
-        ),
+        saveButton,
       ],
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final type in ClassType.values)
-                  ChoiceChip(
-                    label: Text(type.label),
-                    selected: _type == type,
-                    onSelected: (_) => _selectType(type),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Title'),
-              validator: (value) =>
-                  (value ?? '').trim().isEmpty ? 'Enter a title' : null,
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder<List<ScheduleTrainer>>(
-              future: _trainersFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: LinearProgressIndicator(),
-                  );
-                }
-                final trainers = snapshot.data ?? const <ScheduleTrainer>[];
-                return DropdownButtonFormField<int>(
-                  initialValue: _selectedTrainerId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Trainer'),
-                  items: [
-                    for (final trainer in trainers)
-                      DropdownMenuItem<int>(
-                        value: trainer.id,
-                        child: Text(trainer.label),
-                      ),
-                  ],
-                  validator: (value) =>
-                      value == null ? 'Select a trainer' : null,
-                  onChanged: (value) =>
-                      setState(() => _selectedTrainerId = value),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _selectedHour,
-                    decoration: const InputDecoration(labelText: 'Hour'),
-                    items: [
-                      for (var hour = 0; hour < 24; hour++)
-                        DropdownMenuItem(
-                          value: hour,
-                          child: Text(hour.toString().padLeft(2, '0')),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _selectedHour = value);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _selectedMinute,
-                    decoration: const InputDecoration(labelText: 'Minute'),
-                    items: [
-                      for (final minute in _minuteOptions)
-                        DropdownMenuItem(
-                          value: minute,
-                          child: Text(minute.toString().padLeft(2, '0')),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null)
-                        setState(() => _selectedMinute = value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              initialValue: _selectedDuration,
-              decoration: const InputDecoration(
-                labelText: 'Duration (minutes)',
-              ),
-              items: [
-                for (final duration in _durationOptions)
-                  DropdownMenuItem(
-                    value: duration,
-                    child: Text('$duration min'),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _selectedDuration = value);
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _capacityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Capacity'),
-              validator: (value) {
-                final parsed = int.tryParse((value ?? '').trim());
-                if (parsed == null || parsed <= 0) {
-                  return 'Enter a valid capacity';
-                }
-                return null;
-              },
-            ),
-            if (_isCreating) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Repeats weekly',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: appText,
-                          ),
-                        ),
-                        Text(
-                          _repeatsWeekly
-                              ? 'Runs every week on the selected days, '
-                                    'starting this week.'
-                              : 'Happens once on this date.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: appSubtleText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: _repeatsWeekly,
-                    onChanged: (value) =>
-                        setState(() => _repeatsWeekly = value),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_repeatsWeekly)
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (var day = 1; day <= 7; day++)
-                      FilterChip(
-                        label: Text(_weekdayShortLabels[day - 1]),
-                        selected: _weekdays.contains(day),
-                        onSelected: (selected) => setState(
-                          () => selected
-                              ? _weekdays.add(day)
-                              : _weekdays.remove(day),
-                        ),
-                      ),
-                  ],
-                ),
-            ],
-          ],
-        ),
-      ),
+      child: form,
     );
   }
 }

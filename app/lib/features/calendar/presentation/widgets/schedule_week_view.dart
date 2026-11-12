@@ -75,6 +75,7 @@ class ScheduleWeekView extends ConsumerWidget {
     required this.onOpenClass,
     this.onAddClass,
     this.onImport,
+    this.onCreateSchedule,
   });
 
   /// Monday of the week shown.
@@ -91,6 +92,9 @@ class ScheduleWeekView extends ConsumerWidget {
 
   /// Opens the CSV WOD import. Null hides the button (athletes).
   final VoidCallback? onImport;
+
+  /// The header's accent + : create recurring classes (§2).
+  final VoidCallback? onCreateSchedule;
 
   Future<void> _openWod(
     BuildContext context,
@@ -159,7 +163,7 @@ class ScheduleWeekView extends ConsumerWidget {
               if (!isCurrentWeek)
                 TextButton(
                   onPressed: () => onWeekChanged(mondayOf(DateTime.now())),
-                  child: const Text('This week'),
+                  child: const Text('Today'),
                 ),
               if (onImport != null)
                 IconButton(
@@ -177,6 +181,21 @@ class ScheduleWeekView extends ConsumerWidget {
                 icon: const Icon(Icons.chevron_right_rounded),
                 tooltip: 'Next week',
               ),
+              if (onCreateSchedule != null) ...[
+                const SizedBox(width: appSpaceSm),
+                IconButton.filled(
+                  onPressed: onCreateSchedule,
+                  style: IconButton.styleFrom(
+                    backgroundColor: appPrimary,
+                    foregroundColor: appInverseText,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(appRadiusSm),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_rounded),
+                  tooltip: 'Create recurring classes',
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 14),
