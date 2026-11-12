@@ -844,8 +844,50 @@ class _ShellFooter extends StatelessWidget {
   final Map<int, int> badges;
   final ValueChanged<int> onSelectBranch;
 
+  /// Phones fit five tabs; beyond that the first four stay and the rest
+  /// move behind "More".
+  static const _maxTabs = 5;
+
+  Future<void> _showMore(
+    BuildContext context,
+    List<ShellDestination> overflow,
+  ) async {
+    final branch = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: appSurfaceElevated,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final dest in overflow)
+              ListTile(
+                leading: _CountBadge(
+                  count: badges[dest.branchIndex] ?? 0,
+                  child: Icon(
+                    dest.branchIndex == selectedBranchIndex
+                        ? dest.activeIcon
+                        : dest.icon,
+                    color: dest.branchIndex == selectedBranchIndex
+                        ? appPrimary
+                        : appMutedText,
+                  ),
+                ),
+                title: Text(dest.label),
+                selected: dest.branchIndex == selectedBranchIndex,
+                onTap: () => Navigator.of(sheetContext).pop(dest.branchIndex),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (branch != null) onSelectBranch(branch);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final split = destinations.length > _maxTabs ? _maxTabs - 1 : _maxTabs;
+    final visible = destinations.take(split).toList();
+    final overflow = destinations.skip(split).toList();
     return Align(
       alignment: Alignment.bottomCenter,
       heightFactor: 1,
@@ -863,7 +905,7 @@ class _ShellFooter extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
               child: Row(
                 children: [
-                  for (final dest in destinations)
+                  for (final dest in visible)
                     _FooterDest(
                       icon: dest.icon,
                       activeIcon: dest.activeIcon,
@@ -871,6 +913,20 @@ class _ShellFooter extends StatelessWidget {
                       badge: badges[dest.branchIndex] ?? 0,
                       selected: dest.branchIndex == selectedBranchIndex,
                       onTap: () => onSelectBranch(dest.branchIndex),
+                    ),
+                  if (overflow.isNotEmpty)
+                    _FooterDest(
+                      icon: Icons.more_horiz_rounded,
+                      activeIcon: Icons.more_horiz_rounded,
+                      label: 'More',
+                      badge: overflow.fold(
+                        0,
+                        (sum, d) => sum + (badges[d.branchIndex] ?? 0),
+                      ),
+                      selected: overflow.any(
+                        (d) => d.branchIndex == selectedBranchIndex,
+                      ),
+                      onTap: () => _showMore(context, overflow),
                     ),
                 ],
               ),

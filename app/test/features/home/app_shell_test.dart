@@ -6,7 +6,10 @@ import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Widget _shell({void Function(UserRole)? onRole}) => MaterialApp(
+Widget _shell({
+  void Function(UserRole)? onRole,
+  void Function(int)? onBranch,
+}) => MaterialApp(
   theme: buildBoxOsTheme(),
   home: AuthenticatedScaffold(
     selectedBranchIndex: kHomeBranch,
@@ -22,7 +25,7 @@ Widget _shell({void Function(UserRole)? onRole}) => MaterialApp(
     unreadNotifications: 3,
     branchBadges: const {kMembersBranch: 8},
     body: const SizedBox.expand(),
-    onSelectBranch: (_) {},
+    onSelectBranch: onBranch ?? (_) {},
     onHeaderProfileTap: () {},
     onNotificationsTap: () {},
     onRoleSelected: onRole ?? (_) {},
@@ -67,6 +70,25 @@ void main() {
     await tester.tap(find.text('Switch to ${UserRole.athlete.label}'));
     await tester.pumpAndSettle();
     expect(picked, UserRole.athlete);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('phones show four tabs plus More for the owner', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    int? picked;
+
+    await tester.pumpWidget(_shell(onBranch: (b) => picked = b));
+    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Members'), findsOneWidget);
+    expect(find.text('Settings'), findsNothing);
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(picked, kBoxSettingsBranch);
     expect(tester.takeException(), isNull);
   });
 }

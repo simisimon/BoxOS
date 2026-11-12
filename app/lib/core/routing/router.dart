@@ -21,6 +21,7 @@ import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
 import 'package:app/features/members/presentation/screens/member_detail_screen.dart';
 import 'package:app/features/members/presentation/screens/members_screen.dart';
 import 'package:app/features/memberships/presentation/screens/memberships_screen.dart';
+import 'package:app/features/programming/presentation/screens/programs_screen.dart';
 import 'package:app/features/tracking/presentation/screens/tracking_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
@@ -193,6 +194,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/memberships',
                 name: 'memberships',
                 builder: (context, state) => const MembershipsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/programs',
+                name: 'programs',
+                builder: (context, state) => const ProgramsScreen(),
               ),
             ],
           ),

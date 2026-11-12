@@ -13,7 +13,6 @@ import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart
 import 'package:app/features/calendar/presentation/widgets/class_template_dialog.dart';
 import 'package:app/features/calendar/presentation/widgets/schedule_week_view.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
-import 'package:app/features/programming/presentation/screens/import_workouts_dialog.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/features/programming/presentation/widgets/wod_day_section.dart';
@@ -46,13 +45,6 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _openImport() async {
-    await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => const ImportWorkoutsDialog(),
-    );
   }
 
   Future<void> _deleteClass(ScheduleClass item, bool canManage) async {
@@ -295,7 +287,6 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       onAddClass: canManage
           ? (date) => _showClassFormDialog(context, date: date)
           : null,
-      onImport: canManage ? _openImport : null,
       onCreateSchedule: canManage
           ? () => showClassTemplateDialog(context, ref)
           : null,

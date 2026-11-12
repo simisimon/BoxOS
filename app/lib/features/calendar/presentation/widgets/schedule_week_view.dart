@@ -74,8 +74,8 @@ class ScheduleWeekView extends ConsumerWidget {
     required this.selectedClassId,
     required this.onOpenClass,
     this.onAddClass,
-    this.onImport,
     this.onCreateSchedule,
+    this.canProgram = false,
   });
 
   /// Monday of the week shown.
@@ -90,8 +90,9 @@ class ScheduleWeekView extends ConsumerWidget {
   /// Null hides "Add class" (athletes).
   final ValueChanged<DateTime>? onAddClass;
 
-  /// Opens the CSV WOD import. Null hides the button (athletes).
-  final VoidCallback? onImport;
+  /// Whether WODs can be added or edited from the week. Programming lives on
+  /// the Programs page, so Classes shows WODs read-only.
+  final bool canProgram;
 
   /// The header's accent + : create recurring classes (§2).
   final VoidCallback? onCreateSchedule;
@@ -102,8 +103,12 @@ class ScheduleWeekView extends ConsumerWidget {
     _WeekDay day,
   ) async {
     if (day.workout != null) {
-      await showWodDetailsDialog(context, date: day.date, canManage: canManage);
-    } else if (canManage && !day.isPast) {
+      await showWodDetailsDialog(
+        context,
+        date: day.date,
+        canManage: canProgram,
+      );
+    } else if (canProgram && !day.isPast) {
       await showWodEditorDialog(context, ref, date: day.date);
     }
   }
@@ -117,7 +122,8 @@ class ScheduleWeekView extends ConsumerWidget {
     // Athletes only ever see published WODs.
     final workouts = [
       for (final workout in workoutsAsync.value ?? const <DailyWorkout>[])
-        if (canManage || workout.isPublished) workout,
+        // Drafts only where they can be worked on (Programs).
+        if (canProgram || workout.isPublished) workout,
     ];
 
     final days = [for (var i = 0; i < 7; i++) _buildDay(i, workouts, sessions)];
@@ -165,12 +171,6 @@ class ScheduleWeekView extends ConsumerWidget {
                   onPressed: () => onWeekChanged(mondayOf(DateTime.now())),
                   child: const Text('Today'),
                 ),
-              if (onImport != null)
-                IconButton(
-                  onPressed: onImport,
-                  icon: const Icon(Icons.upload_file_rounded),
-                  tooltip: 'Import WODs',
-                ),
               IconButton(
                 onPressed: () => onWeekChanged(_addDays(weekStart, -7)),
                 icon: const Icon(Icons.chevron_left_rounded),
@@ -207,7 +207,7 @@ class ScheduleWeekView extends ConsumerWidget {
                       Widget slip(_WeekDay day, _SlipLayout layout) => _DaySlip(
                         day: day,
                         layout: layout,
-                        canManage: canManage,
+                        canManage: canProgram,
                         selectedClassId: selectedClassId,
                         onOpenWod: () => _openWod(context, ref, day),
                         onOpenClass: onOpenClass,

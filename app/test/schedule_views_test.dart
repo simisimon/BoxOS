@@ -259,13 +259,8 @@ void main() {
       _expectNoException(tester);
       expect(find.text('Today'), findsOneWidget);
 
-      // Every day of next week is in the future, so each offers "Add WOD".
-      await tester.tap(find.text('Add WOD').first);
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.text('Save & Publish'), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+      // Programming moved to the Programs page: the week shows WODs only.
+      expect(find.text('Add WOD'), findsNothing);
 
       await tester.tap(find.text('Today'));
       await tester.pumpAndSettle();

@@ -46,6 +46,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       kMyBoxBranch,
       kMembersBranch,
       kMembershipsBranch,
+      kProgramsBranch,
     }.contains(navigationShell.currentIndex);
 
     return AuthenticatedScaffold(

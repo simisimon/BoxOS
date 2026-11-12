@@ -16,6 +16,7 @@ import 'package:app/features/programming/data/repositories/api_programming_repos
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/programming/domain/repositories/programming_repository.dart';
 import 'package:app/features/programming/presentation/screens/import_workouts_dialog.dart';
+import 'package:app/features/programming/presentation/screens/programs_screen.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
@@ -268,7 +269,7 @@ void main() {
     );
   });
 
-  testWidgets('Import button opens the import dialog', (tester) async {
+  testWidgets('Programs import button opens the import panel', (tester) async {
     await _loadRealFont();
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(1120, 800);
@@ -294,7 +295,8 @@ void main() {
             useMaterial3: true,
             fontFamily: 'Roboto',
           ),
-          home: const Scaffold(body: SafeArea(child: MyBoxScreen())),
+          // The import moved from the week to the Programs page.
+          home: const Scaffold(body: SafeArea(child: ProgramsScreen())),
         ),
       ),
     );

@@ -29,10 +29,11 @@ void main() {
       // Box settings left the profile for a tab of its own, so the owner set
       // is two over the five-tab bottom-nav budget. One goes when the logbook
       // rebuild moves athlete history into the member detail.
-      expect(owner().length, 8);
+      expect(owner().length, 9);
       expect(owner().map((d) => d.label), [
         'Dashboard',
         'Classes',
+        'Programs',
         'Members',
         'Memberships',
         'Community',
@@ -76,12 +77,19 @@ void main() {
       expect(owner().map((d) => d.branchIndex), contains(kLogbookBranch));
     });
 
-    test('a trainer sees the athlete tab set', () {
+    test('a trainer sees the athlete tab set plus Programs', () {
       final trainer = destinationsForView(
         accountType: AccountType.athlete,
         role: UserRole.trainer,
       );
-      expect(trainer.map((d) => d.label), athlete().map((d) => d.label));
+      expect(trainer.map((d) => d.label), [
+        'Home',
+        'My Box',
+        'Programs',
+        'Community',
+        'Logbook',
+        'Profile',
+      ]);
     });
 
     test('every destination points at a distinct branch', () {

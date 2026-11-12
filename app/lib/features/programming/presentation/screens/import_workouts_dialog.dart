@@ -1,4 +1,4 @@
-import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/features/calendar/presentation/screens/csv_file_picker.dart';
@@ -322,7 +322,7 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final outcome = _outcome;
-    return AppFormDialog(
+    return AppSidePanel(
       title: 'Import WODs',
       actions: [
         TextButton(

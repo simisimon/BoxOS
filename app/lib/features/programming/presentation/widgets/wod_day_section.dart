@@ -1,6 +1,7 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
@@ -58,8 +59,8 @@ Future<bool> showWodEditorDialog(
   required DateTime date,
   DailyWorkout? existing,
 }) async {
-  final saved = await showDialog<bool>(
-    context: context,
+  final saved = await showAppSidePanel<bool>(
+    context,
     builder: (_) => _WorkoutEditorDialog(existing: existing, prefillDate: date),
   );
   if (saved == true) {
@@ -90,6 +91,80 @@ Future<void> showWodDetailsDialog(
       child: WodDaySection(date: date, canManage: canManage),
     ),
   );
+}
+
+/// Publishes or unpublishes [workout] and refreshes the programming list.
+Future<void> publishWod(
+  BuildContext context,
+  WidgetRef ref,
+  DailyWorkout workout, {
+  required bool publish,
+}) async {
+  try {
+    final repository = ref.read(programmingRepositoryProvider);
+    if (publish) {
+      await repository.publishWorkout(id: workout.id);
+    } else {
+      await repository.unpublishWorkout(id: workout.id);
+    }
+    ref.invalidate(programmingListProvider);
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          errorMessageFrom(
+            error,
+            fallback: publish
+                ? 'Failed to publish workout'
+                : 'Failed to unpublish workout',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Copies [workout] to a picked day as a draft ("Copy to day…").
+Future<void> duplicateWod(
+  BuildContext context,
+  WidgetRef ref,
+  DailyWorkout workout,
+) async {
+  final today = _dateOnly(DateTime.now());
+  final weekLater = workout.scheduledDate.add(const Duration(days: 7));
+  final target = await showDatePicker(
+    context: context,
+    // Never before firstDate: a WOD from weeks ago would assert.
+    initialDate: weekLater.isBefore(today) ? today : weekLater,
+    firstDate: _dateOnly(DateTime.now()),
+    lastDate: DateTime.now().add(const Duration(days: 365)),
+  );
+  if (target == null) return;
+  try {
+    await ref
+        .read(programmingRepositoryProvider)
+        .duplicateWorkout(
+          sourceDate: workout.scheduledDate,
+          targetDate: target,
+        );
+    ref.invalidate(programmingListProvider);
+    if (!context.mounted) return;
+    final formatted =
+        '${target.year}-${target.month.toString().padLeft(2, '0')}-${target.day.toString().padLeft(2, '0')}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Duplicated to $formatted (as draft).')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          errorMessageFrom(error, fallback: 'Failed to duplicate workout'),
+        ),
+      ),
+    );
+  }
 }
 
 class _WodErrorCard extends StatelessWidget {
@@ -123,15 +198,8 @@ class _WodEmptyState extends ConsumerWidget {
 
   bool get _isPast => _dateOnly(date).isBefore(_dateOnly(DateTime.now()));
 
-  Future<void> _openEditor(BuildContext context, WidgetRef ref) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _WorkoutEditorDialog(existing: null, prefillDate: date),
-    );
-    if (saved == true) {
-      ref.invalidate(programmingListProvider);
-    }
-  }
+  Future<void> _openEditor(BuildContext context, WidgetRef ref) =>
+      showWodEditorDialog(context, ref, date: date);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -221,89 +289,6 @@ class _WorkoutCard extends ConsumerWidget {
   final DailyWorkout workout;
   final bool canManage;
 
-  Future<void> _openEditor(BuildContext context, WidgetRef ref) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _WorkoutEditorDialog(
-        existing: workout,
-        prefillDate: workout.scheduledDate,
-      ),
-    );
-    if (saved == true) {
-      ref.invalidate(programmingListProvider);
-    }
-  }
-
-  Future<void> _publish(BuildContext context, WidgetRef ref) async {
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .publishWorkout(id: workout.id);
-      ref.invalidate(programmingListProvider);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to publish workout'),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _unpublish(BuildContext context, WidgetRef ref) async {
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .unpublishWorkout(id: workout.id);
-      ref.invalidate(programmingListProvider);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to unpublish workout'),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _duplicate(BuildContext context, WidgetRef ref) async {
-    final target = await showDatePicker(
-      context: context,
-      initialDate: workout.scheduledDate.add(const Duration(days: 7)),
-      firstDate: _dateOnly(DateTime.now()),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (target == null) return;
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .duplicateWorkout(
-            sourceDate: workout.scheduledDate,
-            targetDate: target,
-          );
-      ref.invalidate(programmingListProvider);
-      if (!context.mounted) return;
-      final formatted =
-          '${target.year}-${target.month.toString().padLeft(2, '0')}-${target.day.toString().padLeft(2, '0')}';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Duplicated to $formatted (as draft).')),
-      );
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to duplicate workout'),
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -368,17 +353,18 @@ class _WorkoutCard extends ConsumerWidget {
                   onSelected: (value) {
                     switch (value) {
                       case 'edit':
-                        _openEditor(context, ref);
-                        break;
+                        showWodEditorDialog(
+                          context,
+                          ref,
+                          date: workout.scheduledDate,
+                          existing: workout,
+                        );
                       case 'publish':
-                        _publish(context, ref);
-                        break;
+                        publishWod(context, ref, workout, publish: true);
                       case 'unpublish':
-                        _unpublish(context, ref);
-                        break;
+                        publishWod(context, ref, workout, publish: false);
                       case 'duplicate':
-                        _duplicate(context, ref);
-                        break;
+                        duplicateWod(context, ref, workout);
                     }
                   },
                   itemBuilder: (context) => [
@@ -780,7 +766,7 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
       context,
     ).formatFullDate(_selectedDate);
     final isCreating = widget.existing == null;
-    return AppFormDialog(
+    return AppSidePanel(
       title: isCreating ? 'New WOD' : 'Edit WOD',
       subtitle: dateLabel,
       child: Form(

@@ -25,6 +25,17 @@ const int kBoxSettingsBranch = 7;
 /// Owner-only plan catalogue (docs/admin-ui-reference.md §9).
 const int kMembershipsBranch = 8;
 
+/// WOD programming board (docs/admin-ui-reference.md §3); owners and
+/// trainers.
+const int kProgramsBranch = 9;
+
+const _programsDestination = ShellDestination(
+  branchIndex: kProgramsBranch,
+  icon: Icons.view_week_outlined,
+  activeIcon: Icons.view_week_rounded,
+  label: 'Programs',
+);
+
 /// A single bottom-nav / rail destination. [branchIndex] is the shell branch it
 /// activates, decoupling the role-specific tab order from the fixed branch
 /// order in the router.
@@ -90,6 +101,7 @@ const List<ShellDestination> _ownerDestinations = [
     activeIcon: Icons.event_rounded,
     label: 'Classes',
   ),
+  _programsDestination,
   ShellDestination(
     branchIndex: kMembersBranch,
     icon: Icons.groups_outlined,
@@ -148,4 +160,11 @@ List<ShellDestination> destinationsForView({
   required UserRole? role,
 }) => isOwnerView(accountType: accountType, role: role)
     ? _ownerDestinations
+    : role == UserRole.trainer
+    // Trainers program WODs too; Programs sits after My Box.
+    ? [
+        ..._athleteDestinations.take(2),
+        _programsDestination,
+        ..._athleteDestinations.skip(2),
+      ]
     : _athleteDestinations;
