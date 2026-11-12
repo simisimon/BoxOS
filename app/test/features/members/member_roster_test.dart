@@ -102,6 +102,7 @@ void main() {
           saving: false,
           onSave: (_) async {},
           planSection: const SizedBox(height: 80),
+          membershipsTab: const Text('plans table'),
           bookings: Future.value([
             MemberBooking(
               classId: 1,
@@ -129,6 +130,9 @@ void main() {
       expect(find.text('75.0%'), findsOneWidget);
       expect(find.textContaining('3:42'), findsOneWidget);
 
+      // The tab bar scrolls on phones.
+      await tester.ensureVisible(find.text('Classes'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Classes'));
       await tester.pumpAndSettle();
       expect(find.text('Evening WOD'), findsOneWidget);

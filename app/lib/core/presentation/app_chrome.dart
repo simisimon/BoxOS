@@ -44,6 +44,9 @@ const appSuccess = Color(0xFF3DDC97);
 const appWarning = Color(0xFFFFB454);
 const appInfo = Color(0xFF5BC0FF);
 
+// Dims the page behind a side panel (docs/admin-ui-reference.md §0).
+const appScrim = Color(0x99000000);
+
 // --- Radii ------------------------------------------------------------------
 // Sharp, angular scale to match the BoxOS wireframes — near-square corners with
 // just enough softening to avoid a hard pixel edge. The previous pillowy range

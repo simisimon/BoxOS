@@ -1,34 +1,31 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/platform/open_external_url.dart';
 import 'package:app/core/presentation/app_chrome.dart';
-import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:app/features/memberships/presentation/extra_tokens_dialogs.dart';
-import 'package:app/features/memberships/presentation/plan_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Box configuration → Memberships: the plans the box offers, the currency,
-/// whether bookings require an active plan, extra tokens, and the box's
-/// Stripe account. Every change is saved right away.
-class MembershipPlansPanel extends ConsumerStatefulWidget {
-  const MembershipPlansPanel({super.key});
+/// Box settings → Memberships: the currency, whether bookings require an
+/// active plan, extra tokens, and the box's Stripe account. The plans
+/// themselves live on the Memberships page. Every change is saved right away.
+class MembershipSettingsPanel extends ConsumerStatefulWidget {
+  const MembershipSettingsPanel({super.key});
 
   @override
-  ConsumerState<MembershipPlansPanel> createState() =>
-      _MembershipPlansPanelState();
+  ConsumerState<MembershipSettingsPanel> createState() =>
+      _MembershipSettingsPanelState();
 }
 
-class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
+class _MembershipSettingsPanelState
+    extends ConsumerState<MembershipSettingsPanel> {
   bool _loading = true;
   bool _busy = false;
   String? _error;
   MembershipSettings? _settings;
-  List<MembershipPlan> _plans = const [];
-  bool _showArchived = false;
   StripeConnectState _stripe = StripeConnectState.unavailable;
 
   MembershipRepository get _repository =>
@@ -46,22 +43,16 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
       _error = null;
     });
     try {
-      final results = await Future.wait<Object>([
-        _repository.fetchSettings(),
-        _repository.fetchPlans(includeArchived: true),
-      ]);
+      final settings = await _repository.fetchSettings();
       if (!mounted) return;
-      setState(() {
-        _settings = results[0] as MembershipSettings;
-        _plans = results[1] as List<MembershipPlan>;
-      });
+      setState(() => _settings = settings);
       await _loadStripe();
     } catch (error) {
       if (!mounted) return;
       setState(
         () => _error = errorMessageFrom(
           error,
-          fallback: 'Could not load membership plans',
+          fallback: 'Could not load membership settings',
         ),
       );
     } finally {
@@ -129,63 +120,6 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
     }
   }
 
-  void _replacePlan(MembershipPlan plan) {
-    setState(() {
-      final exists = _plans.any((item) => item.id == plan.id);
-      _plans = exists
-          ? [for (final item in _plans) item.id == plan.id ? plan : item]
-          : [..._plans, plan];
-    });
-  }
-
-  Future<void> _createPlan() async {
-    final draft = await showPlanEditorDialog(
-      context,
-      currency: _settings?.currency ?? 'EUR',
-    );
-    if (draft == null) return;
-    await _run(
-      () async => _replacePlan(await _repository.createPlan(draft)),
-      done: 'Created ${draft.name}.',
-      failed: 'Could not create the plan',
-    );
-  }
-
-  Future<void> _editPlan(MembershipPlan plan) async {
-    final draft = await showPlanEditorDialog(
-      context,
-      plan: plan,
-      currency: _settings?.currency ?? 'EUR',
-    );
-    if (draft == null) return;
-    await _run(
-      () async => _replacePlan(await _repository.updatePlan(plan.id, draft)),
-      done: 'Saved ${draft.name}.',
-      failed: 'Could not save the plan',
-    );
-  }
-
-  Future<void> _setArchived(MembershipPlan plan, bool archived) async {
-    if (archived) {
-      final confirmed = await showAppConfirmDialog(
-        context,
-        title: 'Archive ${plan.name}?',
-        message:
-            'Athletes can no longer request this plan and open requests for '
-            'it are withdrawn. Members already on it keep it until it ends.',
-        confirmLabel: 'Archive plan',
-      );
-      if (!confirmed) return;
-    }
-    await _run(
-      () async => _replacePlan(
-        await _repository.setPlanArchived(plan.id, archived: archived),
-      ),
-      done: archived ? 'Archived ${plan.name}.' : 'Restored ${plan.name}.',
-      failed: 'Could not update the plan',
-    );
-  }
-
   Future<void> _updateSettings({
     String? currency,
     bool? requirePlanForBooking,
@@ -231,7 +165,7 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
     if (_error != null && _settings == null) {
       return AppCard(
         child: AppEmptyState.error(
-          title: 'Could not load membership plans',
+          title: 'Could not load membership settings',
           subtitle: _error,
           actionLabel: 'Retry',
           onAction: _load,
@@ -240,119 +174,10 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
       );
     }
     final settings = _settings!;
-    final active = [
-      for (final plan in _plans)
-        if (!plan.isArchived) plan,
-    ];
-    final archived = [
-      for (final plan in _plans)
-        if (plan.isArchived) plan,
-    ];
     final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'MEMBERSHIPS',
-                          style: appMono(
-                            fontSize: 10,
-                            letterSpacing: 1.5,
-                            color: appPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          'Membership plans',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  AppPrimaryButton(
-                    label: 'New plan',
-                    icon: Icons.add_rounded,
-                    onPressed: _busy ? null : _createPlan,
-                    size: AppButtonSize.md,
-                    expand: false,
-                  ),
-                ],
-              ),
-              const SizedBox(height: appSpaceSm),
-              Text(
-                'Athletes see these plans and request one; you approve the '
-                'request under Members → Requests, or assign a plan from a '
-                'member\'s detail.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: appSubtleText,
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: appSpaceLg),
-              if (active.isEmpty)
-                AppEmptyState(
-                  icon: Icons.workspace_premium_outlined,
-                  title: 'No plans yet',
-                  subtitle:
-                      'Create your first plan, e.g. Unlimited, 12 tokens a '
-                      'month or a 10-token pack.',
-                  actionLabel: 'New plan',
-                  onAction: _busy ? null : _createPlan,
-                  compact: true,
-                )
-              else
-                for (final plan in active) ...[
-                  _PlanTile(
-                    plan: plan,
-                    enabled: !_busy,
-                    onEdit: () => _editPlan(plan),
-                    onArchive: () => _setArchived(plan, true),
-                  ),
-                  const SizedBox(height: appSpaceSm),
-                ],
-              if (archived.isNotEmpty) ...[
-                const SizedBox(height: appSpaceSm),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _showArchived = !_showArchived),
-                    icon: Icon(
-                      _showArchived
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                    ),
-                    label: Text('Archived plans (${archived.length})'),
-                  ),
-                ),
-                if (_showArchived)
-                  for (final plan in archived) ...[
-                    _PlanTile(
-                      plan: plan,
-                      enabled: !_busy,
-                      onEdit: () => _editPlan(plan),
-                      onRestore: () => _setArchived(plan, false),
-                    ),
-                    const SizedBox(height: appSpaceSm),
-                  ],
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: appSpaceLg),
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -494,11 +319,7 @@ class _MembershipPlansPanelState extends ConsumerState<MembershipPlansPanel> {
         ),
         if (_stripe != StripeConnectState.unavailable) ...[
           const SizedBox(height: appSpaceLg),
-          _StripeCard(
-            state: _stripe,
-            busy: _busy,
-            onConnect: _connectStripe,
-          ),
+          _StripeCard(state: _stripe, busy: _busy, onConnect: _connectStripe),
         ],
       ],
     );
@@ -587,114 +408,6 @@ class _StripeCard extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PlanTile extends StatelessWidget {
-  const _PlanTile({
-    required this.plan,
-    required this.enabled,
-    required this.onEdit,
-    this.onArchive,
-    this.onRestore,
-  });
-
-  final MembershipPlan plan;
-  final bool enabled;
-  final VoidCallback onEdit;
-  final VoidCallback? onArchive;
-  final VoidCallback? onRestore;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final details = [
-      plan.limitLabel,
-      classTypesLabel(plan.allowedClassTypes),
-      '${plan.activeMemberCount} '
-          '${plan.activeMemberCount == 1 ? 'member' : 'members'}',
-    ].join(' · ');
-    return AppCard.inset(
-      onTap: enabled ? onEdit : null,
-      child: Row(
-        children: [
-          AppAccentBadge(
-            icon: switch (plan.type) {
-              PlanType.unlimited => Icons.all_inclusive_rounded,
-              PlanType.tokens => Icons.autorenew_rounded,
-              PlanType.tokenPack => Icons.confirmation_number_outlined,
-            },
-            color: plan.isArchived ? appSubtleText : appPrimary,
-            size: 38,
-          ),
-          const SizedBox(width: appSpaceMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        plan.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: appText,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (plan.isArchived) ...[
-                      const SizedBox(width: appSpaceSm),
-                      const AppPill(label: 'Archived', dense: true),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  details,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: appSubtleText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: appSpaceSm),
-          Text(
-            plan.priceLabel,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: appText,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          PopupMenuButton<String>(
-            enabled: enabled,
-            tooltip: 'Plan actions',
-            onSelected: (value) {
-              switch (value) {
-                case 'edit':
-                  onEdit();
-                case 'archive':
-                  onArchive?.call();
-                case 'restore':
-                  onRestore?.call();
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              if (onArchive != null)
-                const PopupMenuItem(value: 'archive', child: Text('Archive')),
-              if (onRestore != null)
-                const PopupMenuItem(value: 'restore', child: Text('Restore')),
-            ],
-          ),
         ],
       ),
     );

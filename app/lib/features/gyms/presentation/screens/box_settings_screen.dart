@@ -5,7 +5,7 @@ import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
-import 'package:app/features/memberships/presentation/membership_plans_panel.dart';
+import 'package:app/features/memberships/presentation/membership_settings_panel.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -147,7 +147,7 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
           onSave: () => _save('Scheduling rules'),
         );
       case _SettingsSection.memberships:
-        return const MembershipPlansPanel();
+        return const MembershipSettingsPanel();
       case _SettingsSection.notifications:
         return _NotificationsPanel(
           notifyJoinRequests: _notifyJoinRequests,

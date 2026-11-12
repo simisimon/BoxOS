@@ -29,11 +29,12 @@ void main() {
       // Box settings left the profile for a tab of its own, so the owner set
       // is two over the five-tab bottom-nav budget. One goes when the logbook
       // rebuild moves athlete history into the member detail.
-      expect(owner().length, 7);
+      expect(owner().length, 8);
       expect(owner().map((d) => d.label), [
         'Dashboard',
         'Classes',
         'Members',
+        'Memberships',
         'Community',
         'Logbook',
         'Settings',

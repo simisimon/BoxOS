@@ -1,6 +1,7 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
@@ -37,24 +38,29 @@ class PlanAssignment {
   final int? priceCents;
 }
 
-/// Pick a plan (unless [fixedPlan] is given), a start date and optionally a
-/// different price. Used to assign a plan and to approve a plan request.
-Future<PlanAssignment?> showPlanAssignmentDialog(
+/// Create membership panel (docs/admin-ui-reference.md §6): pick a plan
+/// (unless [fixedPlan] is given), a start date and optionally a different
+/// price, with a live payment timeline beside the form. Used to assign a plan
+/// and to approve a plan request.
+Future<PlanAssignment?> showPlanAssignmentPanel(
   BuildContext context, {
   required String title,
   required String confirmLabel,
   List<MembershipPlan> plans = const [],
   MemberPlan? fixedPlan,
   String? subtitle,
+  String? memberName,
 }) {
-  return showDialog<PlanAssignment>(
-    context: context,
+  return showAppSidePanel<PlanAssignment>(
+    context,
+    width: 860,
     builder: (_) => _PlanAssignmentDialog(
       title: title,
       subtitle: subtitle,
       confirmLabel: confirmLabel,
       plans: plans,
       fixedPlan: fixedPlan,
+      memberName: memberName,
     ),
   );
 }
@@ -66,6 +72,7 @@ class _PlanAssignmentDialog extends StatefulWidget {
     required this.confirmLabel,
     required this.plans,
     required this.fixedPlan,
+    required this.memberName,
   });
 
   final String title;
@@ -73,6 +80,7 @@ class _PlanAssignmentDialog extends StatefulWidget {
   final String confirmLabel;
   final List<MembershipPlan> plans;
   final MemberPlan? fixedPlan;
+  final String? memberName;
 
   @override
   State<_PlanAssignmentDialog> createState() => _PlanAssignmentDialogState();
@@ -143,11 +151,111 @@ class _PlanAssignmentDialogState extends State<_PlanAssignmentDialog> {
     );
   }
 
+  MembershipPlan? get _selectedPlan =>
+      widget.plans.where((p) => p.id == _planId).firstOrNull;
+
+  BillingPeriod? get _billing =>
+      widget.fixedPlan?.billingPeriod ?? _selectedPlan?.billingPeriod;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fixed = widget.fixedPlan;
-    return AppFormDialog(
+    final form = Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.memberName != null) ...[
+            InputDecorator(
+              decoration: const InputDecoration(labelText: 'Member'),
+              child: Text(widget.memberName!),
+            ),
+            const SizedBox(height: appSpaceLg),
+          ],
+          if (fixed != null)
+            AppCard.inset(
+              child: _PlanSummaryLine(
+                name: fixed.planName,
+                details:
+                    '${fixed.limitLabel} · '
+                    '${classTypesLabel(fixed.allowedClassTypes)}',
+                price: fixed.priceLabel,
+              ),
+            )
+          else if (widget.plans.isEmpty)
+            Text(
+              'Create a plan on the Memberships page first.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: appMutedText),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) => DropdownMenu<int>(
+                width: constraints.maxWidth,
+                initialSelection: _planId,
+                label: const Text('Membership plan'),
+                enableFilter: true,
+                requestFocusOnTap: true,
+                menuStyle: const MenuStyle(
+                  backgroundColor: WidgetStatePropertyAll(appSurfaceElevated),
+                ),
+                onSelected: (value) => setState(() {
+                  for (final plan in widget.plans) {
+                    if (plan.id == value) _selectPlan(plan);
+                  }
+                }),
+                dropdownMenuEntries: [
+                  for (final plan in widget.plans)
+                    DropdownMenuEntry(
+                      value: plan.id,
+                      label: plan.name,
+                      trailingIcon: Text(
+                        plan.priceLabel,
+                        style: const TextStyle(color: appSubtleText),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(height: appSpaceLg),
+          InkWell(
+            onTap: _pickDate,
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Start date',
+                suffixIcon: Icon(Icons.event_rounded),
+              ),
+              child: Text(_isoDate(_startsOn)),
+            ),
+          ),
+          const SizedBox(height: appSpaceLg),
+          TextFormField(
+            controller: _price,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Price for this member',
+              suffixText: _currency,
+            ),
+            validator: (value) =>
+                parsePriceCents(value ?? '') == null ? 'Enter a price' : null,
+          ),
+          const SizedBox(height: appSpaceSm),
+          Text(
+            'A plan the member is on now ends the day before this one starts.',
+            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+          ),
+        ],
+      ),
+    );
+    final timeline = _PaymentTimeline(
+      startsOn: _planId == null && fixed == null ? null : _startsOn,
+      billing: _billing,
+      priceCents: parsePriceCents(_price.text),
+      listPriceCents: _listPriceCents,
+      currency: _currency,
+    );
+    return AppSidePanel(
       title: widget.title,
       subtitle: widget.subtitle,
       actions: [
@@ -160,92 +268,228 @@ class _PlanAssignmentDialogState extends State<_PlanAssignmentDialog> {
           child: Text(widget.confirmLabel),
         ),
       ],
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (fixed != null)
-              AppCard.inset(
-                child: _PlanSummaryLine(
-                  name: fixed.planName,
-                  details:
-                      '${fixed.limitLabel} · '
-                      '${classTypesLabel(fixed.allowedClassTypes)}',
-                  price: fixed.priceLabel,
-                ),
+      child: LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth >= 640
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: form),
+                  const SizedBox(width: appSpace2xl),
+                  SizedBox(width: 280, child: timeline),
+                ],
               )
-            else if (widget.plans.isEmpty)
-              Text(
-                'Create a plan under Box configuration → Memberships first.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: appMutedText,
-                ),
-              )
-            else
-              RadioGroup<int>(
-                groupValue: _planId,
-                onChanged: (value) => setState(() {
-                  for (final plan in widget.plans) {
-                    if (plan.id == value) _selectPlan(plan);
-                  }
-                }),
-                child: Column(
-                  children: [
-                    for (final plan in widget.plans)
-                      RadioListTile<int>(
-                        value: plan.id,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(plan.name),
-                        subtitle: Text(
-                          '${plan.limitLabel} · ${plan.priceLabel}',
-                        ),
-                      ),
-                  ],
-                ),
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  form,
+                  const SizedBox(height: appSpace2xl),
+                  timeline,
+                ],
               ),
-            const SizedBox(height: appSpaceLg),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickDate,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Starts on',
-                        suffixIcon: Icon(Icons.event_rounded),
-                      ),
-                      child: Text(_isoDate(_startsOn)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: appSpaceMd),
-                Expanded(
-                  child: TextFormField(
-                    controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Price for this member',
-                      suffixText: _currency,
-                    ),
-                    validator: (value) => parsePriceCents(value ?? '') == null
-                        ? 'Enter a price'
-                        : null,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: appSpaceSm),
+      ),
+    );
+  }
+}
+
+/// Live preview of what the new membership bills: start, first payment, the
+/// next cycle, then plan price vs. this member's price.
+class _PaymentTimeline extends StatelessWidget {
+  const _PaymentTimeline({
+    required this.startsOn,
+    required this.billing,
+    required this.priceCents,
+    required this.listPriceCents,
+    required this.currency,
+  });
+
+  /// Null until a plan is chosen.
+  final DateTime? startsOn;
+  final BillingPeriod? billing;
+  final int? priceCents;
+  final int listPriceCents;
+  final String currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = startsOn;
+    final price = priceCents;
+    final decoration = BoxDecoration(
+      color: appSurface,
+      borderRadius: BorderRadius.circular(appRadiusLg),
+      border: Border.all(color: appBorder),
+    );
+    if (start == null || price == null) {
+      return Container(
+        padding: const EdgeInsets.all(appSpace2xl),
+        decoration: decoration,
+        child: const Column(
+          children: [
+            Icon(Icons.search_rounded, color: appSubtleText),
+            SizedBox(height: appSpaceSm),
             Text(
-              'A plan the member is on now ends the day before this one '
-              'starts.',
-              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
+              'No selection',
+              style: TextStyle(color: appText, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: appSpaceXs),
+            Text(
+              'Select a plan to continue.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: appSubtleText, fontSize: 12.5),
             ),
           ],
         ),
+      );
+    }
+    final next = switch (billing) {
+      BillingPeriod.monthly => _addMonths(start, 1),
+      BillingPeriod.yearly => _addMonths(start, 12),
+      _ => null,
+    };
+    final discount = listPriceCents - price;
+    return Container(
+      padding: const EdgeInsets.all(appSpaceLg),
+      decoration: decoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('PAYMENT TIMELINE', style: appMono(fontSize: 10)),
+          const SizedBox(height: appSpaceMd),
+          _TimelineStep(
+            title: 'Start · ${_isoDate(start)}',
+            subtitle: 'Membership starts',
+          ),
+          _TimelineStep(
+            title: formatPrice(price, currency),
+            subtitle: 'First payment',
+            accent: true,
+          ),
+          if (next != null)
+            _TimelineStep(
+              title: 'New cycle · ${_isoDate(next)}',
+              subtitle: 'Next payment of ${formatPrice(price, currency)}',
+              last: true,
+            )
+          else
+            const _TimelineStep(
+              title: 'One-off',
+              subtitle: 'No recurring payments',
+              last: true,
+            ),
+          const Divider(height: appSpace2xl, color: appBorder),
+          _SummaryRow('Plan price', formatPrice(listPriceCents, currency)),
+          _SummaryRow(
+            'Discount',
+            discount > 0 ? '− ${formatPrice(discount, currency)}' : 'N/A',
+          ),
+          _SummaryRow(
+            'Total${billing?.priceSuffix ?? ''}',
+            formatPrice(price, currency),
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// [date] plus [months], clamped to the target month's last day (Jan 31 +
+/// 1 month = Feb 28/29, not Mar 3).
+DateTime _addMonths(DateTime date, int months) {
+  final firstOfTarget = DateTime(date.year, date.month + months);
+  final lastDay = DateTime(firstOfTarget.year, firstOfTarget.month + 1, 0).day;
+  return DateTime(
+    firstOfTarget.year,
+    firstOfTarget.month,
+    date.day > lastDay ? lastDay : date.day,
+  );
+}
+
+class _TimelineStep extends StatelessWidget {
+  const _TimelineStep({
+    required this.title,
+    required this.subtitle,
+    this.accent = false,
+    this.last = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool accent;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent ? appPrimary : appSurfaceAlt,
+                  border: Border.all(
+                    color: accent ? appPrimary : appBorderStrong,
+                  ),
+                ),
+              ),
+              if (!last) Expanded(child: Container(width: 1, color: appBorderStrong)),
+            ],
+          ),
+          const SizedBox(width: appSpaceMd),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: last ? 0 : appSpaceLg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: appText,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: appSubtleText, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow(this.label, this.value, {this.strong = false});
+
+  final String label;
+  final String value;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      color: strong ? appText : appMutedText,
+      fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
+      fontSize: 13,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: appSpaceXs),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          Text(value, style: style),
+        ],
       ),
     );
   }
@@ -313,7 +557,7 @@ Future<bool> reviewPlanRequest(
   final repository = ref.read(membershipRepositoryProvider);
   PlanAssignment? assignment;
   if (approve) {
-    assignment = await showPlanAssignmentDialog(
+    assignment = await showPlanAssignmentPanel(
       context,
       title: 'Approve plan request',
       subtitle: request.memberName == null
@@ -467,6 +711,7 @@ class MemberPlanSection extends ConsumerStatefulWidget {
     required this.userId,
     required this.memberName,
     this.onChanged,
+    this.asTable = false,
   });
 
   final int userId;
@@ -474,6 +719,10 @@ class MemberPlanSection extends ConsumerStatefulWidget {
 
   /// Called after any change so the roster can refresh its plan pills.
   final VoidCallback? onChanged;
+
+  /// Member detail → Memberships tab (§4.2): every plan as a table with
+  /// "+ Create", instead of the Overview card. Same data and actions.
+  final bool asTable;
 
   @override
   ConsumerState<MemberPlanSection> createState() => _MemberPlanSectionState();
@@ -508,9 +757,7 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
 
   Future<void> _load() async {
     try {
-      final membership = await _repository.fetchMemberMembership(
-        widget.userId,
-      );
+      final membership = await _repository.fetchMemberMembership(widget.userId);
       if (!mounted) return;
       setState(() {
         _plans = membership.plans;
@@ -560,12 +807,12 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
       return;
     }
     if (!mounted) return;
-    final assignment = await showPlanAssignmentDialog(
+    final assignment = await showPlanAssignmentPanel(
       context,
-      title: 'Assign plan',
-      subtitle: 'Give ${widget.memberName} a plan.',
-      confirmLabel: 'Assign plan',
+      title: 'Create membership',
+      confirmLabel: 'Create membership',
       plans: plans,
+      memberName: widget.memberName,
     );
     if (assignment == null) return;
     await _act(
@@ -578,6 +825,18 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
       'Could not assign the plan',
     );
   }
+
+  /// Membership detail panel (§7); its actions reuse this section's.
+  Future<void> _openPlan(MemberPlan plan) => showMembershipDetailPanel(
+    context,
+    plan: plan,
+    memberName: widget.memberName,
+    onPaymentChanged: (status) => _act(
+      () => _repository.updatePaymentStatus(plan.id, status),
+      'Could not update payment',
+    ),
+    onEnd: () => _end(plan),
+  );
 
   Future<void> _end(MemberPlan plan) async {
     if (plan.paidOnline) {
@@ -691,8 +950,73 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
     if (mounted) setState(() => _busy = false);
   }
 
+  Widget _buildTable() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: appSpaceLg, bottom: appSpaceMd),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: AppPrimaryButton(
+              label: 'Create',
+              icon: Icons.add_rounded,
+              onPressed: _busy || _plans == null ? null : _assign,
+              size: AppButtonSize.md,
+              expand: false,
+            ),
+          ),
+        ),
+        Expanded(
+          child: _plans == null && _error == null
+              ? const AppLoadingState()
+              : AppDataTable<MemberPlan>(
+                  columns: const [
+                    AppTableColumn('Plan', flex: 3),
+                    AppTableColumn('Type', flex: 2, hideWhenNarrow: true),
+                    AppTableColumn('Status', flex: 2),
+                    AppTableColumn('Start', flex: 2, hideWhenNarrow: true),
+                    AppTableColumn('End', flex: 2, hideWhenNarrow: true),
+                    AppTableColumn('Payment', flex: 2),
+                  ],
+                  rows: _plans ?? const [],
+                  emptyText: _error ?? 'No memberships yet.',
+                  onRowTap: _busy ? null : _openPlan,
+                  cells: (plan) => [
+                    Text(
+                      plan.planName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: appText,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    _Muted(plan.type.label),
+                    AppPill(
+                      label: plan.state.label,
+                      intent: memberPlanStateIntent(plan.state),
+                      dense: true,
+                    ),
+                    _Muted(plan.startsOn ?? '—'),
+                    _Muted(plan.endsOn ?? '—'),
+                    AppPill(
+                      label: plan.paymentStatus.label,
+                      intent: paymentPillIntent(plan.paymentStatus),
+                      dense: true,
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: appSpaceLg),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.asTable) return _buildTable();
     final theme = Theme.of(context);
     final plans = _plans;
     Widget body;
@@ -728,6 +1052,7 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
             _ActivePlanTile(
               plan: plan,
               enabled: !_busy,
+              onOpen: () => _openPlan(plan),
               onPaymentChanged: (status) => _act(
                 () => _repository.updatePaymentStatus(plan.id, status),
                 'Could not update payment',
@@ -840,7 +1165,7 @@ class _MemberPlanSectionState extends ConsumerState<MemberPlanSection> {
               TextButton.icon(
                 onPressed: _busy || plans == null ? null : _assign,
                 icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Assign plan'),
+                label: const Text('Create'),
               ),
             ],
           ),
@@ -932,10 +1257,12 @@ class _ActivePlanTile extends StatelessWidget {
     required this.enabled,
     required this.onPaymentChanged,
     required this.onEnd,
+    required this.onOpen,
   });
 
   final MemberPlan plan;
   final bool enabled;
+  final VoidCallback onOpen;
   final ValueChanged<PaymentStatus> onPaymentChanged;
   final VoidCallback onEnd;
 
@@ -950,6 +1277,7 @@ class _ActivePlanTile extends StatelessWidget {
       if (plan.paidOnline) 'Paid via Stripe',
     ].join(' · ');
     return AppCard.inset(
+      onTap: enabled ? onOpen : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1008,4 +1336,139 @@ class _ActivePlanTile extends StatelessWidget {
       ),
     );
   }
+}
+
+AppPillIntent memberPlanStateIntent(MemberPlanState state) => switch (state) {
+  MemberPlanState.current => AppPillIntent.success,
+  MemberPlanState.upcoming => AppPillIntent.primary,
+  MemberPlanState.requested => AppPillIntent.warning,
+  MemberPlanState.rejected => AppPillIntent.danger,
+  _ => AppPillIntent.neutral,
+};
+
+/// Membership detail panel (docs/admin-ui-reference.md §7): plan name and
+/// state, the plan's terms in a grid, a short timeline, and End membership in
+/// the `⋯` menu. Payment status changes from the pill.
+Future<void> showMembershipDetailPanel(
+  BuildContext context, {
+  required MemberPlan plan,
+  required String memberName,
+  required ValueChanged<PaymentStatus> onPaymentChanged,
+  required VoidCallback onEnd,
+}) {
+  return showAppSidePanel<void>(
+    context,
+    builder: (panelContext) {
+      final cells = <(String, Widget)>[
+        ('Price', Text(plan.priceLabel)),
+        ('Billing', Text(plan.billingPeriod.label)),
+        (
+          'Payment',
+          plan.isActive
+              ? PopupMenuButton<PaymentStatus>(
+                  tooltip: 'Payment status',
+                  color: appSurfaceElevated,
+                  onSelected: (status) {
+                    Navigator.of(panelContext).pop();
+                    onPaymentChanged(status);
+                  },
+                  itemBuilder: (_) => [
+                    for (final status in PaymentStatus.values)
+                      PopupMenuItem(value: status, child: Text(status.label)),
+                  ],
+                  child: AppPill(
+                    label: plan.paymentStatus.label,
+                    icon: Icons.expand_more_rounded,
+                    intent: paymentPillIntent(plan.paymentStatus),
+                    dense: true,
+                  ),
+                )
+              : AppPill(
+                  label: plan.paymentStatus.label,
+                  intent: paymentPillIntent(plan.paymentStatus),
+                  dense: true,
+                ),
+        ),
+        ('Payment method', Text(plan.paidOnline ? 'Stripe' : 'On site')),
+        ('Check-ins', Text(plan.usageLabel ?? plan.limitLabel)),
+        ('Class types', Text(classTypesLabel(plan.allowedClassTypes))),
+      ];
+      return AppSidePanel(
+        title: plan.planName,
+        subtitle: memberName,
+        status: AppPill(
+          label: plan.state.label,
+          intent: memberPlanStateIntent(plan.state),
+          dense: true,
+        ),
+        menu: [if (plan.isActive) ('End membership', onEnd)],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: appSpaceLg,
+              runSpacing: appSpaceLg,
+              children: [
+                for (final (label, value) in cells)
+                  SizedBox(
+                    width: 240,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label.toUpperCase(), style: appMono(fontSize: 10)),
+                        const SizedBox(height: appSpaceXs),
+                        DefaultTextStyle.merge(
+                          style: const TextStyle(
+                            color: appText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          child: value,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: appSpace2xl),
+            Text('TIMELINE', style: appMono(fontSize: 10)),
+            const SizedBox(height: appSpaceMd),
+            if (plan.requestedAt != null)
+              _TimelineStep(
+                title: 'Requested',
+                subtitle: _isoDate(plan.requestedAt!.toLocal()),
+              ),
+            _TimelineStep(
+              title: 'Membership starts',
+              subtitle: plan.startsOn ?? 'Not set',
+              accent: true,
+            ),
+            if (plan.periodLabel != null)
+              _TimelineStep(
+                title: 'Current period',
+                subtitle: plan.periodLabel!,
+              ),
+            _TimelineStep(
+              title: plan.endsOn == null ? 'Runs until ended' : 'Ends',
+              subtitle: plan.endsOn ?? 'No end date',
+              last: true,
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _Muted extends StatelessWidget {
+  const _Muted(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(color: appMutedText, fontSize: 13),
+  );
 }

@@ -238,8 +238,8 @@ class _CellText extends StatelessWidget {
 }
 
 /// Member details page body (docs/admin-ui-reference.md §4.2): header card,
-/// then tabs Overview | Classes. [planSection] is the member's plan card,
-/// [bookings] feeds the Classes tab.
+/// then tabs Overview | Memberships | Classes. [planSection] is the member's
+/// plan card, [membershipsTab] the full plan table, [bookings] feeds Classes.
 class MemberDetailView extends StatelessWidget {
   const MemberDetailView({
     super.key,
@@ -247,6 +247,7 @@ class MemberDetailView extends StatelessWidget {
     required this.saving,
     required this.onSave,
     required this.planSection,
+    required this.membershipsTab,
     required this.bookings,
     this.onBack,
   });
@@ -255,13 +256,14 @@ class MemberDetailView extends StatelessWidget {
   final bool saving;
   final Future<void> Function(MemberDraft draft) onSave;
   final Widget planSection;
+  final Widget membershipsTab;
   final Future<List<MemberBooking>> bookings;
   final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: NestedScrollView(
         headerSliverBuilder: (context, _) => [
           SliverToBoxAdapter(
@@ -275,6 +277,7 @@ class MemberDetailView extends StatelessWidget {
                 tabAlignment: TabAlignment.start,
                 tabs: [
                   Tab(text: 'Overview'),
+                  Tab(text: 'Memberships'),
                   Tab(text: 'Classes'),
                 ],
               ),
@@ -289,6 +292,7 @@ class MemberDetailView extends StatelessWidget {
               onSave: onSave,
               planSection: planSection,
             ),
+            membershipsTab,
             _ClassesTab(bookings: bookings),
           ],
         ),

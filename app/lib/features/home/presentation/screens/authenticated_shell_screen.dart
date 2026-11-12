@@ -45,6 +45,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     final fullBleed = const {
       kMyBoxBranch,
       kMembersBranch,
+      kMembershipsBranch,
     }.contains(navigationShell.currentIndex);
 
     return AuthenticatedScaffold(

@@ -22,6 +22,9 @@ const int kTrackingBranch = 6;
 /// Profile.
 const int kBoxSettingsBranch = 7;
 
+/// Owner-only plan catalogue (docs/admin-ui-reference.md §9).
+const int kMembershipsBranch = 8;
+
 /// A single bottom-nav / rail destination. [branchIndex] is the shell branch it
 /// activates, decoupling the role-specific tab order from the fixed branch
 /// order in the router.
@@ -92,6 +95,12 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.groups_outlined,
     activeIcon: Icons.groups_rounded,
     label: 'Members',
+  ),
+  ShellDestination(
+    branchIndex: kMembershipsBranch,
+    icon: Icons.card_membership_outlined,
+    activeIcon: Icons.card_membership_rounded,
+    label: 'Memberships',
   ),
   ShellDestination(
     branchIndex: kCommunityBranch,

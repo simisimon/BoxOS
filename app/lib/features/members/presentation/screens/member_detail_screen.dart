@@ -120,6 +120,12 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                   memberName: memberDisplayName(user),
                   onChanged: _load,
                 ),
+                membershipsTab: MemberPlanSection(
+                  userId: user.id,
+                  memberName: memberDisplayName(user),
+                  onChanged: _load,
+                  asTable: true,
+                ),
               )
             : _error != null
             ? AppEmptyState.error(
