@@ -39,9 +39,13 @@ class AuthenticatedShellScreen extends ConsumerWidget {
               (ref.watch(pendingPlanRequestsProvider).value?.length ?? 0)
         : 0;
 
-    // Only the schedule week (My Box) spans the full width; every other view,
-    // the owner dashboard included, sits in the same clamped content column.
-    final fullBleed = navigationShell.currentIndex == kMyBoxBranch;
+    // The schedule week and views migrated to the admin layout
+    // (docs/admin-ui-reference.md) span the full width; the rest keep the
+    // clamped content column until their migration.
+    final fullBleed = const {
+      kMyBoxBranch,
+      kMembersBranch,
+    }.contains(navigationShell.currentIndex);
 
     return AuthenticatedScaffold(
       selectedBranchIndex: navBranchFor(navigationShell.currentIndex),

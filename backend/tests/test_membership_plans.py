@@ -82,6 +82,30 @@ class MembershipPlanTests(FastApiTestCase):
     def book(self, class_id: int, headers: dict | None = None):
         return self.client.post("/schedule/bookings", headers=headers or self.athlete_headers, json={"class_id": class_id})
 
+    # --- member bookings (owner's member detail) -----------------------------
+
+    def test_owner_lists_a_members_bookings_and_waitlist(self) -> None:
+        day = self.next_week_day(1)
+        early = self.create_class(day, hour=8)
+        full = self.create_class(day, hour=18, capacity=1)
+        self.assertEqual(self.book(early).status_code, 201)
+        self.create_verified_user("first@boxos.app")
+        self.add_active_membership("first@boxos.app", self.gym_id)
+        self.assertEqual(self.book(full, self.auth_headers("first@boxos.app", "BoxOS123!")).status_code, 201)
+        waitlisted = self.client.post("/schedule/waitlist", headers=self.athlete_headers, json={"class_id": full})
+        self.assertEqual(waitlisted.status_code, 201, waitlisted.text)
+
+        response = self.client.get(f"/membership/members/{self.athlete_id}/bookings", headers=self.admin_headers)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        rows = response.json()["bookings"]
+        self.assertEqual([(r["class_id"], r["status"]) for r in rows], [(full, "waitlist"), (early, "booked")])
+        # Athletes cannot read another member's bookings.
+        self.assertEqual(
+            self.client.get(f"/membership/members/{self.athlete_id}/bookings", headers=self.athlete_headers).status_code,
+            403,
+        )
+
     # --- plan definition ------------------------------------------------------
 
     def test_owner_creates_edits_and_archives_plans(self) -> None:

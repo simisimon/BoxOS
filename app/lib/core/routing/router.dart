@@ -18,6 +18,7 @@ import 'package:app/features/community/presentation/screens/community_screen.dar
 import 'package:app/features/home/presentation/screens/authenticated_shell_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
 import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
+import 'package:app/features/members/presentation/screens/member_detail_screen.dart';
 import 'package:app/features/members/presentation/screens/members_screen.dart';
 import 'package:app/features/tracking/presentation/screens/tracking_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
@@ -133,6 +134,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/members',
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':userId',
+                    name: 'member-detail',
+                    redirect: (context, state) =>
+                        int.tryParse(state.pathParameters['userId']!) == null
+                        ? '/members'
+                        : null,
+                    builder: (context, state) => MemberDetailScreen(
+                      userId: int.parse(state.pathParameters['userId']!),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -2208,6 +2208,41 @@ def get_member_plans(
         connection.close()
 
 
+@app.get("/membership/members/{user_id}/bookings")
+def get_member_bookings(
+    user_id: int,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """A member's class bookings and waitlist entries, newest class first, for
+    the Classes tab of the owner's member detail. Read-only."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        _require_member(connection, gym_id, user_id)
+        rows = connection.execute(
+            """
+            select class_schedules.id as class_id, class_schedules.title, class_schedules.class_type,
+                   class_schedules.start_time, class_schedules.end_time,
+                   trainers.display_name as trainer_name, entries.status
+            from (
+                select class_schedule_id, attendance_status as status
+                from class_bookings where user_id = ?
+                union all
+                select class_schedule_id, 'waitlist' as status
+                from class_waitlist_entries where user_id = ?
+            ) entries
+            join class_schedules on class_schedules.id = entries.class_schedule_id
+            left join users trainers on trainers.id = class_schedules.assigned_trainer_user_id
+            where class_schedules.gym_id = ?
+            order by class_schedules.start_time desc
+            """,
+            (user_id, user_id, gym_id),
+        ).fetchall()
+        return {"bookings": [dict(row) for row in rows]}
+    finally:
+        connection.close()
+
+
 @app.post("/membership/extra-tokens", status_code=HTTPStatus.CREATED.value)
 def grant_extra_tokens(
     body: GrantExtraTokensRequest,

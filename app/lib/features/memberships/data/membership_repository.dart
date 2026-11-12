@@ -1,4 +1,5 @@
 import 'package:app/core/network/dio_client.dart';
+import 'package:app/features/members/domain/member_booking.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
@@ -215,6 +216,17 @@ class MembershipRepository {
           ?.toInt(),
       currency: response.data?['currency'] as String? ?? 'EUR',
     );
+  }
+
+  Future<List<MemberBooking>> fetchMemberBookings(int userId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/membership/members/$userId/bookings',
+      options: await _options(),
+    );
+    return [
+      for (final row in response.data?['bookings'] as List? ?? const [])
+        MemberBooking.fromJson(row as Map<String, dynamic>),
+    ];
   }
 
   /// Owner adds [tokens] extra tokens; [priceCents] is the total paid
