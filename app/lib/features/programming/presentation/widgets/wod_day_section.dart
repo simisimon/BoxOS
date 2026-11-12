@@ -453,6 +453,22 @@ class _SectionRow extends StatelessWidget {
               height: 1.4,
             ),
           ),
+          // Member notes for everyone; coach notes only reach coaches (the
+          // server blanks them for members).
+          for (final (label, note) in [
+            ('Notes', section.memberNotes),
+            ('Coach notes', section.coachNotes),
+          ])
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '$label: $note',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: appMutedText,
+                  height: 1.4,
+                ),
+              ),
+            ],
         ],
       ),
     );
@@ -618,6 +634,7 @@ class _SectionDraft {
     required this.titleController,
     required this.descriptionController,
     required this.scoreType,
+    this.source,
   });
 
   factory _SectionDraft.empty() => _SectionDraft(
@@ -630,17 +647,34 @@ class _SectionDraft {
     titleController: TextEditingController(text: section.title),
     descriptionController: TextEditingController(text: section.description),
     scoreType: section.scoreType,
+    source: section,
   );
+
+  /// The block this draft edits; its structured fields (sets, notes) are not
+  /// shown here and must survive a save.
+  final DailyWorkoutSection? source;
 
   final TextEditingController titleController;
   final TextEditingController descriptionController;
   WorkoutSectionScore scoreType;
 
-  DailyWorkoutSection toSection() => DailyWorkoutSection(
-    title: titleController.text.trim(),
-    description: descriptionController.text.trim(),
-    scoreType: scoreType,
-  );
+  DailyWorkoutSection toSection() {
+    final description = descriptionController.text.trim();
+    // An exercise block whose text was edited here no longer matches its
+    // sets; the text wins and it becomes a plain workout block.
+    final keepStructure = source?.description == description;
+    return DailyWorkoutSection(
+      title: titleController.text.trim(),
+      description: description,
+      scoreType: scoreType,
+      kind: keepStructure ? source!.kind : BlockKind.workout,
+      exerciseName: keepStructure ? source!.exerciseName : '',
+      setUnit: source?.setUnit ?? SetUnit.percent,
+      sets: keepStructure ? source!.sets : const [],
+      coachNotes: source?.coachNotes ?? '',
+      memberNotes: source?.memberNotes ?? '',
+    );
+  }
 
   void dispose() {
     titleController.dispose();

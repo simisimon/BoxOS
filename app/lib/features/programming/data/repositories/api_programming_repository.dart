@@ -178,11 +178,7 @@ class ApiProgrammingRepository implements ProgrammingRepository {
     if (data == null) {
       throw Exception('Missing section data.');
     }
-    return DailyWorkoutSection(
-      title: data['title'] as String? ?? '',
-      description: data['description'] as String? ?? '',
-      scoreType: parseWorkoutSectionScore(data['score_type']),
-    );
+    return DailyWorkoutSection.fromJson(data);
   }
 
   WorkoutLogEntrySummary _workoutLogSummaryFromJson(

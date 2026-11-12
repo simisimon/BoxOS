@@ -59,18 +59,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Fran'), findsOneWidget);
       expect(find.text('Metcon'), findsOneWidget);
       expect(find.text('PUBLISHED'), findsOneWidget);
 
-      // Next week is all future: every column offers "Add WOD".
+      // Next week is all future: every column offers "Add block".
       await tester.tap(find.byTooltip('Next week'));
       await tester.pumpAndSettle();
-      expect(find.text('Fran'), findsNothing);
-      await tester.tap(find.text('Add WOD').first);
+      expect(find.text('Metcon'), findsNothing);
+      await tester.tap(find.text('Add block').first);
       await tester.pumpAndSettle();
       expect(find.byType(AppSidePanel), findsOneWidget);
-      expect(find.text('Save & Publish'), findsOneWidget);
+      expect(find.text('New block'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

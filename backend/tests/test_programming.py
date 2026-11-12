@@ -164,6 +164,49 @@ class ProgrammingApiTests(FastApiTestCase):
         self.assertEqual(sections[0]["title"], "")
         self.assertEqual(sections[0]["score_type"], "time")
 
+    def test_exercise_blocks_keep_sets_and_hide_coach_notes_from_members(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Block Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        block = {
+            "title": "Strength",
+            "description": "Back Squat: 5 @ 80%",
+            "score_type": "weight",
+            "kind": "exercise",
+            "exercise_name": "Back Squat",
+            "set_unit": "percent",
+            "sets": [{"reps": 5, "value": 80}, {"reps": 3, "value": None}],
+            "coach_notes": "Watch depth",
+            "member_notes": "Belt allowed",
+        }
+        created = self.client.post(
+            "/programming/workouts",
+            headers=admin_headers,
+            json={"scheduled_date": security.now_utc().date().isoformat(), "title": "Squat day", "sections": [block]},
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        saved = created.json()["workout"]["sections"][0]
+        self.assertEqual(saved["kind"], "exercise")
+        self.assertEqual(saved["sets"], [{"reps": 5, "value": 80.0}, {"reps": 3, "value": None}])
+        self.assertEqual(saved["coach_notes"], "Watch depth")
+
+        workout_id = created.json()["workout"]["id"]
+        self.client.post("/programming/workouts/publish", headers=admin_headers, json={"id": workout_id})
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+        seen = self.client.get("/programming/workouts", headers=athlete_headers).json()["workouts"][0]["sections"][0]
+        self.assertEqual(seen["coach_notes"], "")
+        self.assertEqual(seen["member_notes"], "Belt allowed")
+
+        bad = self.client.post(
+            "/programming/workouts",
+            headers=admin_headers,
+            json={
+                "scheduled_date": (security.now_utc().date() + timedelta(days=1)).isoformat(),
+                "title": "Bad",
+                "sections": [{**block, "sets": [{"reps": 0, "value": 80}]}],
+            },
+        )
+        self.assertEqual(bad.status_code, 400)
+
     def test_workout_section_validation_rejects_invalid_score(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Score Box")
         self.add_active_membership(settings.DEMO_EMAIL, gym_id)

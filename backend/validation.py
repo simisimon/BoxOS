@@ -737,9 +737,55 @@ def require_workout_sections(value: Any) -> list[dict[str, Any]]:
             )
         score_type = require_workout_section_score_type(raw.get("score_type"))
         sections.append(
-            {"title": title, "description": description, "score_type": score_type}
+            {
+                "title": title,
+                "description": description,
+                "score_type": score_type,
+                **_require_block_fields(raw, index),
+            }
         )
     return sections
+
+
+MAX_BLOCK_SETS = 30
+
+
+def _require_block_fields(raw: dict[str, Any], index: int) -> dict[str, Any]:
+    """Optional structured-block fields of a section; older clients omit
+    them and get a plain 'workout' block."""
+    label = f"Section {index + 1}"
+    kind = str(raw.get("kind") or "workout")
+    if kind not in {"workout", "exercise"}:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} kind must be 'workout' or 'exercise'.")
+    set_unit = str(raw.get("set_unit") or "percent")
+    if set_unit not in {"percent", "rpe"}:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} set unit must be 'percent' or 'rpe'.")
+    raw_sets = raw.get("sets") or []
+    if not isinstance(raw_sets, list) or len(raw_sets) > MAX_BLOCK_SETS:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} can have at most {MAX_BLOCK_SETS} sets.")
+    sets = []
+    for raw_set in raw_sets:
+        try:
+            reps = int(raw_set["reps"])
+            value = raw_set.get("value")
+            value = None if value is None else float(value)
+        except (TypeError, ValueError, KeyError):
+            raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} has an invalid set.") from None
+        if not 1 <= reps <= 999 or (value is not None and not 0 <= value <= 1000):
+            raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} has an invalid set.")
+        sets.append({"reps": reps, "value": value})
+    fields = {
+        "kind": kind,
+        "exercise_name": str(raw.get("exercise_name") or "").strip(),
+        "set_unit": set_unit,
+        "sets": sets,
+        "coach_notes": str(raw.get("coach_notes") or "").strip(),
+        "member_notes": str(raw.get("member_notes") or "").strip(),
+    }
+    for key in ("exercise_name", "coach_notes", "member_notes"):
+        if len(fields[key]) > 2000:
+            raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} {key.replace('_', ' ')} is too long.")
+    return fields
 
 
 def require_chat_message_body(value: Any) -> str:

@@ -473,6 +473,16 @@ alter table gyms add column if not exists stripe_details_submitted integer not n
 alter table member_plans add column if not exists stripe_checkout_session_id text;
 
 alter table member_plans add column if not exists stripe_subscription_id text;
+
+-- Structured program blocks (docs/admin-ui-reference.md §3.1): a section is a
+-- free-text 'workout' or an 'exercise' with numbered sets (reps @ % or RPE).
+-- The description keeps a readable text version for every reader.
+alter table daily_workout_sections add column if not exists kind text not null default 'workout';
+alter table daily_workout_sections add column if not exists exercise_name text not null default '';
+alter table daily_workout_sections add column if not exists set_unit text not null default 'percent';
+alter table daily_workout_sections add column if not exists sets_json text not null default '[]';
+alter table daily_workout_sections add column if not exists coach_notes text not null default '';
+alter table daily_workout_sections add column if not exists member_notes text not null default '';
 alter table member_plans add column if not exists stripe_paid_invoice_id text;
 
 create index if not exists member_plans_stripe_subscription_idx on member_plans (stripe_subscription_id);

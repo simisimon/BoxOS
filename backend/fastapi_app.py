@@ -366,10 +366,22 @@ class TrackingSessionRequest(BaseModel):
     notes_text: str | None = None
 
 
+class DailyWorkoutSetPayload(BaseModel):
+    reps: int
+    value: float | None = None
+
+
 class DailyWorkoutSectionPayload(BaseModel):
     title: str | None = None
     description: str
     score_type: str
+    # Structured block (docs/admin-ui-reference.md §3.1); all optional.
+    kind: str | None = None
+    exercise_name: str | None = None
+    set_unit: str | None = None
+    sets: list[DailyWorkoutSetPayload] | None = None
+    coach_notes: str | None = None
+    member_notes: str | None = None
 
 
 class DailyWorkoutRequest(BaseModel):
