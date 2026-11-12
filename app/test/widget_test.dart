@@ -627,7 +627,7 @@ class RecordingScheduleRepository implements ScheduleRepository {
   }
 
   @override
-  Future<void> cancelBooking({required int classId}) async {
+  Future<void> cancelBooking({required int classId, int? userId}) async {
     lastCancelledClassId = classId;
     classes = [
       for (final item in classes)

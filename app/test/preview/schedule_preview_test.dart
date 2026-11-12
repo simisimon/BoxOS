@@ -140,7 +140,7 @@ class _FakeScheduleRepository implements ScheduleRepository {
   Future<void> bookClass({required int classId}) async {}
 
   @override
-  Future<void> cancelBooking({required int classId}) async {}
+  Future<void> cancelBooking({required int classId, int? userId}) async {}
 
   @override
   Future<void> joinWaitlist({required int classId}) async {}

@@ -100,6 +100,41 @@ class ScheduleApiTests(FastApiTestCase):
         self.assertTrue(promoted_class["is_booked"])
         self.assertEqual(promoted_class["waitlist_count"], 0)
 
+    def test_owner_removes_a_members_booking_and_promotes_the_waitlist(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Remove Box")
+        athlete_id = self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        self.create_verified_user("next@boxos.app")
+        self.add_active_membership("next@boxos.app", gym_id)
+        class_id = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Cap One",
+                "class_type": "WOD",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 45,
+                "capacity": 1,
+                "recurrence_frequency": "none",
+            },
+        ).json()["class"]["id"]
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+        next_headers = self.auth_headers("next@boxos.app", "BoxOS123!")
+        self.assertEqual(self.client.post("/schedule/bookings", headers=athlete_headers, json={"class_id": class_id}).status_code, 201)
+        self.assertEqual(self.client.post("/schedule/waitlist", headers=next_headers, json={"class_id": class_id}).status_code, 201)
+
+        # Members cannot remove someone else.
+        refused = self.client.request(
+            "DELETE", "/schedule/bookings", headers=next_headers, json={"class_id": class_id, "user_id": athlete_id}
+        )
+        self.assertEqual(refused.status_code, 403)
+
+        removed = self.client.request(
+            "DELETE", "/schedule/bookings", headers=admin_headers, json={"class_id": class_id, "user_id": athlete_id}
+        )
+        self.assertEqual(removed.status_code, 200, removed.text)
+        promoted = self.client.get("/schedule/classes", headers=next_headers).json()["classes"][0]
+        self.assertTrue(promoted["is_booked"])
+
     def test_cannot_reduce_capacity_below_existing_bookings(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Capacity Box")
         self.add_active_membership(settings.DEMO_EMAIL, gym_id)

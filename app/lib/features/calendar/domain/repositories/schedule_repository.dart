@@ -45,7 +45,9 @@ abstract class ScheduleRepository {
 
   Future<void> bookClass({required int classId});
 
-  Future<void> cancelBooking({required int classId});
+  /// Cancels the caller's booking, or [userId]'s when an owner or trainer
+  /// removes a member from the class.
+  Future<void> cancelBooking({required int classId, int? userId});
 
   Future<void> joinWaitlist({required int classId});
 

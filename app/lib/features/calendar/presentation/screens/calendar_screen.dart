@@ -413,6 +413,45 @@ class _ClassSidePanel extends ConsumerWidget {
   final void Function(ScheduleClass item) onDelete;
   final ValueChanged<int> onEditSchedule;
 
+  /// Takes [booking]'s member off [item] (e.g. they called to cancel); the
+  /// next eligible member on the waitlist moves up.
+  Future<void> _removeBooking(
+    BuildContext context,
+    WidgetRef ref,
+    ScheduleClass item,
+    ScheduleBooking booking,
+  ) async {
+    final name = booking.displayName.isEmpty
+        ? booking.nickname
+        : booking.displayName;
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Remove $name?',
+      message:
+          '$name is taken off ${item.title}. If the class has a waiting '
+          'list, the next member moves up.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(scheduleRepositoryProvider)
+          .cancelBooking(classId: item.id, userId: booking.userId);
+      ref.invalidate(scheduleListProvider);
+      messenger.showSnackBar(SnackBar(content: Text('Removed $name.')));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Could not remove the member'),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final item = (ref.watch(scheduleListProvider).value ?? const [])
@@ -470,6 +509,9 @@ class _ClassSidePanel extends ConsumerWidget {
             onToggleWaitlist: () => onToggleWaitlist(item),
             onUpdateAttendance: (booking, status) =>
                 onUpdateAttendance(item, booking, status),
+            onRemoveBooking: canManage
+                ? (booking) => _removeBooking(context, ref, item, booking)
+                : null,
           ),
         ),
         AppPanelTab(
@@ -508,9 +550,13 @@ class _ScheduleClassCard extends StatelessWidget {
     required this.onToggleBooking,
     required this.onToggleWaitlist,
     required this.onUpdateAttendance,
+    this.onRemoveBooking,
   });
 
   final ScheduleClass item;
+
+  /// Removes a member's booking (managers, upcoming classes).
+  final ValueChanged<ScheduleBooking>? onRemoveBooking;
 
   /// Title of the day's programmed WOD; only shown on WOD-type classes.
   final String? wodTitle;
@@ -657,6 +703,9 @@ class _ScheduleClassCard extends StatelessWidget {
                       booking: booking,
                       canManageAttendance: canManageAttendance,
                       onUpdateAttendance: onUpdateAttendance,
+                      onRemove: canManage && isFuture && onRemoveBooking != null
+                          ? () => onRemoveBooking!(booking)
+                          : null,
                     ),
                     const SizedBox(height: 10),
                   ],
@@ -972,10 +1021,14 @@ class _AttendanceRow extends StatelessWidget {
     required this.booking,
     required this.canManageAttendance,
     required this.onUpdateAttendance,
+    this.onRemove,
   });
 
   final ScheduleBooking booking;
   final bool canManageAttendance;
+
+  /// Owners and trainers take a member off an upcoming class; null hides it.
+  final VoidCallback? onRemove;
   final Future<void> Function(ScheduleBooking booking, String attendanceStatus)
   onUpdateAttendance;
 
@@ -997,6 +1050,16 @@ class _AttendanceRow extends StatelessWidget {
               color: Colors.transparent,
               child: Chip(label: Text(_labelFor(booking.attendanceStatus))),
             ),
+            if (onRemove != null)
+              IconButton(
+                tooltip: 'Remove from class',
+                onPressed: onRemove,
+                icon: const Icon(
+                  Icons.person_remove_outlined,
+                  size: 18,
+                  color: appDanger,
+                ),
+              ),
           ],
         ),
         if (canManageAttendance)

@@ -16,6 +16,7 @@ import 'package:app/features/profile/domain/models/notification_preferences.dart
 import 'package:app/features/profile/domain/models/user_profile.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/app.dart';
+import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,6 +103,12 @@ final _seriesSession = ScheduleClass(
 class _FakeScheduleRepository implements ScheduleRepository {
   ClassTemplateDraft? lastCreatedTemplate;
   int? lastBookedClassId;
+  int? lastRemovedUserId;
+
+  @override
+  Future<void> cancelBooking({required int classId, int? userId}) async {
+    lastRemovedUserId = userId;
+  }
 
   @override
   Future<void> bookClass({required int classId}) async {
@@ -186,6 +193,7 @@ Future<_FakeScheduleRepository> _pumpSchedule(
   WidgetTester tester,
   Size size, {
   UserProfile profile = _owner,
+  ScheduleClass? session,
 }) async {
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
@@ -197,7 +205,9 @@ Future<_FakeScheduleRepository> _pumpSchedule(
       overrides: [
         currentProfileProvider.overrideWith((ref) async => profile),
         scheduleRepositoryProvider.overrideWithValue(repository),
-        scheduleListProvider.overrideWith((ref) async => [_seriesSession]),
+        scheduleListProvider.overrideWith(
+          (ref) async => [session ?? _seriesSession],
+        ),
         programmingRepositoryProvider.overrideWithValue(
           _FakeProgrammingRepository(),
         ),
@@ -355,6 +365,43 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(find.text('Create recurring classes'), findsOneWidget);
+    });
+
+    testWidgets('Owners remove a booked member at $size', (tester) async {
+      final repository = await _pumpSchedule(
+        tester,
+        size,
+        session: ScheduleClass(
+          id: 10,
+          gymId: 1,
+          title: 'CrossFit',
+          classType: 'WOD',
+          startTime: _tomorrowAt(17).add(const Duration(minutes: 30)),
+          durationMinutes: 60,
+          capacity: 20,
+          classTemplateId: 1,
+          remainingSpots: 19,
+          bookedCount: 1,
+          bookings: const [
+            ScheduleBooking(
+              userId: 42,
+              displayName: 'Clara Haas',
+              nickname: 'clara',
+              attendanceStatus: 'booked',
+              isCurrentUser: false,
+            ),
+          ],
+        ),
+      );
+      await _openTomorrowClass(tester);
+      await tester.ensureVisible(find.byTooltip('Remove from class'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Remove from class'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(repository.lastRemovedUserId, 42);
     });
 
     testWidgets('Athletes book a class from the week at $size', (tester) async {

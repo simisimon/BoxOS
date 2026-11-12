@@ -3305,12 +3305,26 @@ def create_class_booking(
         connection.close()
 
 
+class CancelBookingRequest(BaseModel):
+    class_id: int
+    # Owners and trainers remove someone else's booking (e.g. they called to
+    # cancel); members always cancel their own.
+    user_id: int | None = None
+
+
 @app.delete("/schedule/bookings")
 def delete_class_booking(
-    body: ClassIdRequest,
+    body: CancelBookingRequest,
     session: dict[str, Any] = Depends(require_active_gym_member_session),
 ) -> dict[str, str]:
     schedule_id = body.class_id
+    user_id = session["user_id"] if body.user_id is None else body.user_id
+    removing_other = user_id != session["user_id"]
+    if removing_other and session["role"] not in {"admin", "trainer"}:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN.value,
+            detail="The owner or trainer role is required for this action.",
+        )
     connection = db.get_connection()
     try:
         schedule_row = connection.execute(
@@ -3323,14 +3337,19 @@ def delete_class_booking(
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Only future classes can be cancelled.")
         existing_booking = connection.execute(
             "select id from class_bookings where class_schedule_id = ? and user_id = ?",
-            (schedule_id, session["user_id"]),
+            (schedule_id, user_id),
         ).fetchone()
         if existing_booking is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="You do not have a booking for this class.")
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND.value,
+                detail="This member has no booking for this class."
+                if removing_other
+                else "You do not have a booking for this class.",
+            )
         with connection:
             connection.execute(
                 "delete from class_bookings where class_schedule_id = ? and user_id = ?",
-                (schedule_id, session["user_id"]),
+                (schedule_id, user_id),
             )
             promoted_user_id = plan_service.promote_next_eligible_waitlisted_user(connection, class_schedule_id=schedule_id)
             if promoted_user_id is not None:
