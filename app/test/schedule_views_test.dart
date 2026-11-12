@@ -176,7 +176,6 @@ class _FakeProgrammingRepository implements ProgrammingRepository {
         status: DailyWorkoutStatus.published,
         publishedAt: now,
         canEdit: true,
-        myWorkoutLog: null,
       ),
     ];
   }
@@ -261,7 +260,7 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('Log Results'), findsOneWidget);
+      expect(find.text('Log Results'), findsNothing);
       expect(find.text('Whiteboard'), findsNothing);
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();

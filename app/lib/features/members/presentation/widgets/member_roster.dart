@@ -900,9 +900,6 @@ class _MemberStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final newestPr = user.newestPrTitle.trim().isEmpty
-        ? 'No PR yet'
-        : '${user.newestPrTitle} · ${user.newestPrScore}';
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 520;
@@ -918,14 +915,6 @@ class _MemberStats extends StatelessWidget {
             label: 'Total bookings',
             value: '${user.totalBookings}',
             helper: '${user.noShowBookings} no-shows',
-          ),
-          _StatTile(
-            icon: Icons.emoji_events_outlined,
-            label: 'Newest PR',
-            value: newestPr,
-            helper: user.newestPrAt == null
-                ? 'No logged PR'
-                : formatShortDate(user.newestPrAt!),
           ),
         ];
         if (narrow) {

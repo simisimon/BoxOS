@@ -28,7 +28,6 @@ class _FakeProgramming implements ProgrammingRepository {
         status: DailyWorkoutStatus.published,
         publishedAt: now,
         canEdit: true,
-        myWorkoutLog: null,
       ),
     ];
   }

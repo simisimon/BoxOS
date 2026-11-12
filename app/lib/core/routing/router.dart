@@ -19,12 +19,10 @@ import 'package:app/features/calendar/presentation/screens/calendar_screen.dart'
 import 'package:app/features/community/presentation/screens/community_screen.dart';
 import 'package:app/features/home/presentation/screens/authenticated_shell_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
-import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
 import 'package:app/features/members/presentation/screens/member_detail_screen.dart';
 import 'package:app/features/members/presentation/screens/members_screen.dart';
 import 'package:app/features/memberships/presentation/screens/memberships_screen.dart';
 import 'package:app/features/programming/presentation/screens/programs_screen.dart';
-import 'package:app/features/tracking/presentation/screens/tracking_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
@@ -126,15 +124,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/logbook',
-                name: 'logbook',
-                builder: (context, state) => const LogbookScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
                 path: '/members',
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
@@ -169,15 +158,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/profile',
                 name: 'profile',
                 builder: (context, state) => const ProfileScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/tracking',
-                name: 'tracking',
-                builder: (context, state) => const TrackingScreen(),
               ),
             ],
           ),

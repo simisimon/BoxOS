@@ -62,7 +62,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
             ));
 
     return AuthenticatedScaffold(
-      selectedBranchIndex: navBranchFor(navigationShell.currentIndex),
+      selectedBranchIndex: navigationShell.currentIndex,
       destinations: destinations,
       displayName: profile?.displayName ?? '',
       roleLabel: profile?.role.label ?? 'Athlete',
@@ -104,14 +104,13 @@ class AuthenticatedShellScreen extends ConsumerWidget {
   }
 
   /// Where a notification leads: the page that shows what it is about.
-  /// Matches the backend's `type` first (a PR is filed under its WOD), then
+  /// Matches the backend's `type` first, then
   /// its `entity_type`.
   static String? _locationFor(
     AppNotification notification, {
     required bool owner,
     required bool manager,
   }) => switch ((notification.type, notification.entityType)) {
-    ('pr_achieved', _) => '/logbook',
     (_, 'announcement') => owner ? '/messages' : '/community',
     (_, 'daily_workout') => manager ? '/programs' : '/my-box',
     (_, 'schedule_class') => '/my-box',

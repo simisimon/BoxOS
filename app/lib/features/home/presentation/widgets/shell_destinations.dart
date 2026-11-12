@@ -7,33 +7,25 @@ import 'package:flutter/material.dart';
 /// branch index instead of assuming the nav position equals the branch.
 const int kHomeBranch = 0;
 const int kMyBoxBranch = 1;
-const int kLogbookBranch = 2;
-const int kMembersBranch = 3;
-const int kCommunityBranch = 4;
-const int kProfileBranch = 5;
+const int kMembersBranch = 2;
+const int kCommunityBranch = 3;
+const int kProfileBranch = 4;
 
-/// Tracking has no tab of its own: it answers the same question as the logbook
-/// ("how am I doing"), so it is reached from there. The router still keeps the
-/// branch, which is why the index stays.
-const int kTrackingBranch = 6;
-
-/// Owner-only box configuration. Appended after Tracking so the existing branch
-/// indices stay stable; the owner tab order places it between Logbook and
-/// Profile.
-const int kBoxSettingsBranch = 7;
+/// Owner-only box configuration.
+const int kBoxSettingsBranch = 5;
 
 /// Owner-only plan catalogue (docs/admin-ui-reference.md §9).
-const int kMembershipsBranch = 8;
+const int kMembershipsBranch = 6;
 
 /// WOD programming board (docs/admin-ui-reference.md §3); owners and
 /// trainers.
-const int kProgramsBranch = 9;
+const int kProgramsBranch = 7;
 
 /// Owner reports (docs/admin-ui-reference.md §8); Attendance for now.
-const int kReportsBranch = 10;
+const int kReportsBranch = 8;
 
-/// Owner messages: the box's announcements (docs/admin-ui-reference.md §5).
-const int kMessagesBranch = 11;
+/// Owner messages: announcements and box chat (docs/admin-ui-reference.md §5).
+const int kMessagesBranch = 9;
 
 const _programsDestination = ShellDestination(
   branchIndex: kProgramsBranch,
@@ -85,12 +77,6 @@ const List<ShellDestination> _athleteDestinations = [
     label: 'Community',
   ),
   ShellDestination(
-    branchIndex: kLogbookBranch,
-    icon: Icons.menu_book_outlined,
-    activeIcon: Icons.menu_book_rounded,
-    label: 'Logbook',
-  ),
-  ShellDestination(
     branchIndex: kProfileBranch,
     icon: Icons.person_outline_rounded,
     activeIcon: Icons.person_rounded,
@@ -137,18 +123,7 @@ const List<ShellDestination> _ownerDestinations = [
     activeIcon: Icons.card_membership_rounded,
     label: 'Memberships',
   ),
-  ShellDestination(
-    branchIndex: kCommunityBranch,
-    icon: Icons.chat_bubble_outline_rounded,
-    activeIcon: Icons.chat_bubble_rounded,
-    label: 'Community',
-  ),
-  ShellDestination(
-    branchIndex: kLogbookBranch,
-    icon: Icons.menu_book_outlined,
-    activeIcon: Icons.menu_book_rounded,
-    label: 'Logbook',
-  ),
+  // The box chat is a tab of Messages for owners, not a nav item.
   ShellDestination(
     branchIndex: kBoxSettingsBranch,
     icon: Icons.tune_outlined,
@@ -177,13 +152,6 @@ bool isOwnerView({
   required AccountType? accountType,
   required UserRole? role,
 }) => accountType == AccountType.admin && role == UserRole.admin;
-
-/// The tab that should read as active for [branchIndex].
-///
-/// Tracking has no tab of its own and is entered from the logbook, so it keeps
-/// the Logbook tab lit instead of falling back to the first one.
-int navBranchFor(int branchIndex) =>
-    branchIndex == kTrackingBranch ? kLogbookBranch : branchIndex;
 
 /// The nav destinations for the current account/role pair.
 List<ShellDestination> destinationsForView({

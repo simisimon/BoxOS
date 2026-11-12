@@ -458,26 +458,9 @@ class _CommunityDashboardPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.sizeOf(context).width >= 900;
     return AppCard.elevated(
       padding: const EdgeInsets.all(appSpaceLg),
-      child: isWide
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 5, child: _StatsGrid(stats: dashboard.stats)),
-                const SizedBox(width: appSpaceLg),
-                Expanded(flex: 4, child: _NewestPrs(prs: dashboard.newestPrs)),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _StatsGrid(stats: dashboard.stats),
-                const SizedBox(height: appSpaceLg),
-                _NewestPrs(prs: dashboard.newestPrs),
-              ],
-            ),
+      child: _StatsGrid(stats: dashboard.stats),
     );
   }
 }
@@ -509,12 +492,6 @@ class _StatsGrid extends StatelessWidget {
         value: stats.owners.toString(),
         icon: Icons.admin_panel_settings_outlined,
         color: appWarning,
-      ),
-      _CommunityMetric(
-        label: 'PRs 30d',
-        value: stats.prsLast30Days.toString(),
-        icon: Icons.emoji_events_outlined,
-        color: appSuccess,
       ),
       _CommunityMetric(
         label: 'Chat 7d',
@@ -571,113 +548,6 @@ class _CommunityMetric extends StatelessWidget {
           const SizedBox(width: appSpaceMd),
           Expanded(
             child: AppMetric(label: label, value: value, valueSize: 22),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NewestPrs extends StatelessWidget {
-  const _NewestPrs({required this.prs});
-
-  final List<CommunityPr> prs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _PanelTitle(
-          icon: Icons.workspace_premium_outlined,
-          title: 'Newest PRs',
-        ),
-        const SizedBox(height: appSpaceMd),
-        if (prs.isEmpty)
-          const AppEmptyState(
-            icon: Icons.emoji_events_outlined,
-            title: 'No PRs yet',
-            subtitle: 'New member records appear here as soon as they log one.',
-            compact: true,
-          )
-        else
-          Column(
-            children: [
-              for (var index = 0; index < prs.length; index++) ...[
-                _PrRow(pr: prs[index]),
-                if (index != prs.length - 1) const SizedBox(height: appSpaceSm),
-              ],
-            ],
-          ),
-      ],
-    );
-  }
-}
-
-class _PrRow extends StatelessWidget {
-  const _PrRow({required this.pr});
-
-  final CommunityPr pr;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AppCard.inset(
-      padding: const EdgeInsets.all(appSpaceMd),
-      child: Row(
-        children: [
-          const AppAccentBadge(
-            icon: Icons.emoji_events_outlined,
-            color: appSuccess,
-            size: 38,
-          ),
-          const SizedBox(width: appSpaceMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  pr.memberLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: appText,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  pr.workoutTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: appSubtleText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: appSpaceMd),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                pr.scoreLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: appSuccess,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _formatRelativeDate(pr.updatedAt),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: appSubtleText,
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -1014,15 +884,4 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatRelativeDate(DateTime value) {
-  final now = DateTime.now();
-  final difference = now.difference(value);
-  if (difference.inDays <= 0) return 'Today';
-  if (difference.inDays == 1) return 'Yesterday';
-  if (difference.inDays < 7) return '${difference.inDays}d ago';
-  final day = value.day.toString().padLeft(2, '0');
-  final month = value.month.toString().padLeft(2, '0');
-  return '$day.$month';
 }

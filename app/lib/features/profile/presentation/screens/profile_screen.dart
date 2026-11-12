@@ -2,7 +2,6 @@ import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
 
 import 'package:app/features/auth/application/auth_controller.dart';
-import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/memberships/presentation/my_membership_card.dart';
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -12,60 +11,6 @@ import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-/// Weekly training-session goal driving the profile snapshot's "x/N" chip.
-/// Mirrors the home screen's goal so both surfaces tell the same story.
-const _weeklySessionGoal = 5;
-
-/// At-a-glance training stats shown in the profile hero, derived from the
-/// athlete's logbook so the screen reads as "alive" rather than settings-only.
-class _TrainingSnapshot {
-  const _TrainingSnapshot({
-    required this.sessionsThisWeek,
-    required this.weekStreak,
-    required this.prCount,
-  });
-
-  final int sessionsThisWeek;
-  final int weekStreak;
-  final int prCount;
-}
-
-DateTime _weekStart(DateTime date) {
-  final d = DateTime(date.year, date.month, date.day);
-  return d.subtract(Duration(days: d.weekday - DateTime.monday));
-}
-
-final _trainingSnapshotProvider = FutureProvider.autoDispose<_TrainingSnapshot>(
-  (ref) async {
-    final entries = await ref.read(logbookRepositoryProvider).fetchEntries();
-    final thisWeekStart = _weekStart(DateTime.now());
-
-    var sessionsThisWeek = 0;
-    var prCount = 0;
-    final weeksWithSessions = <DateTime>{};
-    for (final entry in entries) {
-      if (entry.isPr) prCount++;
-      final weekStart = _weekStart(entry.scheduledDate);
-      weeksWithSessions.add(weekStart);
-      if (!weekStart.isBefore(thisWeekStart)) sessionsThisWeek++;
-    }
-
-    // Walk back week-by-week from the current week while sessions exist.
-    var streak = 0;
-    var cursor = thisWeekStart;
-    while (weeksWithSessions.contains(cursor)) {
-      streak++;
-      cursor = cursor.subtract(const Duration(days: 7));
-    }
-
-    return _TrainingSnapshot(
-      sessionsThisWeek: sessionsThisWeek,
-      weekStreak: streak,
-      prCount: prCount,
-    );
-  },
-);
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -98,9 +43,6 @@ class ProfileScreen extends ConsumerWidget {
               roleLabel: profile?.role.label ?? 'Athlete',
               gymName: profile?.activeGym?.name,
               profileImageUrl: profile?.profileImageUrl ?? '',
-              snapshot: profile?.activeGym == null
-                  ? null
-                  : ref.watch(_trainingSnapshotProvider).value,
             ),
             const SizedBox(height: appSpace2xl),
             // Athletes see their plan at the active box; owners manage plans
@@ -152,7 +94,7 @@ class ProfileScreen extends ConsumerWidget {
                   icon: Icons.notifications_outlined,
                   title: 'Notification Settings',
                   subtitle:
-                      'Tune workout, PR, booking, and payment-related alerts.',
+                      'Tune workout, booking, and payment-related alerts.',
                   enabled: !isLoading,
                   onTap: () => context.go('/notification-settings'),
                 ),
@@ -232,7 +174,6 @@ class _ProfileHero extends StatelessWidget {
     required this.roleLabel,
     required this.gymName,
     required this.profileImageUrl,
-    this.snapshot,
   });
 
   final String displayName;
@@ -241,7 +182,6 @@ class _ProfileHero extends StatelessWidget {
   final String roleLabel;
   final String? gymName;
   final String profileImageUrl;
-  final _TrainingSnapshot? snapshot;
 
   @override
   Widget build(BuildContext context) {
@@ -305,79 +245,8 @@ class _ProfileHero extends StatelessWidget {
               AppPill(label: gymName ?? 'No gym selected'),
             ],
           ),
-          if (snapshot != null) ...[
-            const SizedBox(height: appSpaceLg),
-            const Divider(height: 1, color: appBorder),
-            const SizedBox(height: appSpaceLg),
-            Row(
-              children: [
-                Expanded(
-                  child: _SnapshotStat(
-                    value:
-                        '${snapshot!.sessionsThisWeek}'
-                        '/$_weeklySessionGoal',
-                    label: 'SESSIONS · WK',
-                  ),
-                ),
-                _snapshotDivider,
-                Expanded(
-                  child: _SnapshotStat(
-                    value: '${snapshot!.weekStreak}',
-                    label: 'WEEK STREAK',
-                  ),
-                ),
-                _snapshotDivider,
-                Expanded(
-                  child: _SnapshotStat(
-                    value: '${snapshot!.prCount}',
-                    label: 'PRs ALL-TIME',
-                  ),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
-    );
-  }
-
-  static final Widget _snapshotDivider = Container(
-    width: 1,
-    height: 34,
-    margin: const EdgeInsets.symmetric(horizontal: 8),
-    color: appBorder,
-  );
-}
-
-/// One cell of the profile hero's training snapshot: a Chakra-display value
-/// over a mono micro-label.
-class _SnapshotStat extends StatelessWidget {
-  const _SnapshotStat({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontSize: 24,
-            height: 1,
-            letterSpacing: -0.4,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: appMono(fontSize: 9, letterSpacing: 1.2),
-        ),
-      ],
     );
   }
 }

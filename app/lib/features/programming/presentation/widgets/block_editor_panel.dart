@@ -1,6 +1,6 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_side_panel.dart';
-import 'package:app/features/logbook/data/repositories/api_exercise_repository.dart';
+import 'package:app/features/exercises/data/api_exercise_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -202,7 +202,7 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
     Navigator.of(context).pop(
       DailyWorkoutSection(
         title: _name.text.trim().isEmpty ? exercise : _name.text.trim(),
-        // Readable text for every reader (athletes, logbook).
+        // Readable text for every reader (athletes, older views).
         description: [
           exercise,
           for (var i = 0; i < sets.length; i++)

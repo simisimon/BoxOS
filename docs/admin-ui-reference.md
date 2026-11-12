@@ -429,6 +429,6 @@ These product decisions in `CLAUDE.md` take precedence over the reference:
   not yet migrated keep the old pattern). Yes/no confirmations stay
   `showAppConfirmDialog`.
 - Keep BoxOS's current colours (§0), not the reference's orange.
-- Whiteboard stays removed; the Logbook is history only.
+- Whiteboard stays removed; workout logging (logbook, PRs) was removed too.
 - Roles are Owner / Trainer / Athlete (`docs/DESIGN.md`): the admin views here
   are owner-only; trainers get Classes and Programs.

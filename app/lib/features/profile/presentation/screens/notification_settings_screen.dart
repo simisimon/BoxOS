@@ -177,21 +177,6 @@ class _NotificationSettingsScreenState
                           ),
                           const SizedBox(height: 12),
                           _PreferenceCard(
-                            title: 'PR Achievements',
-                            subtitle:
-                                'Personal-record and milestone notifications.',
-                            accentColor: appPrimary,
-                            value: currentPreferences.prAchievements,
-                            onChanged: (value) {
-                              _updatePreferences(
-                                currentPreferences.copyWith(
-                                  prAchievements: value,
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          _PreferenceCard(
                             title: 'Announcement Activity',
                             subtitle:
                                 'Likes and comments on announcements you posted.',

@@ -94,33 +94,14 @@ class ApiCommunityRepository implements CommunityRepository {
       throw Exception('Missing community dashboard data.');
     }
     final stats = (data['stats'] as Map<String, dynamic>?) ?? const {};
-    final prs = data['newest_prs'] as List<dynamic>? ?? const [];
     return CommunityDashboard(
       stats: CommunityStats(
         activeMembers: (stats['active_members'] as num?)?.toInt() ?? 0,
         activeTrainers: (stats['active_trainers'] as num?)?.toInt() ?? 0,
         owners: (stats['owners'] as num?)?.toInt() ?? 0,
-        prsLast30Days: (stats['prs_last_30_days'] as num?)?.toInt() ?? 0,
         messagesLast7Days:
             (stats['messages_last_7_days'] as num?)?.toInt() ?? 0,
       ),
-      newestPrs: prs
-          .map((item) => _prFromJson(item as Map<String, dynamic>?))
-          .toList(),
-    );
-  }
-
-  CommunityPr _prFromJson(Map<String, dynamic>? data) {
-    if (data == null) {
-      throw Exception('Missing PR data.');
-    }
-    return CommunityPr(
-      userId: (data['user_id'] as num?)?.toInt() ?? 0,
-      displayName: data['display_name'] as String? ?? '',
-      nickname: data['nickname'] as String? ?? '',
-      workoutTitle: data['workout_title'] as String? ?? '',
-      scoreLabel: data['score_label'] as String? ?? '',
-      updatedAt: DateTime.parse(data['updated_at'] as String? ?? '').toLocal(),
     );
   }
 }

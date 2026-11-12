@@ -175,7 +175,6 @@ class _NotificationRow extends StatelessWidget {
   final VoidCallback onTap;
 
   static IconData _icon(String type) => switch (type) {
-    'pr_achieved' => Icons.emoji_events_outlined,
     'announcement_liked' => Icons.favorite_border_rounded,
     'announcement_commented' => Icons.chat_bubble_outline_rounded,
     'booking_confirmed' ||

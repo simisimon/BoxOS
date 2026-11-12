@@ -14,22 +14,17 @@ void main() {
       role: UserRole.admin,
     );
 
-    test('the athlete tab set fits the five-tab bottom-nav budget', () {
-      expect(athlete().length, 5);
+    test('the athlete tab set fits the bottom-nav budget', () {
       expect(athlete().map((d) => d.label), [
         'Home',
         'My Box',
         'Community',
-        'Logbook',
         'Profile',
       ]);
     });
 
-    test('the owner tab set puts Settings between Logbook and Profile', () {
-      // Box settings left the profile for a tab of its own, so the owner set
-      // is two over the five-tab bottom-nav budget. One goes when the logbook
-      // rebuild moves athlete history into the member detail.
-      expect(owner().length, 11);
+    test('the owner tab set follows the admin reference', () {
+      // The box chat is a tab of Messages; there is no logbook.
       expect(owner().map((d) => d.label), [
         'Dashboard',
         'Classes',
@@ -38,8 +33,6 @@ void main() {
         'Reports',
         'Messages',
         'Memberships',
-        'Community',
-        'Logbook',
         'Settings',
         'Profile',
       ]);
@@ -61,24 +54,6 @@ void main() {
       );
     });
 
-    test('Tracking has no tab of its own', () {
-      expect(
-        athlete().map((d) => d.branchIndex),
-        isNot(contains(kTrackingBranch)),
-      );
-      expect(
-        owner().map((d) => d.branchIndex),
-        isNot(contains(kTrackingBranch)),
-      );
-      expect(athlete().map((d) => d.label), isNot(contains('Tracking')));
-      expect(owner().map((d) => d.label), isNot(contains('Tracking')));
-    });
-
-    test('both roles keep the logbook, which is where tracking is entered', () {
-      expect(athlete().map((d) => d.branchIndex), contains(kLogbookBranch));
-      expect(owner().map((d) => d.branchIndex), contains(kLogbookBranch));
-    });
-
     test('a trainer sees the athlete tab set plus Programs', () {
       final trainer = destinationsForView(
         accountType: AccountType.athlete,
@@ -89,7 +64,6 @@ void main() {
         'My Box',
         'Programs',
         'Community',
-        'Logbook',
         'Profile',
       ]);
     });
@@ -99,40 +73,6 @@ void main() {
         final branches = set.map((d) => d.branchIndex).toList();
         expect(branches.toSet(), hasLength(branches.length));
       }
-    });
-  });
-
-  group('navBranchFor', () {
-    test('tracking lights the Logbook tab instead of falling back to Home', () {
-      expect(navBranchFor(kTrackingBranch), kLogbookBranch);
-    });
-
-    test('every other branch maps to itself', () {
-      for (final branch in [
-        kHomeBranch,
-        kMyBoxBranch,
-        kLogbookBranch,
-        kMembersBranch,
-        kCommunityBranch,
-        kProfileBranch,
-        kBoxSettingsBranch,
-      ]) {
-        expect(navBranchFor(branch), branch);
-      }
-    });
-
-    test('the mapped branch is always a visible tab for some role', () {
-      final visible = {
-        ...destinationsForView(
-          accountType: AccountType.athlete,
-          role: UserRole.athlete,
-        ).map((d) => d.branchIndex),
-        ...destinationsForView(
-          accountType: AccountType.admin,
-          role: UserRole.admin,
-        ).map((d) => d.branchIndex),
-      };
-      expect(visible, contains(navBranchFor(kTrackingBranch)));
     });
   });
 }

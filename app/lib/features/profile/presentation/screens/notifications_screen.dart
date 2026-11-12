@@ -99,7 +99,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           eyebrow: 'Inbox',
                           title: 'Live alert stream',
                           subtitle:
-                              'Operational updates, workout posts, PR moments, and announcement activity stay in one cleaner notification feed.',
+                              'Operational updates, workout posts, and announcement activity stay in one cleaner notification feed.',
                           trailing: Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -229,7 +229,7 @@ class _NotificationsHero extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Booking changes, WOD drops, waitlist moves, PR alerts, and announcement reactions now sit in a cleaner inbox with stronger visibility for unread items.',
+                'Booking changes, WOD drops, waitlist moves, and announcement reactions now sit in a cleaner inbox with stronger visibility for unread items.',
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: appMutedText,
                   height: 1.45,
@@ -272,7 +272,7 @@ class _NotificationsPlaceholder extends StatelessWidget {
           icon: Icons.notifications_none_rounded,
           title: 'You are all caught up',
           message:
-              'Booking updates, WOD posts, waitlist changes, and PR alerts will appear here once your gym starts sending them.',
+              'Booking updates, WOD posts, and waitlist changes will appear here once your gym starts sending them.',
           accentColor: appPrimary,
         ),
         const SizedBox(height: 12),
@@ -301,15 +301,7 @@ class _NotificationCard extends StatelessWidget {
         '${createdAt.day.toString().padLeft(2, '0')} '
         '${createdAt.hour.toString().padLeft(2, '0')}:'
         '${createdAt.minute.toString().padLeft(2, '0')}';
-    final isPr = notification.type == 'pr_achieved';
-    final isAnnouncement =
-        notification.type == 'announcement_liked' ||
-        notification.type == 'announcement_commented';
-    final accentColor = isPr
-        ? appPrimary
-        : isAnnouncement
-        ? appPrimary
-        : appPrimary;
+    const accentColor = appPrimary;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -335,9 +327,7 @@ class _NotificationCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppAccentBadge(
-            icon: isPr
-                ? Icons.emoji_events_outlined
-                : notification.type == 'announcement_liked'
+            icon: notification.type == 'announcement_liked'
                 ? Icons.favorite_rounded
                 : notification.type == 'announcement_commented'
                 ? Icons.chat_bubble_outline_rounded

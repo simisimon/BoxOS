@@ -2,7 +2,6 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/app_side_panel.dart';
-import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:flutter/material.dart';
@@ -392,10 +391,6 @@ class _WorkoutCard extends ConsumerWidget {
             if (i > 0) const SizedBox(height: 10),
             _SectionRow(index: i, section: workout.sections[i]),
           ],
-          if (workout.isPublished) ...[
-            const SizedBox(height: 16),
-            _PanelSection(child: _WorkoutLogSection(workout: workout)),
-          ],
         ],
       ),
     );
@@ -522,108 +517,6 @@ class _StatusBadge extends StatelessWidget {
           letterSpacing: 0.6,
         ),
       ),
-    );
-  }
-}
-
-class _PanelSection extends StatelessWidget {
-  const _PanelSection({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: appBorder),
-      ),
-      child: child,
-    );
-  }
-}
-
-String _scoreLabel(String value) {
-  switch (value) {
-    case 'time':
-      return 'For time';
-    case 'reps':
-      return 'Reps';
-    case 'load':
-      return 'Load';
-    default:
-      return value;
-  }
-}
-
-class _WorkoutLogSection extends ConsumerWidget {
-  const _WorkoutLogSection({required this.workout});
-  final DailyWorkout workout;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Log Results',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final updated = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => _WorkoutLogDialog(workout: workout),
-                );
-                if (updated == true) {
-                  ref.invalidate(programmingListProvider);
-                }
-              },
-              icon: const Icon(Icons.edit_note_outlined),
-              // Theme buttons are full-width; next to the title in a Row
-              // they need a finite minimum width.
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-              label: Text(workout.myWorkoutLog == null ? 'Log' : 'Update'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (workout.myWorkoutLog == null)
-          Text(
-            'No personal workout log yet.',
-            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: appSurface,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${workout.myWorkoutLog!.scoreLabel} '
-                    '(${_scoreLabel(workout.myWorkoutLog!.scoreType)})'
-                    '${workout.myWorkoutLog!.notesText.isEmpty ? '' : '\n${workout.myWorkoutLog!.notesText}'}',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: appText),
-                  ),
-                ),
-                if (workout.myWorkoutLog!.isPr) const Chip(label: Text('PR')),
-              ],
-            ),
-          ),
-      ],
     );
   }
 }
@@ -1043,143 +936,6 @@ class _SectionCard extends StatelessWidget {
                   },
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkoutLogDialog extends ConsumerStatefulWidget {
-  const _WorkoutLogDialog({required this.workout});
-  final DailyWorkout workout;
-
-  @override
-  ConsumerState<_WorkoutLogDialog> createState() => _WorkoutLogDialogState();
-}
-
-class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late String _scoreType;
-  late TextEditingController _scoreValueController;
-  late TextEditingController _notesController;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scoreType = widget.workout.myWorkoutLog?.scoreType ?? 'time';
-    _scoreValueController = TextEditingController(
-      text: widget.workout.myWorkoutLog?.scoreLabel ?? '',
-    );
-    _notesController = TextEditingController(
-      text: widget.workout.myWorkoutLog?.notesText ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _scoreValueController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _isSaving = true);
-    try {
-      await ref
-          .read(logbookRepositoryProvider)
-          .submitEntry(
-            workoutId: widget.workout.id,
-            scoreType: _scoreType,
-            scoreValue: _scoreValueController.text.trim(),
-            notesText: _notesController.text.trim(),
-          );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to save workout log'),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppFormDialog(
-      title: 'Log Workout Result',
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isSaving ? null : _submit,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
-        ),
-      ],
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: _scoreType,
-                decoration: const InputDecoration(labelText: 'Score Type'),
-                items: const [
-                  DropdownMenuItem(value: 'time', child: Text('For time')),
-                  DropdownMenuItem(value: 'reps', child: Text('Reps')),
-                  DropdownMenuItem(value: 'load', child: Text('Load')),
-                ],
-                onChanged: _isSaving
-                    ? null
-                    : (value) {
-                        if (value != null) {
-                          setState(() => _scoreType = value);
-                        }
-                      },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _scoreValueController,
-                decoration: InputDecoration(
-                  labelText: _scoreType == 'time'
-                      ? 'Score (mm:ss or hh:mm:ss)'
-                      : _scoreType == 'reps'
-                      ? 'Score (reps)'
-                      : 'Score (load)',
-                ),
-                validator: (value) =>
-                    (value ?? '').trim().isEmpty ? 'Enter a score' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _notesController,
-                decoration: const InputDecoration(labelText: 'Notes'),
-                minLines: 2,
-                maxLines: 4,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

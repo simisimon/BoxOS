@@ -66,9 +66,6 @@ class RoleManagedUser {
     this.noShowBookings = 0,
     this.bookingRate = 0,
     this.lastBookingAt,
-    this.newestPrTitle = '',
-    this.newestPrScore = '',
-    this.newestPrAt,
     this.plan,
     this.hasPlanRequest = false,
   });
@@ -96,9 +93,6 @@ class RoleManagedUser {
   final int noShowBookings;
   final double bookingRate;
   final DateTime? lastBookingAt;
-  final String newestPrTitle;
-  final String newestPrScore;
-  final DateTime? newestPrAt;
 
   /// The member's current (or, if none has started, next) membership plan.
   final MemberPlanSummary? plan;

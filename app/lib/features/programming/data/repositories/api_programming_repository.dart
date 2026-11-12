@@ -166,11 +166,6 @@ class ApiProgrammingRepository implements ProgrammingRepository {
           ? null
           : DateTime.parse(publishedAtRaw),
       canEdit: data['can_edit'] as bool? ?? false,
-      myWorkoutLog: data['my_workout_log'] == null
-          ? null
-          : _workoutLogSummaryFromJson(
-              data['my_workout_log'] as Map<String, dynamic>?,
-            ),
     );
   }
 
@@ -179,24 +174,6 @@ class ApiProgrammingRepository implements ProgrammingRepository {
       throw Exception('Missing section data.');
     }
     return DailyWorkoutSection.fromJson(data);
-  }
-
-  WorkoutLogEntrySummary _workoutLogSummaryFromJson(
-    Map<String, dynamic>? data,
-  ) {
-    if (data == null) {
-      throw Exception('Missing workout log summary data.');
-    }
-    return WorkoutLogEntrySummary(
-      id: data['id'] as int? ?? 0,
-      scoreType: data['score_type'] as String? ?? '',
-      scoreValue: (data['score_value'] as num?)?.toDouble() ?? 0,
-      scoreLabel: data['score_label'] as String? ?? '',
-      notesText: data['notes_text'] as String? ?? '',
-      updatedAt: DateTime.parse(data['updated_at'] as String? ?? ''),
-      isPr: data['is_pr'] as bool? ?? false,
-      prRank: data['pr_rank'] as int?,
-    );
   }
 
   String _dateOnly(DateTime value) {

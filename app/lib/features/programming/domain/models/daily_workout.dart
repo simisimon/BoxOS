@@ -113,7 +113,7 @@ class DailyWorkoutSection {
   final String title;
 
   /// Free text for workout blocks; for exercise blocks the readable version
-  /// of the sets, so every reader (logbook, athletes) still has text.
+  /// of the sets, so every reader (athletes, older views) still has text.
   final String description;
   final WorkoutSectionScore scoreType;
   final BlockKind kind;
@@ -190,7 +190,6 @@ class DailyWorkout {
     required this.status,
     required this.publishedAt,
     required this.canEdit,
-    required this.myWorkoutLog,
   });
 
   final int id;
@@ -201,29 +200,6 @@ class DailyWorkout {
   final DailyWorkoutStatus status;
   final DateTime? publishedAt;
   final bool canEdit;
-  final WorkoutLogEntrySummary? myWorkoutLog;
 
   bool get isPublished => status == DailyWorkoutStatus.published;
-}
-
-class WorkoutLogEntrySummary {
-  const WorkoutLogEntrySummary({
-    required this.id,
-    required this.scoreType,
-    required this.scoreValue,
-    required this.scoreLabel,
-    required this.notesText,
-    required this.updatedAt,
-    required this.isPr,
-    required this.prRank,
-  });
-
-  final int id;
-  final String scoreType;
-  final double scoreValue;
-  final String scoreLabel;
-  final String notesText;
-  final DateTime updatedAt;
-  final bool isPr;
-  final int? prRank;
 }

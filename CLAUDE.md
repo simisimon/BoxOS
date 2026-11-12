@@ -72,7 +72,8 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 - Schedule: one week view for every role; classes are templates (types WOD,
   Open Gym, Skill, PT), one WOD per gym per day.
 - The whiteboard feature was removed on purpose — do not re-add it.
-- Logbook is history only (logged WODs, score, PR, the WOD's sections). Scores
-  are stored per WOD, not per exercise.
+- Workout logging was removed on purpose (2026-11-12): no logbook, scores,
+  PRs or tracking in the app — do not re-add it. The `workout_logs` tables
+  still exist so old data is kept.
 - Join requests live in the Members tab (Requests segment); the Members nav
   item shows the open count as a badge.

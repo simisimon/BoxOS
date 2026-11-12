@@ -22,9 +22,6 @@ final _users = [
     attendedBookings: 9,
     noShowBookings: 1,
     bookingRate: 75,
-    newestPrTitle: 'Fran',
-    newestPrScore: '3:42',
-    newestPrAt: DateTime.utc(2026, 5, 1),
   ),
   RoleManagedUser(
     id: 2,
@@ -128,7 +125,6 @@ void main() {
       );
 
       expect(find.text('75.0%'), findsOneWidget);
-      expect(find.textContaining('3:42'), findsOneWidget);
 
       // The tab bar scrolls on phones.
       await tester.ensureVisible(find.text('Classes'));
