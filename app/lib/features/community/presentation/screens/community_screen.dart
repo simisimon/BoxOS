@@ -18,7 +18,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 const _pollInterval = Duration(seconds: 10);
 
 class CommunityScreen extends ConsumerStatefulWidget {
-  const CommunityScreen({super.key});
+  const CommunityScreen({super.key, this.chatOnly = false});
+
+  /// Only the box chat and its composer, full width: the Chat tab of the
+  /// owners' Messages page. Members get the whole Community tab.
+  final bool chatOnly;
 
   @override
   ConsumerState<CommunityScreen> createState() => _CommunityScreenState();
@@ -265,7 +269,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         bottom: true,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final maxWidth = context.contentMaxWidth;
+            final maxWidth = widget.chatOnly
+                ? double.infinity
+                : context.contentMaxWidth;
             final horizontalPadding = constraints.maxWidth > maxWidth
                 ? (constraints.maxWidth - maxWidth) / 2
                 : 0.0;
@@ -275,10 +281,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                 mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    child: _CommunityHeader(gymName: gymName),
-                  ),
+                  if (!widget.chatOnly)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: _CommunityHeader(gymName: gymName),
+                    ),
                   Expanded(
                     child: activeGym == null
                         ? const _NoActiveGymState()
@@ -315,34 +322,35 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       role: profile?.role,
     );
     final children = <Widget>[
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-        child: FutureBuilder<CommunityDashboard>(
-          future: _dashboardFuture!,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const _DashboardLoading();
-            }
-            if (snapshot.hasError && !snapshot.hasData) {
-              return _DashboardError(
-                message: errorMessageFrom(
-                  snapshot.error!,
-                  fallback: 'Failed to load community stats',
-                ),
-                onRetry: () => setState(() {
-                  _dashboardGymId = activeGymId;
-                  _dashboardFuture = _loadDashboard();
-                }),
-              );
-            }
-            return _CommunityDashboardPanel(dashboard: snapshot.data!);
-          },
+      if (!widget.chatOnly)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          child: FutureBuilder<CommunityDashboard>(
+            future: _dashboardFuture!,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const _DashboardLoading();
+              }
+              if (snapshot.hasError && !snapshot.hasData) {
+                return _DashboardError(
+                  message: errorMessageFrom(
+                    snapshot.error!,
+                    fallback: 'Failed to load community stats',
+                  ),
+                  onRetry: () => setState(() {
+                    _dashboardGymId = activeGymId;
+                    _dashboardFuture = _loadDashboard();
+                  }),
+                );
+              }
+              return _CommunityDashboardPanel(dashboard: snapshot.data!);
+            },
+          ),
         ),
-      ),
       // Box news lives next to box chat: both are "what the box is saying".
       // Owners write and manage it on the Messages page instead.
-      if (!isOwner)
+      if (!isOwner && !widget.chatOnly)
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 16, 18),
           child: AnnouncementFeedSection(),

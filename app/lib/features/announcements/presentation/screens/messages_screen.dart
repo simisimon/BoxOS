@@ -6,14 +6,15 @@ import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/announcements/data/repositories/api_announcement_repository.dart';
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/presentation/widgets/announcement_composer_dialog.dart';
+import 'package:app/features/community/presentation/screens/community_screen.dart';
 import 'package:app/features/members/presentation/widgets/member_roster.dart'
     show formatShortDate;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Messages page (docs/admin-ui-reference.md §5) for owners: the box's
-/// announcements as a searchable list beside a reading pane; Compose and
-/// Edit open the composer panel. BoxOS has no per-recipient read state or
+/// Messages page (docs/admin-ui-reference.md §5) for owners: Announcements
+/// (a searchable list beside a reading pane; Compose and Edit open the
+/// composer panel) and Chat (the box chat, moved here from Community). BoxOS has no per-recipient read state or
 /// e-mail delivery, so there is no recipients dialog.
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({super.key});
@@ -97,8 +98,52 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     }
   }
 
+  /// Announcements | Chat: owners post news and talk with members here.
+  bool _chat = false;
+
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            appSpaceLg,
+            appSpaceLg,
+            appSpaceLg,
+            0,
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  icon: Icon(Icons.campaign_outlined),
+                  label: Text('Announcements'),
+                ),
+                ButtonSegment(
+                  value: true,
+                  icon: Icon(Icons.forum_outlined),
+                  label: Text('Chat'),
+                ),
+              ],
+              selected: {_chat},
+              onSelectionChanged: (s) => setState(() => _chat = s.first),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _chat
+              ? const CommunityScreen(chatOnly: true)
+              : _buildAnnouncements(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnnouncements(BuildContext context) {
     final messages = _messages;
     if (messages == null) {
       return _error == null
