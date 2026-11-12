@@ -3,6 +3,11 @@ import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/admin_analytics/application/admin_analytics_controller.dart';
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
 import 'package:app/features/admin_analytics/presentation/widgets/admin_analytics_details.dart';
+import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
+import 'package:app/features/calendar/domain/models/schedule_class.dart';
+import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
+import 'package:app/features/members/presentation/widgets/member_roster.dart'
+    show formatShortDate;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,7 +18,7 @@ const _perfGreen = appSuccess;
 
 /// Reports → Attendance (docs/admin-ui-reference.md §8, the [inferred]
 /// Attendance report): the review-window KPIs, daily attendance, busiest
-/// classes and the full analytics. Moved here from the owner dashboard.
+/// classes, a table per class occurrence and the full analytics.
 class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
 
@@ -139,6 +144,8 @@ class _OwnerDashboardContent extends ConsumerWidget {
                 pressure,
               ],
             ],
+            const SizedBox(height: appSpaceMd),
+            _ClassOccurrenceTable(windowDays: window),
             const SizedBox(height: appSpaceMd),
             _FullAnalyticsCard(windowDays: window),
           ],
@@ -646,6 +653,90 @@ class _PressureClassRow extends StatelessWidget {
         ),
         const SizedBox(width: appSpaceMd),
         AppPill(label: pill, intent: intent, dense: true),
+      ],
+    );
+  }
+}
+
+/// One row per class that took place in the review window, newest first:
+/// booked, attended, no-shows and how full it was.
+class _ClassOccurrenceTable extends ConsumerWidget {
+  const _ClassOccurrenceTable({required this.windowDays});
+
+  final int windowDays;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final since = DateTime(now.year, now.month, now.day - (windowDays - 1));
+    // shortcut: reads the gym's whole class history with bookings from the
+    // schedule endpoint; add a ranged report endpoint once gyms have months
+    // of classes.
+    final schedule = ref.watch(scheduleListProvider);
+    final rows = <ScheduleClass>[
+      for (final c in schedule.value ?? const [])
+        if (!c.startTime.isBefore(since) && c.startTime.isBefore(now)) c,
+    ]..sort((a, b) => b.startTime.compareTo(a.startTime));
+    int count(ScheduleClass c, String status) =>
+        c.bookings.where((b) => b.attendanceStatus == status).length;
+    String hm(DateTime t) =>
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    const muted = TextStyle(color: appMutedText, fontSize: 13);
+
+    return AppDataTable<ScheduleClass>(
+      shrinkWrap: true,
+      columns: const [
+        AppTableColumn('Date', flex: 2),
+        AppTableColumn('Time', flex: 1, hideWhenNarrow: true),
+        AppTableColumn('Class', flex: 3),
+        AppTableColumn('Booked', flex: 1, hideWhenNarrow: true),
+        AppTableColumn('Attended', flex: 1),
+        AppTableColumn('No-shows', flex: 1),
+        AppTableColumn('Utilisation', flex: 1, hideWhenNarrow: true),
+      ],
+      rows: rows,
+      emptyText: schedule.isLoading
+          ? 'Loading…'
+          : schedule.hasError
+          ? 'Could not load classes.'
+          : 'No classes in this window.',
+      cells: (c) => [
+        Text(formatShortDate(c.startTime), style: muted),
+        Text(hm(c.startTime), style: muted),
+        Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: classTypeColor(c.type),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: appSpaceSm),
+            Expanded(
+              child: Text(
+                c.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: appText,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+        Text('${c.bookedCount}/${c.capacity}', style: muted),
+        Text('${count(c, 'attended')}', style: muted),
+        Text('${count(c, 'no_show')}', style: muted),
+        Text(
+          c.capacity <= 0
+              ? '—'
+              : '${(c.bookedCount * 100 / c.capacity).round()}%',
+          style: muted,
+        ),
       ],
     );
   }
