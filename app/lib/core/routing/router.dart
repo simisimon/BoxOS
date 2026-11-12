@@ -1,3 +1,4 @@
+import 'package:app/features/admin_analytics/presentation/screens/reports_screen.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/application/auth_state.dart';
 import 'package:app/features/auth/presentation/screens/auth_loading_screen.dart';
@@ -206,6 +207,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/reports',
+                name: 'reports',
+                builder: (context, state) => const ReportsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -224,7 +234,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const NotificationSettingsScreen(),
       ),
       // Full analytics now unfold inside the owner dashboard.
-      GoRoute(path: '/admin-analytics', redirect: (context, state) => '/home'),
+      GoRoute(
+        path: '/admin-analytics',
+        redirect: (context, state) => '/reports',
+      ),
       GoRoute(
         path: '/change-password',
         name: 'change-password',

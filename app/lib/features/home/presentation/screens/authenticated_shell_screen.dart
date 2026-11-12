@@ -42,12 +42,20 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     // The schedule week and views migrated to the admin layout
     // (docs/admin-ui-reference.md) span the full width; the rest keep the
     // clamped content column until their migration.
-    final fullBleed = const {
-      kMyBoxBranch,
-      kMembersBranch,
-      kMembershipsBranch,
-      kProgramsBranch,
-    }.contains(navigationShell.currentIndex);
+    final fullBleed =
+        const {
+          kMyBoxBranch,
+          kMembersBranch,
+          kMembershipsBranch,
+          kProgramsBranch,
+          kReportsBranch,
+        }.contains(navigationShell.currentIndex) ||
+        // The owner dashboard is migrated; the athlete home is not yet.
+        (navigationShell.currentIndex == kHomeBranch &&
+            isOwnerView(
+              accountType: profile?.accountType,
+              role: profile?.role,
+            ));
 
     return AuthenticatedScaffold(
       selectedBranchIndex: navBranchFor(navigationShell.currentIndex),

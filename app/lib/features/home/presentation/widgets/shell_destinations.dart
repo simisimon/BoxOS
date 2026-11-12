@@ -29,6 +29,9 @@ const int kMembershipsBranch = 8;
 /// trainers.
 const int kProgramsBranch = 9;
 
+/// Owner reports (docs/admin-ui-reference.md §8); Attendance for now.
+const int kReportsBranch = 10;
+
 const _programsDestination = ShellDestination(
   branchIndex: kProgramsBranch,
   icon: Icons.view_week_outlined,
@@ -107,6 +110,12 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.groups_outlined,
     activeIcon: Icons.groups_rounded,
     label: 'Members',
+  ),
+  ShellDestination(
+    branchIndex: kReportsBranch,
+    icon: Icons.insert_chart_outlined_rounded,
+    activeIcon: Icons.insert_chart_rounded,
+    label: 'Reports',
   ),
   ShellDestination(
     branchIndex: kMembershipsBranch,

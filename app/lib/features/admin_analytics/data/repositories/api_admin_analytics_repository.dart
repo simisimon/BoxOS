@@ -1,5 +1,6 @@
 import 'package:app/core/network/dio_client.dart';
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
+import 'package:app/features/admin_analytics/domain/models/owner_dashboard_data.dart';
 import 'package:app/features/admin_analytics/domain/repositories/admin_analytics_repository.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
@@ -34,6 +35,15 @@ class ApiAdminAnalyticsRepository implements AdminAnalyticsRepository {
       options: Options(headers: await _authHeaders()),
     );
     return _overviewFromJson(response.data);
+  }
+
+  @override
+  Future<OwnerDashboardData> fetchDashboard() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/admin/dashboard',
+      options: Options(headers: await _authHeaders()),
+    );
+    return OwnerDashboardData.fromJson(response.data ?? const {});
   }
 
   Future<Map<String, String>> _authHeaders() async {

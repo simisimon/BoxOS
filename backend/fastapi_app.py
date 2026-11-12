@@ -10,7 +10,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -4932,6 +4932,125 @@ def admin_analytics_overview(
                 {"id": int(row["id"]), "title": row["title"], "start_time": row["start_time"], "capacity": int(row["capacity"]), "bookings": int(row["bookings"]), "attended": int(row["attended"]), "no_shows": int(row["no_shows"]), "utilization_rate": 0.0 if int(row["capacity"]) <= 0 else round((int(row["bookings"]) / int(row["capacity"])) * 100, 1), "attendance_rate": 0.0 if int(row["bookings"]) <= 0 else round((int(row["attended"]) / int(row["bookings"])) * 100, 1), "no_show_rate": 0.0 if int(row["bookings"]) <= 0 else round((int(row["no_shows"]) / int(row["bookings"])) * 100, 1)}
                 for row in problem_rows
             ],
+        }
+    finally:
+        connection.close()
+
+
+AT_RISK_DAYS = 21
+EXPIRING_DAYS = 14
+
+
+@app.get("/admin/dashboard")
+def admin_dashboard(session: dict[str, Any] = Depends(require_admin_gym_session)) -> dict[str, Any]:
+    """Owner dashboard (docs/admin-ui-reference.md §1): headline member counts
+    and month-by-month series for the last six calendar months. Read-only."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    # shortcut: months are cut at the gym's local "today", but rows are
+    # bucketed by their UTC timestamp, so a class in the first hours of a
+    # month can count for the previous one; convert in SQL if that matters.
+    today = schedule_service.local_today(_gym_timezone(connection, gym_id))
+    # First day of the month five months back, then six month keys "YYYY-MM".
+    first = date(today.year, today.month, 1)
+    months = []
+    for _ in range(6):
+        months.insert(0, first)
+        first = date(first.year - (first.month == 1), (first.month - 2) % 12 + 1, 1)
+    keys = [month.isoformat()[:7] for month in months]
+    since = months[0].isoformat()
+    at_risk_cutoff = (today - timedelta(days=AT_RISK_DAYS)).isoformat()
+    now = security.isoformat(security.now_utc())
+    try:
+        at_risk = connection.execute(
+            """
+            select count(*) as count from gym_memberships
+            where gym_id = ? and status = 'active' and active_role = 'athlete'
+              and substr(created_at, 1, 10) < ?
+              and not exists (
+                select 1 from class_bookings
+                join class_schedules on class_schedules.id = class_bookings.class_schedule_id
+                where class_bookings.user_id = gym_memberships.user_id and class_schedules.gym_id = ?
+                  and substr(class_schedules.start_time, 1, 10) >= ?
+                  -- Only classes that happened and that they showed up for.
+                  and class_schedules.start_time <= ? and class_bookings.attendance_status <> 'no_show'
+              )
+            """,
+            (gym_id, at_risk_cutoff, gym_id, at_risk_cutoff, now),
+        ).fetchone()["count"]
+        expiring = connection.execute(
+            """
+            select count(*) as count from member_plans
+            where gym_id = ? and status = 'active' and ends_on between ? and ?
+            """,
+            (gym_id, today.isoformat(), (today + timedelta(days=EXPIRING_DAYS)).isoformat()),
+        ).fetchone()["count"]
+
+        def per_month(sql: str, params: tuple) -> dict[str, dict[str, Any]]:
+            return {row["month"]: dict(row) for row in connection.execute(sql, params).fetchall()}
+
+        churned = per_month(
+            """
+            select substr(updated_at, 1, 7) as month, count(*) as count from gym_memberships
+            where gym_id = ? and status = 'removed' and substr(updated_at, 1, 10) >= ?
+            group by substr(updated_at, 1, 7)
+            """,
+            (gym_id, since),
+        )
+        new_members = per_month(
+            """
+            select substr(created_at, 1, 7) as month, count(*) as count from gym_memberships
+            where gym_id = ? and active_role = 'athlete' and substr(created_at, 1, 10) >= ?
+            group by substr(created_at, 1, 7)
+            """,
+            (gym_id, since),
+        )
+        new_memberships = per_month(
+            """
+            select substr(starts_on, 1, 7) as month, count(*) as count from member_plans
+            where gym_id = ? and status in ('active', 'ended') and starts_on >= ?
+            group by substr(starts_on, 1, 7)
+            """,
+            (gym_id, since),
+        )
+        classes = per_month(
+            """
+            select per_class.month, coalesce(sum(per_class.capacity), 0) as capacity,
+              coalesce(sum(per_class.bookings), 0) as bookings, coalesce(sum(per_class.attended), 0) as attended
+            from (
+              select substr(class_schedules.start_time, 1, 7) as month, class_schedules.capacity as capacity,
+                count(class_bookings.id) as bookings,
+                coalesce(sum(case when class_bookings.attendance_status = 'attended' then 1 else 0 end), 0) as attended
+              from class_schedules
+              left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+              where class_schedules.gym_id = ? and substr(class_schedules.start_time, 1, 10) between ? and ?
+              group by class_schedules.id, substr(class_schedules.start_time, 1, 7), class_schedules.capacity
+            ) per_class
+            group by per_class.month
+            """,
+            (gym_id, since, today.isoformat()),
+        )
+        series = []
+        for key in keys:
+            month_classes = classes.get(key, {})
+            capacity = int(month_classes.get("capacity") or 0)
+            bookings = int(month_classes.get("bookings") or 0)
+            series.append({
+                "month": key,
+                "new_members": int(new_members.get(key, {}).get("count") or 0),
+                "new_memberships": int(new_memberships.get(key, {}).get("count") or 0),
+                "churned_members": int(churned.get(key, {}).get("count") or 0),
+                "registrations": bookings,
+                "attended": int(month_classes.get("attended") or 0),
+                # Percent of booked seats over offered seats, 0–100.
+                "utilization_percent": 0.0 if capacity <= 0 else round(bookings * 100 / capacity, 1),
+            })
+        return {
+            "members_at_risk": int(at_risk),
+            "at_risk_days": AT_RISK_DAYS,
+            "expiring_memberships": int(expiring),
+            "expiring_days": EXPIRING_DAYS,
+            "months": series,
         }
     finally:
         connection.close()
