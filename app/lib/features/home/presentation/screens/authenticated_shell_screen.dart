@@ -5,7 +5,9 @@ import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
+import 'package:app/features/profile/domain/models/app_notification.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
+import 'package:app/features/profile/presentation/widgets/notifications_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -83,10 +85,40 @@ class AuthenticatedShellScreen extends ConsumerWidget {
         initialLocation: branchIndex == navigationShell.currentIndex,
       ),
       onHeaderProfileTap: () => navigationShell.goBranch(kProfileBranch),
-      onNotificationsTap: () => context.push('/notifications'),
+      onNotificationsTap: () => showNotificationsPanel(
+        context,
+        onOpen: (notification) {
+          final location = _locationFor(
+            notification,
+            owner: isOwnerView(
+              accountType: profile?.accountType,
+              role: profile?.role,
+            ),
+            manager: profile?.role != UserRole.athlete,
+          );
+          if (location != null) context.go(location);
+        },
+      ),
       onRoleSelected: (role) => _switchRole(context, ref, role),
     );
   }
+
+  /// Where a notification leads: the page that shows what it is about.
+  /// Matches the backend's `type` first (a PR is filed under its WOD), then
+  /// its `entity_type`.
+  static String? _locationFor(
+    AppNotification notification, {
+    required bool owner,
+    required bool manager,
+  }) => switch ((notification.type, notification.entityType)) {
+    ('pr_achieved', _) => '/logbook',
+    (_, 'announcement') => owner ? '/messages' : '/community',
+    (_, 'daily_workout') => manager ? '/programs' : '/my-box',
+    (_, 'schedule_class') => '/my-box',
+    // Members see their plan and extra tokens on their profile.
+    (_, 'member_plan' || 'token_credit') => owner ? '/members' : '/profile',
+    _ => null,
+  };
 
   Future<void> _switchGym(
     BuildContext context,
