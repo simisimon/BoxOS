@@ -135,6 +135,73 @@ class ScheduleApiTests(FastApiTestCase):
         promoted = self.client.get("/schedule/classes", headers=next_headers).json()["classes"][0]
         self.assertTrue(promoted["is_booked"])
 
+    def test_owner_adds_a_class_type_and_uses_it(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Types Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+
+        created = self.client.post(
+            "/class-types", headers=admin_headers, json={"name": "Hyrox", "color": "danger", "default_capacity": 16}
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertEqual(
+            [(t["name"], t["color"], t["default_capacity"]) for t in created.json()["class_types"]],
+            [("Hyrox", "danger", 16)],
+        )
+        # Names are unique per gym, built-ins included; members cannot add.
+        self.assertEqual(self.client.post("/class-types", headers=admin_headers, json={"name": "hyrox"}).status_code, 409)
+        self.assertEqual(self.client.post("/class-types", headers=admin_headers, json={"name": "wod"}).status_code, 409)
+        self.assertEqual(self.client.post("/class-types", headers=athlete_headers, json={"name": "Yoga"}).status_code, 403)
+
+        listed = self.client.get("/class-types", headers=athlete_headers)
+        self.assertEqual([t["name"] for t in listed.json()["class_types"]], ["Hyrox"])
+
+        class_created = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Hyrox Prep",
+                "class_type": "Hyrox",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 16,
+                "recurrence_frequency": "none",
+            },
+        )
+        self.assertEqual(class_created.status_code, 201, class_created.text)
+        unknown = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Mystery",
+                "class_type": "Pilates",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 8,
+                "recurrence_frequency": "none",
+            },
+        )
+        self.assertEqual(unknown.status_code, 400)
+
+        plan = self.client.post(
+            "/membership/plans",
+            headers=admin_headers,
+            json={
+                "name": "Hyrox only",
+                "plan_type": "unlimited",
+                "price_cents": 5000,
+                "billing_period": "monthly",
+                "allowed_class_types": ["Hyrox"],
+            },
+        )
+        self.assertEqual(plan.status_code, 201, plan.text)
+        self.assertEqual(plan.json()["plan"]["allowed_class_types"], ["Hyrox"])
+
+        type_id = created.json()["class_types"][0]["id"]
+        deleted = self.client.request("DELETE", "/class-types", headers=admin_headers, json={"id": type_id})
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertEqual(deleted.json()["class_types"], [])
+
     def test_cannot_reduce_capacity_below_existing_bookings(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Capacity Box")
         self.add_active_membership(settings.DEMO_EMAIL, gym_id)

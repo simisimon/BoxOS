@@ -4,11 +4,38 @@ import 'package:flutter/material.dart';
 
 /// One accent per class type so the calendar, day panel and week plan read
 /// the same at a glance. WOD keeps the brand cyan; Open Gym stays neutral.
-Color classTypeColor(ClassType type) => switch (type) {
-  ClassType.wod => appPrimary,
-  ClassType.openGym => appMutedText,
-  ClassType.skill => appWarning,
-  ClassType.pt => appSuccess,
+/// Looked up by name so models parsed before the custom types loaded still
+/// get their colour.
+Color classTypeColor(ClassType type) =>
+    classTypeColorFor(ClassType.fromWire(type.wireValue).colorKey);
+
+/// Colour keys an owner can pick for a custom type, in picker order.
+const classTypeColorKeys = [
+  'primary',
+  'info',
+  'success',
+  'warning',
+  'danger',
+  'muted',
+];
+
+/// Name read out for a colour key, e.g. in the colour picker.
+String classTypeColorName(String key) => switch (key) {
+  'primary' => 'Cyan',
+  'success' => 'Green',
+  'warning' => 'Amber',
+  'danger' => 'Red',
+  'muted' => 'Grey',
+  _ => 'Blue',
+};
+
+Color classTypeColorFor(String key) => switch (key) {
+  'primary' => appPrimary,
+  'success' => appSuccess,
+  'warning' => appWarning,
+  'danger' => appDanger,
+  'muted' => appMutedText,
+  _ => appInfo,
 };
 
 /// Compact uppercase type tag, e.g. `WOD` or `OPEN GYM`.

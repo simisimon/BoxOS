@@ -69,8 +69,9 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 
 ## Product decisions
 
-- Schedule: one week view for every role; classes are templates (types WOD,
-  Open Gym, Skill, PT), one WOD per gym per day.
+- Schedule: one week view for every role; classes are templates, one WOD per
+  gym per day. Types: the built-ins WOD, Open Gym, Skill, PT plus custom types
+  an owner adds in Settings › Class types (`/class-types`, `gym_class_types`).
 - The whiteboard feature was removed on purpose — do not re-add it.
 - Workout logging was removed on purpose (2026-11-12): no logbook, scores,
   PRs or tracking in the app — do not re-add it. The `workout_logs` tables

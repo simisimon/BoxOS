@@ -1167,13 +1167,14 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
     );
     _selectedTrainerId = widget.existing?.assignedTrainer?.id;
     _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
-    _type = widget.existing?.type ?? ClassType.wod;
+    // Re-resolve: the model may predate the custom types loading.
+    _type = ClassType.fromWire(widget.existing?.classType ?? '');
     _weekdays = {_baseDate.weekday};
     _titleController = TextEditingController(
       text: widget.existing?.title ?? _type.defaultTitle,
     );
     _capacityController = TextEditingController(
-      text: '${widget.existing?.capacity ?? 12}',
+      text: '${widget.existing?.capacity ?? _type.defaultCapacity}',
     );
   }
 
@@ -1182,6 +1183,9 @@ class _ClassFormState extends ConsumerState<_ClassForm> {
       // Follow the type with the title until the user has typed their own.
       if (_titleController.text.trim() == _type.defaultTitle) {
         _titleController.text = type.defaultTitle;
+      }
+      if (_capacityController.text.trim() == '${_type.defaultCapacity}') {
+        _capacityController.text = '${type.defaultCapacity}';
       }
       _type = type;
     });

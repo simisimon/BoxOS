@@ -330,15 +330,34 @@ def require_schedule_title(value: Any) -> str:
     return title
 
 
-def require_class_type(value: Any) -> str:
+BUILTIN_CLASS_TYPES = ("WOD", "Open Gym", "Skill", "PT")
+CLASS_TYPE_COLORS = {"primary", "info", "success", "warning", "danger", "muted"}
+
+
+def require_class_type(value: Any, allowed: Any = BUILTIN_CLASS_TYPES) -> str:
+    """A class type of the gym: built-in or one its owner added."""
     class_type = str(value or "").strip()
-    allowed_types = {"WOD", "Open Gym", "Skill", "PT"}
-    if class_type not in allowed_types:
-        raise ApiError(
-            HTTPStatus.BAD_REQUEST,
-            "Class type must be WOD, Open Gym, Skill, or PT.",
-        )
+    if class_type not in set(allowed):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Unknown class type.")
     return class_type
+
+
+def require_new_class_type(raw: dict[str, Any], existing: Any) -> dict[str, Any]:
+    name = str(raw.get("name") or "").strip()
+    if not 1 <= len(name) <= 30:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Name must be 1 to 30 characters.")
+    if name.lower() in {item.lower() for item in existing}:
+        raise ApiError(HTTPStatus.CONFLICT, "This class type already exists.")
+    color = str(raw.get("color") or "info")
+    if color not in CLASS_TYPE_COLORS:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Unknown colour.")
+    try:
+        capacity = int(raw.get("default_capacity") or 12)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Default limit must be a number.") from None
+    if not 1 <= capacity <= 200:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Default limit must be 1 to 200.")
+    return {"name": name, "color": color, "default_capacity": capacity}
 
 
 def require_weekdays(value: Any) -> list[int]:

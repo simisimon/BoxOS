@@ -73,7 +73,8 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
   void initState() {
     super.initState();
     final existing = widget.existing;
-    _type = existing?.classType ?? ClassType.wod;
+    // Re-resolve: the model may predate the custom types loading.
+    _type = ClassType.fromWire(existing?.classType.wireValue ?? '');
     _weekdays = {
       ...?existing?.weekdays,
       if (existing == null) widget.initialWeekday ?? 1,
@@ -88,7 +89,7 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
       text: existing?.title ?? _type.defaultTitle,
     );
     _capacityController = TextEditingController(
-      text: '${existing?.capacity ?? 12}',
+      text: '${existing?.capacity ?? _type.defaultCapacity}',
     );
     _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
   }
@@ -105,6 +106,9 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
       // Follow the type with the title until the owner has typed their own.
       if (_titleController.text.trim() == _type.defaultTitle) {
         _titleController.text = type.defaultTitle;
+      }
+      if (_capacityController.text.trim() == '${_type.defaultCapacity}') {
+        _capacityController.text = '${type.defaultCapacity}';
       }
       _type = type;
     });

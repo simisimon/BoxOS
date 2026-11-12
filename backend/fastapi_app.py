@@ -1759,7 +1759,7 @@ def create_membership_plan(
     session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     gym_id = session["active_gym_id"]
-    fields = plan_service.require_plan_fields(body.model_dump())
+    fields = plan_service.require_plan_fields(body.model_dump(), _class_type_names(session["active_gym_id"]))
     connection = db.get_connection()
     try:
         gym = plan_service.gym_plan_settings(connection, gym_id)
@@ -1814,7 +1814,7 @@ def update_membership_plan(
     """Edit a plan. Members already on the plan keep the price and limits they
     were given; the change applies to new requests and assignments."""
     gym_id = session["active_gym_id"]
-    fields = plan_service.require_plan_fields(body.model_dump())
+    fields = plan_service.require_plan_fields(body.model_dump(), _class_type_names(session["active_gym_id"]))
     connection = db.get_connection()
     try:
         gym = plan_service.gym_plan_settings(connection, gym_id)
@@ -2715,10 +2715,23 @@ def _require_gym_trainer(connection: Any, gym_id: int, trainer_user_id: int | No
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Selected trainer is not active in this gym.")
 
 
-def _class_template_fields(body: ClassTemplateRequest) -> dict[str, Any]:
+def _class_type_names(gym_id: int) -> list[str]:
+    """Built-in class types plus the ones the gym's owner added."""
+    connection = db.get_connection()
+    try:
+        rows = connection.execute(
+            "select name from gym_class_types where gym_id = ? order by created_at, id",
+            (gym_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [*validation.BUILTIN_CLASS_TYPES, *(row["name"] for row in rows)]
+
+
+def _class_template_fields(body: ClassTemplateRequest, gym_id: int) -> dict[str, Any]:
     return {
         "title": validation.require_schedule_title(body.title),
-        "class_type": validation.require_class_type(body.class_type),
+        "class_type": validation.require_class_type(body.class_type, _class_type_names(gym_id)),
         "weekdays": validation.require_weekdays(body.weekdays),
         "start_local_time": validation.require_local_time(body.start_time),
         "duration_minutes": validation.require_duration_minutes(body.duration_minutes),
@@ -2756,7 +2769,7 @@ def create_class_template(
     body: ClassTemplateRequest,
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
-    fields = _class_template_fields(body)
+    fields = _class_template_fields(body, session["active_gym_id"])
     connection = db.get_connection()
     try:
         gym_timezone = _gym_timezone(connection, session["active_gym_id"])
@@ -2813,7 +2826,7 @@ def update_class_template(
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
     template_id = validation.require_user_id(body.id)
-    fields = _class_template_fields(body)
+    fields = _class_template_fields(body, session["active_gym_id"])
     connection = db.get_connection()
     try:
         existing = connection.execute(
@@ -2941,7 +2954,7 @@ def create_schedule_class(
     session: dict[str, Any] = Depends(require_schedule_manager_session),
 ) -> dict[str, Any]:
     title = validation.require_schedule_title(body.title)
-    class_type = validation.require_class_type(body.class_type)
+    class_type = validation.require_class_type(body.class_type, _class_type_names(session["active_gym_id"]))
     start_time = validation.require_future_datetime(body.start_time, label="Start time")
     duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
     capacity = validation.require_capacity(body.capacity)
@@ -3048,7 +3061,7 @@ def update_schedule_class(
 ) -> dict[str, Any]:
     schedule_id = validation.require_user_id(body.id)
     title = validation.require_schedule_title(body.title)
-    class_type = validation.require_class_type(body.class_type)
+    class_type = validation.require_class_type(body.class_type, _class_type_names(session["active_gym_id"]))
     start_time = validation.require_future_datetime(body.start_time, label="Start time")
     duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
     capacity = validation.require_capacity(body.capacity)
@@ -4615,6 +4628,75 @@ def admin_dashboard(session: dict[str, Any] = Depends(require_admin_gym_session)
             "expiring_days": EXPIRING_DAYS,
             "months": series,
         }
+    finally:
+        connection.close()
+
+
+class NewClassTypeRequest(BaseModel):
+    name: str
+    color: str = "info"
+    default_capacity: int = 12
+
+
+def _class_type_rows(connection: Any, gym_id: int) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "select id, name, color, default_capacity from gym_class_types where gym_id = ? order by created_at, id",
+        (gym_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get("/class-types")
+def list_class_types(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
+    """The gym's own class types; the four built-ins are fixed in the app."""
+    connection = db.get_connection()
+    try:
+        return {"class_types": _class_type_rows(connection, session["active_gym_id"])}
+    finally:
+        connection.close()
+
+
+@app.post("/class-types", status_code=HTTPStatus.CREATED.value)
+def create_class_type(
+    body: NewClassTypeRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    fields = validation.require_new_class_type(body.model_dump(), _class_type_names(gym_id))
+    connection = db.get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "insert into gym_class_types (gym_id, name, color, default_capacity, created_at) values (?, ?, ?, ?, ?)",
+                (gym_id, fields["name"], fields["color"], fields["default_capacity"], security.isoformat(security.now_utc())),
+            )
+        return {"class_types": _class_type_rows(connection, gym_id)}
+    finally:
+        connection.close()
+
+
+class ClassTypeIdRequest(BaseModel):
+    id: int
+
+
+@app.delete("/class-types")
+def delete_class_type(
+    body: ClassTypeIdRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Removes a custom type from the pickers. Classes and plans that use it
+    keep its name."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        with connection:
+            deleted = connection.execute(
+                "delete from gym_class_types where id = ? and gym_id = ? returning id",
+                (body.id, gym_id),
+            ).fetchone()
+        if deleted is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class type not found.")
+        return {"class_types": _class_type_rows(connection, gym_id)}
     finally:
         connection.close()
 

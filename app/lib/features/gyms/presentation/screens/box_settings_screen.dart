@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/features/calendar/data/repositories/class_types_repository.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
 import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
@@ -1054,55 +1056,299 @@ class _DangerPanel extends StatelessWidget {
   }
 }
 
-/// Settings ▸ Class types: BoxOS's four fixed types (CLAUDE.md product
-/// decisions) with their calendar colour and default class size.
-class _ClassTypesTable extends StatelessWidget {
+/// Settings ▸ Class types: the four built-ins plus the box's own types,
+/// with their calendar colour and default class size. Owners add and remove
+/// their own types here.
+class _ClassTypesTable extends ConsumerWidget {
   const _ClassTypesTable();
 
-  // shortcut: display-only defaults, not stored; persist them per gym once
-  // new classes should start from them.
-  static const _defaultLimits = {
-    ClassType.wod: 20,
-    ClassType.openGym: 24,
-    ClassType.skill: 14,
-    ClassType.pt: 2,
-  };
-
   @override
-  Widget build(BuildContext context) {
-    return AppDataTable<ClassType>(
-      shrinkWrap: true,
-      columns: const [
-        AppTableColumn('Name', flex: 3),
-        AppTableColumn('Default limit', flex: 2),
-      ],
-      rows: ClassType.values,
-      cells: (type) => [
-        Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: classTypeColor(type),
-                shape: BoxShape.circle,
-              ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final custom = ref.watch(classTypesProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: AppPrimaryButton(
+            label: 'Create class type',
+            icon: Icons.add_rounded,
+            size: AppButtonSize.md,
+            expand: false,
+            onPressed: () => showAppSidePanel<void>(
+              context,
+              builder: (_) => const _ClassTypePanel(),
             ),
-            const SizedBox(width: appSpaceSm),
+          ),
+        ),
+        const SizedBox(height: appSpaceLg),
+        AppDataTable<ClassType>(
+          shrinkWrap: true,
+          columns: const [
+            AppTableColumn('Name', flex: 3),
+            AppTableColumn('Default limit', flex: 2),
+            AppTableColumn('', flex: 1),
+          ],
+          rows: [...ClassType.builtIns, ...?custom.value],
+          cells: (type) => [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: classTypeColor(type),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: appSpaceSm),
+                Flexible(
+                  child: Text(
+                    type.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: appText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             Text(
-              type.label,
-              style: const TextStyle(
-                color: appText,
-                fontWeight: FontWeight.w600,
-              ),
+              '${type.defaultCapacity} participants',
+              style: const TextStyle(color: appMutedText),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: type.isCustom
+                  ? IconButton(
+                      tooltip: 'Delete ${type.label}',
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      color: appMutedText,
+                      onPressed: () => _delete(context, ref, type),
+                    )
+                  : Text(
+                      'BUILT-IN',
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: appMono(fontSize: 9, color: appMutedText),
+                    ),
             ),
           ],
         ),
-        Text(
-          '${_defaultLimits[type]} participants',
-          style: const TextStyle(color: appMutedText),
+        if (custom.hasError) ...[
+          const SizedBox(height: appSpaceSm),
+          Text(
+            errorMessageFrom(
+              custom.error!,
+              fallback: 'Could not load your class types.',
+            ),
+            style: const TextStyle(color: appDanger),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    ClassType type,
+  ) async {
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'Delete ${type.label}?',
+      message:
+          'New classes and plans can no longer use it. Classes that already '
+          'have this type keep it.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    try {
+      await ref.read(classTypesRepositoryProvider).delete(type.id!);
+      if (context.mounted) {
+        ref.invalidate(classTypesProvider);
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessageFrom(error, fallback: 'Could not delete the type.'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+}
+
+/// Create flow for a custom class type: name, colour, default limit.
+class _ClassTypePanel extends ConsumerStatefulWidget {
+  const _ClassTypePanel();
+
+  @override
+  ConsumerState<_ClassTypePanel> createState() => _ClassTypePanelState();
+}
+
+class _ClassTypePanelState extends ConsumerState<_ClassTypePanel> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _capacity = TextEditingController(text: '12');
+  String _color = 'info';
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _capacity.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(classTypesRepositoryProvider)
+          .create(
+            name: _name.text.trim(),
+            colorKey: _color,
+            defaultCapacity: int.parse(_capacity.text.trim()),
+          );
+      ref.invalidate(classTypesProvider);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessageFrom(error, fallback: 'Could not create the type.'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final taken = {
+      for (final type in ClassType.values) type.wireValue.toLowerCase(),
+    };
+    return AppSidePanel(
+      title: 'New class type',
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _submit,
+          child: Text(_saving ? 'Creating...' : 'Create'),
         ),
       ],
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _name,
+              autofocus: true,
+              maxLength: 30,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                hintText: 'e.g. Hyrox',
+              ),
+              validator: (value) {
+                final name = (value ?? '').trim();
+                if (name.isEmpty) {
+                  return 'Enter a name';
+                }
+                if (taken.contains(name.toLowerCase())) {
+                  return 'That type already exists';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: appSpaceLg),
+            Text('COLOUR', style: appMono(fontSize: 10)),
+            const SizedBox(height: appSpaceSm),
+            Wrap(
+              spacing: appSpaceSm,
+              runSpacing: appSpaceSm,
+              children: [
+                for (final key in classTypeColorKeys)
+                  Semantics(
+                    button: true,
+                    selected: _color == key,
+                    label: 'Colour ${classTypeColorName(key)}',
+                    child: InkWell(
+                      onTap: () => setState(() => _color = key),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: _color == key
+                              ? Border.all(
+                                  color: classTypeColorFor(key),
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: classTypeColorFor(key),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: appSpaceLg),
+            TextFormField(
+              controller: _capacity,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Default limit',
+                suffixText: 'participants',
+              ),
+              validator: (value) {
+                final n = int.tryParse((value ?? '').trim());
+                return n == null || n < 1 || n > 200
+                    ? 'Between 1 and 200'
+                    : null;
+              },
+            ),
+            const SizedBox(height: appSpaceSm),
+            Text(
+              'New classes of this type start with this many spots.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: appMutedText),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

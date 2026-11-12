@@ -1,4 +1,5 @@
 import 'package:app/features/auth/application/auth_controller.dart';
+import 'package:app/features/calendar/data/repositories/class_types_repository.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/home/presentation/widgets/app_shell.dart';
 import 'package:app/features/home/presentation/widgets/shell_destinations.dart';
@@ -21,6 +22,8 @@ class AuthenticatedShellScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(currentProfileProvider);
     final notificationInboxAsync = ref.watch(notificationInboxProvider);
+    // Registers the gym's custom class types for pickers and badges.
+    ref.watch(classTypesProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final unreadNotifications = notificationInboxAsync.hasValue
         ? notificationInboxAsync.value!.unreadCount
