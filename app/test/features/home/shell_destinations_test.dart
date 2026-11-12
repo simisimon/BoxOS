@@ -32,7 +32,7 @@ void main() {
       expect(owner().length, 7);
       expect(owner().map((d) => d.label), [
         'Dashboard',
-        'Schedule',
+        'Classes',
         'Members',
         'Community',
         'Logbook',

@@ -85,7 +85,7 @@ const List<ShellDestination> _ownerDestinations = [
     branchIndex: kMyBoxBranch,
     icon: Icons.event_outlined,
     activeIcon: Icons.event_rounded,
-    label: 'Schedule',
+    label: 'Classes',
   ),
   ShellDestination(
     branchIndex: kMembersBranch,
