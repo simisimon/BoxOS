@@ -4,6 +4,8 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/features/calendar/domain/models/class_type.dart';
+import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
 import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/memberships/presentation/membership_settings_panel.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
@@ -11,39 +13,56 @@ import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Box-level configuration — one home for the identity, scheduling, membership
 /// and notification settings that today are scattered across the profile and
-/// create-gym flows. A left-nav (section chips on mobile) drives a single
-/// settings panel.
+/// create-gym flows. The sidebar's Settings ▸ submenu and the section
+/// chips both select the page via `?section=`.
 ///
 /// Scheduling and notification rules are held in local session state: the
 /// backend enforcement lands with Memberships & Payments, so those sections are
 /// flagged as such rather than silently pretending to persist.
 class BoxSettingsScreen extends ConsumerStatefulWidget {
-  const BoxSettingsScreen({super.key});
+  const BoxSettingsScreen({super.key, this.section = SettingsSection.profile});
+
+  /// The page shown; wide screens pick it in the sidebar submenu, phones in
+  /// the chips at the top.
+  final SettingsSection section;
 
   @override
   ConsumerState<BoxSettingsScreen> createState() => _BoxSettingsScreenState();
 }
 
-enum _SettingsSection {
-  identity,
-  scheduling,
-  memberships,
-  notifications,
-  danger,
-}
+/// The Settings ▸ submenu (docs/admin-ui-reference.md §12), in sidebar order.
+/// [slug] is the `?section=` value in the route.
+enum SettingsSection {
+  profile('profile', 'Gym profile'),
+  bookingRules('booking-rules', 'Booking rules'),
+  classTypes('class-types', 'Class types'),
+  payments('payments', 'Payments'),
+  notifications('notifications', 'Notifications');
 
-class _ClassType {
-  const _ClassType(this.name, this.capacity);
-  final String name;
-  final int capacity;
+  const SettingsSection(this.slug, this.label);
+
+  final String slug;
+  final String label;
+
+  static SettingsSection fromSlug(String? slug) => values.firstWhere(
+    (section) => section.slug == slug,
+    orElse: () => SettingsSection.profile,
+  );
 }
 
 class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
-  _SettingsSection _section = _SettingsSection.scheduling;
+  late SettingsSection _section = widget.section;
+
+  @override
+  void didUpdateWidget(BoxSettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section != widget.section) _section = widget.section;
+  }
 
   // Scheduling rules (local session state — see class doc).
   int _bookingWindowDays = 14;
@@ -54,13 +73,6 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
   bool _notifyJoinRequests = true;
   bool _notifyWaitlistPromotion = true;
   bool _notifyLowFill = false;
-
-  List<_ClassType> _classTypes = const [
-    _ClassType('WOD', 20),
-    _ClassType('Open Gym', 24),
-    _ClassType('Skill', 14),
-    _ClassType('PT', 2),
-  ];
 
   void _save(String sectionLabel) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -101,17 +113,18 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
         appSpace3xl,
       ),
       children: [
-        Text(
-          'Box settings',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: appText,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: appSpaceLg),
+        // Always shown: a collapsed sidebar hides its Settings submenu.
         _SectionNav(
           selected: _section,
-          onSelected: (section) => setState(() => _section = section),
+          onSelected: (section) {
+            // Through the URL so the sidebar highlight, reload and Back
+            // agree; tests without a router just switch locally.
+            if (GoRouter.maybeOf(context) != null) {
+              context.go('/box-settings?section=${section.slug}');
+            } else {
+              setState(() => _section = section);
+            }
+          },
         ),
         const SizedBox(height: appSpace2xl),
         _buildPanel(profile!.activeGym!),
@@ -121,34 +134,38 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
 
   Widget _buildPanel(GymSummary gym) {
     switch (_section) {
-      case _SettingsSection.identity:
-        return _IdentityPanel(
-          // Rebuild the form from the server values after each save.
-          key: ValueKey('${gym.id}|${gym.name}|${gym.logoUrl}|${gym.timezone}'),
-          gym: gym,
+      case SettingsSection.profile:
+        // Archiving the box sits at the end of its profile.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _IdentityPanel(
+              // Rebuild the form from the server values after each save.
+              key: ValueKey(
+                '${gym.id}|${gym.name}|${gym.logoUrl}|${gym.timezone}',
+              ),
+              gym: gym,
+            ),
+            const SizedBox(height: appSpace2xl),
+            const _DangerPanel(),
+          ],
         );
-      case _SettingsSection.scheduling:
+      case SettingsSection.bookingRules:
         return _SchedulingPanel(
           bookingWindowDays: _bookingWindowDays,
           cancelCutoffHours: _cancelCutoffHours,
           waitlistAutoPromote: _waitlistAutoPromote,
-          classTypes: _classTypes,
           onBookingWindowChanged: (v) => setState(() => _bookingWindowDays = v),
           onCancelCutoffChanged: (v) => setState(() => _cancelCutoffHours = v),
           onWaitlistAutoPromoteChanged: (v) =>
               setState(() => _waitlistAutoPromote = v),
-          onAddClassType: _addClassType,
-          onRemoveClassType: (index) => setState(
-            () => _classTypes = [
-              for (var i = 0; i < _classTypes.length; i++)
-                if (i != index) _classTypes[i],
-            ],
-          ),
-          onSave: () => _save('Scheduling rules'),
+          onSave: () => _save('Booking rules'),
         );
-      case _SettingsSection.memberships:
+      case SettingsSection.classTypes:
+        return const _ClassTypesTable();
+      case SettingsSection.payments:
         return const MembershipSettingsPanel();
-      case _SettingsSection.notifications:
+      case SettingsSection.notifications:
         return _NotificationsPanel(
           notifyJoinRequests: _notifyJoinRequests,
           notifyWaitlistPromotion: _notifyWaitlistPromotion,
@@ -159,19 +176,6 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
           onLowFillChanged: (v) => setState(() => _notifyLowFill = v),
           onSave: () => _save('Notification rules'),
         );
-      case _SettingsSection.danger:
-        return const _DangerPanel();
-    }
-  }
-
-  Future<void> _addClassType() async {
-    final result = await showModalBottomSheet<_ClassType>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => const _AddClassTypeSheet(),
-    );
-    if (result != null) {
-      setState(() => _classTypes = [..._classTypes, result]);
     }
   }
 }
@@ -179,15 +183,12 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
 class _SectionNav extends StatelessWidget {
   const _SectionNav({required this.selected, required this.onSelected});
 
-  final _SettingsSection selected;
-  final ValueChanged<_SettingsSection> onSelected;
+  final SettingsSection selected;
+  final ValueChanged<SettingsSection> onSelected;
 
-  static const _items = <(_SettingsSection, String, bool)>[
-    (_SettingsSection.identity, 'Box Identity', false),
-    (_SettingsSection.scheduling, 'Scheduling', false),
-    (_SettingsSection.memberships, 'Memberships', false),
-    (_SettingsSection.notifications, 'Notifications', false),
-    (_SettingsSection.danger, 'Danger Zone', false),
+  static final _items = [
+    for (final section in SettingsSection.values)
+      (section, section.label, false),
   ];
 
   @override
@@ -718,24 +719,18 @@ class _SchedulingPanel extends StatelessWidget {
     required this.bookingWindowDays,
     required this.cancelCutoffHours,
     required this.waitlistAutoPromote,
-    required this.classTypes,
     required this.onBookingWindowChanged,
     required this.onCancelCutoffChanged,
     required this.onWaitlistAutoPromoteChanged,
-    required this.onAddClassType,
-    required this.onRemoveClassType,
     required this.onSave,
   });
 
   final int bookingWindowDays;
   final int cancelCutoffHours;
   final bool waitlistAutoPromote;
-  final List<_ClassType> classTypes;
   final ValueChanged<int> onBookingWindowChanged;
   final ValueChanged<int> onCancelCutoffChanged;
   final ValueChanged<bool> onWaitlistAutoPromoteChanged;
-  final VoidCallback onAddClassType;
-  final ValueChanged<int> onRemoveClassType;
   final VoidCallback onSave;
 
   @override
@@ -777,31 +772,6 @@ class _SchedulingPanel extends StatelessWidget {
                 help: 'Move the next athlete up when a spot frees.',
                 value: waitlistAutoPromote,
                 onChanged: onWaitlistAutoPromoteChanged,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: appSpaceLg),
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'CLASS TYPES & DEFAULT CAPACITY',
-                style: appMono(fontSize: 10, letterSpacing: 1.4),
-              ),
-              const SizedBox(height: appSpaceLg),
-              Wrap(
-                spacing: appSpaceSm,
-                runSpacing: appSpaceSm,
-                children: [
-                  for (var i = 0; i < classTypes.length; i++)
-                    _ClassTypeChip(
-                      type: classTypes[i],
-                      onRemove: () => onRemoveClassType(i),
-                    ),
-                  _AddTypeChip(onTap: onAddClassType),
-                ],
               ),
             ],
           ),
@@ -959,92 +929,6 @@ class _ToggleRow extends StatelessWidget {
   }
 }
 
-class _ClassTypeChip extends StatelessWidget {
-  const _ClassTypeChip({required this.type, required this.onRemove});
-
-  final _ClassType type;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(appRadiusSm),
-        border: Border.all(color: appBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            type.name,
-            style: const TextStyle(
-              color: appText,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '·${type.capacity}',
-            style: appMono(fontSize: 11, letterSpacing: 0, color: appPrimary),
-          ),
-          const SizedBox(width: 6),
-          InkWell(
-            onTap: onRemove,
-            borderRadius: BorderRadius.circular(appRadiusPill),
-            child: const Icon(
-              Icons.close_rounded,
-              size: 15,
-              color: appSubtleText,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddTypeChip extends StatelessWidget {
-  const _AddTypeChip({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(appRadiusSm),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(appRadiusSm),
-            border: Border.all(color: appPrimaryHairline),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.add_rounded, size: 16, color: appPrimary),
-              const SizedBox(width: 4),
-              Text(
-                'Add type',
-                style: const TextStyle(
-                  color: appPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _NotificationsPanel extends StatelessWidget {
   const _NotificationsPanel({
     required this.notifyJoinRequests,
@@ -1170,68 +1054,55 @@ class _DangerPanel extends StatelessWidget {
   }
 }
 
-class _AddClassTypeSheet extends StatefulWidget {
-  const _AddClassTypeSheet();
+/// Settings ▸ Class types: BoxOS's four fixed types (CLAUDE.md product
+/// decisions) with their calendar colour and default class size.
+class _ClassTypesTable extends StatelessWidget {
+  const _ClassTypesTable();
 
-  @override
-  State<_AddClassTypeSheet> createState() => _AddClassTypeSheetState();
-}
-
-class _AddClassTypeSheetState extends State<_AddClassTypeSheet> {
-  final _nameController = TextEditingController();
-  int _capacity = 20;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
+  // shortcut: display-only defaults, not stored; persist them per gym once
+  // new classes should start from them.
+  static const _defaultLimits = {
+    ClassType.wod: 20,
+    ClassType.openGym: 24,
+    ClassType.skill: 14,
+    ClassType.pt: 2,
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: appSpaceLg,
-        right: appSpaceLg,
-        top: appSpaceLg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + appSpaceLg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'NEW CLASS TYPE',
-            style: appMono(fontSize: 10, letterSpacing: 1.4),
-          ),
-          const SizedBox(height: appSpaceMd),
-          TextField(
-            controller: _nameController,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(hintText: 'e.g. Endurance'),
-          ),
-          const SizedBox(height: appSpaceLg),
-          _StepperField(
-            label: 'Default capacity',
-            help: 'Seats per class of this type.',
-            value: _capacity,
-            suffix: 'seats',
-            min: 1,
-            max: 100,
-            onChanged: (v) => setState(() => _capacity = v),
-          ),
-          const SizedBox(height: appSpaceLg),
-          AppPrimaryButton(
-            label: 'Add type',
-            onPressed: () {
-              final name = _nameController.text.trim();
-              if (name.isEmpty) return;
-              Navigator.of(context).pop(_ClassType(name, _capacity));
-            },
-          ),
-        ],
-      ),
+    return AppDataTable<ClassType>(
+      shrinkWrap: true,
+      columns: const [
+        AppTableColumn('Name', flex: 3),
+        AppTableColumn('Default limit', flex: 2),
+      ],
+      rows: ClassType.values,
+      cells: (type) => [
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: classTypeColor(type),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: appSpaceSm),
+            Text(
+              type.label,
+              style: const TextStyle(
+                color: appText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          '${_defaultLimits[type]} participants',
+          style: const TextStyle(color: appMutedText),
+        ),
+      ],
     );
   }
 }

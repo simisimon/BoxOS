@@ -186,7 +186,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/box-settings',
                 name: 'box-settings',
-                builder: (context, state) => const BoxSettingsScreen(),
+                builder: (context, state) => BoxSettingsScreen(
+                  section: SettingsSection.fromSlug(
+                    state.uri.queryParameters['section'],
+                  ),
+                ),
               ),
             ],
           ),

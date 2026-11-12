@@ -9,10 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 Widget _shell({
   void Function(UserRole)? onRole,
   void Function(int)? onBranch,
+  int branch = kHomeBranch,
+  void Function(String)? onNavigate,
 }) => MaterialApp(
   theme: buildBoxOsTheme(),
   home: AuthenticatedScaffold(
-    selectedBranchIndex: kHomeBranch,
+    selectedBranchIndex: branch,
+    onNavigate: onNavigate,
+    currentLocation: '/box-settings',
     destinations: destinationsForView(
       accountType: AccountType.admin,
       role: UserRole.admin,
@@ -89,6 +93,21 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(picked, kBoxSettingsBranch);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Settings shows its submenu in the sidebar', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    String? opened;
+
+    await tester.pumpWidget(
+      _shell(branch: kBoxSettingsBranch, onNavigate: (l) => opened = l),
+    );
+    expect(find.text('Gym profile'), findsOneWidget);
+    await tester.tap(find.text('Booking rules'));
+    expect(opened, '/box-settings?section=booking-rules');
     expect(tester.takeException(), isNull);
   });
 }

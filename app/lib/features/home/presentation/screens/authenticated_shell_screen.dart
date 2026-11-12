@@ -50,6 +50,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
           kProgramsBranch,
           kReportsBranch,
           kMessagesBranch,
+          kBoxSettingsBranch,
         }.contains(navigationShell.currentIndex) ||
         // The owner dashboard is migrated; the athlete home is not yet.
         (navigationShell.currentIndex == kHomeBranch &&
@@ -74,6 +75,8 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       onSignOut: () => ref.read(authControllerProvider.notifier).signOut(),
       fullBleedBody: fullBleed,
       branchBadges: {kMembersBranch: openJoinRequests},
+      currentLocation: GoRouterState.of(context).uri.toString(),
+      onNavigate: (location) => context.go(location),
       body: navigationShell,
       onSelectBranch: (branchIndex) => navigationShell.goBranch(
         branchIndex,

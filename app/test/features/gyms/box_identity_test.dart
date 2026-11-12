@@ -106,7 +106,7 @@ Future<_FakeGymRepository> _pump(
 }
 
 Future<void> _openIdentity(WidgetTester tester) async {
-  await tester.tap(find.text('Box Identity'));
+  await tester.tap(find.text('Gym profile'));
   await tester.pumpAndSettle();
 }
 
@@ -186,6 +186,6 @@ void main() {
   testWidgets('non-owners do not get the settings', (tester) async {
     await _pump(tester, role: UserRole.athlete);
     expect(find.text('Owner access required'), findsOneWidget);
-    expect(find.text('Box Identity'), findsNothing);
+    expect(find.text('Gym profile'), findsNothing);
   });
 }

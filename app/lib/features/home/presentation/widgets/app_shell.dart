@@ -31,6 +31,8 @@ class AuthenticatedScaffold extends StatefulWidget {
     this.onSignOut,
     this.fullBleedBody = false,
     this.branchBadges = const {},
+    this.currentLocation = '',
+    this.onNavigate,
   });
 
   /// The currently active shell branch (matches `navigationShell.currentIndex`).
@@ -68,6 +70,12 @@ class AuthenticatedScaffold extends StatefulWidget {
   /// Counter badges per shell branch index, e.g. open join requests on
   /// Members. Missing or zero means no badge.
   final Map<int, int> branchBadges;
+
+  /// The router location, to highlight the active submenu entry.
+  final String currentLocation;
+
+  /// Opens a submenu entry's location.
+  final ValueChanged<String>? onNavigate;
 
   @override
   State<AuthenticatedScaffold> createState() => _AuthenticatedScaffoldState();
@@ -120,6 +128,8 @@ class _AuthenticatedScaffoldState extends State<AuthenticatedScaffold> {
               ],
               badges: w.branchBadges,
               onSelectBranch: w.onSelectBranch,
+              currentLocation: w.currentLocation,
+              onNavigate: w.onNavigate,
               gymName: w.gymName,
               roleLabel: w.roleLabel,
               gyms: w.gyms,
@@ -449,6 +459,8 @@ class _ShellSidebar extends StatelessWidget {
     required this.destinations,
     required this.badges,
     required this.onSelectBranch,
+    required this.currentLocation,
+    required this.onNavigate,
     required this.gymName,
     required this.roleLabel,
     required this.gyms,
@@ -470,6 +482,8 @@ class _ShellSidebar extends StatelessWidget {
   final List<ShellDestination> destinations;
   final Map<int, int> badges;
   final ValueChanged<int> onSelectBranch;
+  final String currentLocation;
+  final ValueChanged<String>? onNavigate;
   final String gymName;
   final String roleLabel;
   final List<GymSummary> gyms;
@@ -540,7 +554,7 @@ class _ShellSidebar extends StatelessWidget {
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    for (final dest in destinations)
+                    for (final dest in destinations) ...[
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
                         child: _SidebarNavItem(
@@ -554,6 +568,31 @@ class _ShellSidebar extends StatelessWidget {
                           onTap: () => onSelectBranch(dest.branchIndex),
                         ),
                       ),
+                      // The active item's submenu (e.g. Settings ▸).
+                      if (!collapsed &&
+                          onNavigate != null &&
+                          dest.branchIndex == selectedBranchIndex)
+                        for (final (i, (label, location))
+                            in dest.children.indexed)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              left: appSpaceXl + appSpaceMd,
+                              bottom: 2,
+                            ),
+                            child: _SidebarNavItem(
+                              collapsed: false,
+                              icon: null,
+                              label: label,
+                              badge: 0,
+                              selected: _isActiveChild(
+                                dest.children,
+                                i,
+                                currentLocation,
+                              ),
+                              onTap: () => onNavigate!(location),
+                            ),
+                          ),
+                    ],
                   ],
                 ),
               ),
@@ -714,7 +753,9 @@ class _SidebarNavItem extends StatelessWidget {
   });
 
   final bool collapsed;
-  final IconData icon;
+
+  /// Null for submenu entries, which show only their label.
+  final IconData? icon;
   final String label;
   final int badge;
   final bool selected;
@@ -723,11 +764,9 @@ class _SidebarNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? appText : appMutedText;
-    final iconWidget = Icon(
-      icon,
-      size: 20,
-      color: selected ? appPrimary : appSubtleText,
-    );
+    final iconWidget = icon == null
+        ? const SizedBox.shrink()
+        : Icon(icon, size: 20, color: selected ? appPrimary : appSubtleText);
     return Tooltip(
       message: collapsed ? label : '',
       child: Material(
@@ -748,8 +787,10 @@ class _SidebarNavItem extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        iconWidget,
-                        const SizedBox(width: appSpaceMd),
+                        if (icon != null) ...[
+                          iconWidget,
+                          const SizedBox(width: appSpaceMd),
+                        ],
                         Expanded(
                           child: Text(
                             label,
@@ -1033,4 +1074,19 @@ class _CountBadge extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// Whether submenu entry [index] matches [currentLocation]: same `section`
+/// query value; a missing or unknown section counts as the first entry, the
+/// page's fallback.
+bool _isActiveChild(
+  List<(String, String)> children,
+  int index,
+  String currentLocation,
+) {
+  String? section(String location) =>
+      Uri.parse(location).queryParameters['section'];
+  final current = section(currentLocation);
+  final known = children.any((child) => section(child.$2) == current);
+  return known ? section(children[index].$2) == current : index == 0;
 }

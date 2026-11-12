@@ -51,12 +51,17 @@ class ShellDestination {
     required this.icon,
     required this.activeIcon,
     required this.label,
+    this.children = const [],
   });
 
   final int branchIndex;
   final IconData icon;
   final IconData activeIcon;
   final String label;
+
+  /// Submenu entries (label, location) shown under this item in the sidebar
+  /// (the reference's `Settings ▸`). Phones ignore them.
+  final List<(String, String)> children;
 }
 
 /// Athlete & trainer keep the original athlete-centric tab set.
@@ -149,6 +154,14 @@ const List<ShellDestination> _ownerDestinations = [
     icon: Icons.tune_outlined,
     activeIcon: Icons.tune_rounded,
     label: 'Settings',
+    // Mirrors SettingsSection in box_settings_screen.dart.
+    children: [
+      ('Gym profile', '/box-settings?section=profile'),
+      ('Booking rules', '/box-settings?section=booking-rules'),
+      ('Class types', '/box-settings?section=class-types'),
+      ('Payments', '/box-settings?section=payments'),
+      ('Notifications', '/box-settings?section=notifications'),
+    ],
   ),
   ShellDestination(
     branchIndex: kProfileBranch,
