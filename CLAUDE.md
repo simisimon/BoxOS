@@ -53,11 +53,12 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 
 - Format only the Dart files you changed (`dart format <file>`). Many files are
   unformatted at HEAD; `dart format lib` floods the diff.
-- Every dialog uses `AppFormDialog` (`app/lib/core/presentation/app_form_dialog.dart`,
-  fixed 520×640); yes/no questions use `showAppConfirmDialog`. No new
+- Layout target: `docs/admin-ui-reference.md` (left sidebar, right-side panels
+  for detail and create flows, full-width pages, BoxOS colours from
+  `app_chrome.dart`). Views are being migrated to it one by one; a view not yet
+  migrated keeps `AppFormDialog` (fixed 520×640) and the `contentMaxWidth`
+  column. Yes/no questions always use `showAppConfirmDialog`. No new
   `AlertDialog` / `SimpleDialog`.
-- All tabs share one content column (`contentMaxWidth`). Only the schedule week
-  (My Box branch) renders full-bleed.
 - The app theme makes `FilledButton`/`OutlinedButton` full-width: inside a
   `Row` give them `minimumSize: Size(0, 44)` or use `OverflowBar`. Widget tests
   pump with `theme: buildBoxOsTheme()` (see `app/test/schedule_views_test.dart`)
