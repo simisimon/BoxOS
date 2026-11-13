@@ -36,7 +36,8 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   --email x@y.de --name "Name" --role athlete|trainer|admin --gym "<name or slug>"`
   prints a generated password; also `reset-password`, `deactivate-user`,
   `list-users`, `list-gyms`. In dev: `docker compose exec backend-dev python -m
-  backend.manage ...`. Production sets `BOXOS_SIGNUP_ENABLED=0` (sign-up
+  backend.manage ...`; on the server: `docker compose -f docker-compose.prod.yml
+  exec backend python -m backend.manage ...` (see `docs/deploy.md`). Production sets `BOXOS_SIGNUP_ENABLED=0` (sign-up
   endpoints answer 403), `BOXOS_SEED_DEMO_USERS=0` (no public demo accounts)
   and builds the web app with `INVITE_ONLY=true` (hides sign-up and password
   reset). Quick-login buttons only show in `ENV=dev` builds.
