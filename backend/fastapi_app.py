@@ -397,6 +397,9 @@ class ChatMessageCreateRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    problems = settings.production_problems()
+    if problems:
+        raise RuntimeError("Refusing to start in production: " + " ".join(problems))
     db.init_db()
     yield
 

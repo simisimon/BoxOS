@@ -1,0 +1,31 @@
+# Reverse proxy for the VPS (Caddy gets and renews Let's Encrypt certificates
+# automatically). Add these blocks to the server's Caddyfile; keep the block
+# that already serves the marketing site at boxos-app.de.
+
+app.boxos-app.de {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy 127.0.0.1:8090
+}
+
+api.boxos-app.de {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	request_body {
+		max_size 10MB
+	}
+	reverse_proxy 127.0.0.1:8080
+}
+
+# Staging (optional)
+staging-app.boxos-app.de {
+	reverse_proxy 127.0.0.1:8091
+}
+
+staging-api.boxos-app.de {
+	reverse_proxy 127.0.0.1:8081
+}
