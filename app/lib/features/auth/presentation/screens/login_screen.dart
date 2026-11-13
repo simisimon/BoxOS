@@ -1,4 +1,5 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/presentation/legal_links.dart';
 import 'package:app/core/routing/env.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
@@ -171,6 +172,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
             ],
+            const SizedBox(height: 16),
+            const LegalLinks(),
           ],
         ),
       ),

@@ -2,6 +2,7 @@ import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/core/presentation/legal_links.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/members/domain/member_booking.dart';
@@ -218,7 +219,7 @@ class _AccountSection extends ConsumerWidget {
           ),
       ],
     );
-    final security = _SettingsCard(
+    final securityCard = _SettingsCard(
       title: 'Preferences & security',
       rows: [
         _SettingsRow(
@@ -250,6 +251,14 @@ class _AccountSection extends ConsumerWidget {
           destructive: true,
           onTap: () => context.go('/delete-account'),
         ),
+      ],
+    );
+    final security = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        securityCard,
+        const SizedBox(height: appSpaceMd),
+        const LegalLinks(),
       ],
     );
     final boxes = memberships.isEmpty
