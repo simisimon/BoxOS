@@ -1,12 +1,12 @@
 {
-    "name": "app",
-    "short_name": "app",
+    "name": "BoxOS",
+    "short_name": "BoxOS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#07080B",
+    "theme_color": "#07080B",
+    "description": "BoxOS – classes, memberships and messages for your CrossFit box.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

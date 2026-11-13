@@ -66,6 +66,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    # Bundled for google_fonts (runtime fetching is off, see main.dart).
+    - assets/fonts/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

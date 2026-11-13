@@ -11,7 +11,8 @@ ARG AUTH_REDIRECT_URL=http://localhost:3000/auth/callback
 # true hides sign-up and password reset (invite-only production).
 ARG INVITE_ONLY=false
 
-RUN flutter build web --release \
+# --no-web-resources-cdn serves CanvasKit from this server, not Google's CDN.
+RUN flutter build web --release --no-web-resources-cdn \
     --dart-define=ENV=${APP_ENV} \
     --dart-define=API_BASE_URL=${API_BASE_URL} \
     --dart-define=AUTH_REDIRECT_URL=${AUTH_REDIRECT_URL} \
