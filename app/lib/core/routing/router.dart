@@ -160,7 +160,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/profile',
                 name: 'profile',
-                builder: (context, state) => const ProfileScreen(),
+                builder: (context, state) => ProfileScreen(
+                  section: ProfileSection.fromSlug(
+                    state.uri.queryParameters['section'],
+                  ),
+                ),
               ),
             ],
           ),

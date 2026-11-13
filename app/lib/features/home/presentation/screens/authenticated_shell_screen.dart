@@ -55,8 +55,9 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       kReportsBranch,
       kMessagesBranch,
       kBoxSettingsBranch,
-      // Every role's start page is migrated.
+      // Every role's start page and the profile are migrated.
       kHomeBranch,
+      kProfileBranch,
     }.contains(navigationShell.currentIndex);
 
     return AuthenticatedScaffold(
@@ -114,7 +115,8 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     (_, 'daily_workout') => manager ? '/programs' : '/my-box',
     (_, 'schedule_class') => '/my-box',
     // Members see their plan and extra tokens on their profile.
-    (_, 'member_plan' || 'token_credit') => owner ? '/members' : '/profile',
+    (_, 'member_plan' || 'token_credit') =>
+      owner ? '/members' : '/profile?section=membership',
     _ => null,
   };
 

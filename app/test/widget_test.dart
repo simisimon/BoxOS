@@ -2609,15 +2609,13 @@ void main() {
       initialLocation: '/profile',
     );
 
-    final switchButton = find.widgetWithText(
-      OutlinedButton,
-      'Switch to This Gym',
-    );
+    // The Boxes card lists every box; the others get a Switch action.
+    final switchButton = find.widgetWithText(TextButton, 'Switch');
     await tester.ensureVisible(switchButton);
     await _settleApp(tester);
 
-    expect(find.text('Switch gym context fast'), findsOneWidget);
-    expect(find.text('CURRENT GYM'), findsOneWidget);
+    expect(find.text('Boxes'), findsOneWidget);
+    expect(find.text('CURRENT'), findsOneWidget);
     expect(switchButton, findsOneWidget);
   });
 
