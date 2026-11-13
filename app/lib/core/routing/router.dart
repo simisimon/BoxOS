@@ -27,6 +27,7 @@ import 'package:app/features/profile/presentation/screens/edit_profile_screen.da
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
+import 'package:app/core/routing/env.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -252,11 +253,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sign-up',
         name: 'sign-up',
+        redirect: (context, state) =>
+            AppEnv.current.inviteOnly ? '/login' : null,
         builder: (context, state) => const SignUpScreen(),
       ),
       GoRoute(
         path: '/admin-sign-up',
         name: 'admin-sign-up',
+        redirect: (context, state) =>
+            AppEnv.current.inviteOnly ? '/login' : null,
         builder: (context, state) => const AdminSignUpScreen(),
       ),
       GoRoute(
@@ -272,6 +277,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         name: 'forgot-password',
+        redirect: (context, state) =>
+            AppEnv.current.inviteOnly ? '/login' : null,
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(

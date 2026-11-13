@@ -38,6 +38,12 @@ CORS_ALLOW_ORIGINS = [
 ]
 LOG_DELIVERY_TOKENS = os.getenv("BOXOS_LOG_DELIVERY_TOKENS", "1") == "1"
 RATE_LIMIT_ENABLED = os.getenv("BOXOS_RATE_LIMIT_ENABLED", "1") == "1"
+# Invite-only production: with sign-up off the /auth/signup* endpoints answer
+# 403 and accounts are created with `python -m backend.manage create-user`.
+SIGNUP_ENABLED = os.getenv("BOXOS_SIGNUP_ENABLED", "1") == "1"
+# The demo/trainer/admin accounts below use public passwords. Keep them for
+# dev and tests; set BOXOS_SEED_DEMO_USERS=0 in production.
+SEED_DEMO_USERS = os.getenv("BOXOS_SEED_DEMO_USERS", "1") == "1"
 
 # Stripe Connect (payments). Empty secret key = payments are switched off and
 # the app hides them. Use test-mode keys (sk_test_...) for development.

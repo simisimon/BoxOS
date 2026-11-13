@@ -32,6 +32,14 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   `docker compose up -d backend-dev` (`restart` does not reload `.env`). Keep
   the listener running; events sent while it is down are not replayed. Add new
   event types to `--events` when `payment_service.handle_event` learns them.
+- Accounts (invite-only production): `python -m backend.manage create-user
+  --email x@y.de --name "Name" --role athlete|trainer|admin --gym "<name or slug>"`
+  prints a generated password; also `reset-password`, `deactivate-user`,
+  `list-users`, `list-gyms`. In dev: `docker compose exec backend-dev python -m
+  backend.manage ...`. Production sets `BOXOS_SIGNUP_ENABLED=0` (sign-up
+  endpoints answer 403), `BOXOS_SEED_DEMO_USERS=0` (no public demo accounts)
+  and builds the web app with `INVITE_ONLY=true` (hides sign-up and password
+  reset). Quick-login buttons only show in `ENV=dev` builds.
 - Demo data: `docker compose exec backend-dev python -m backend.seed_demo`.
   The login screen has a "Demo Owner" quick login for local testing.
 
