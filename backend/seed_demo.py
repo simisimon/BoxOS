@@ -275,13 +275,13 @@ def _add_membership(conn, user_id, gym_id, active_role, roles, *, created_at):
     )
 
 
-def _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today):
+def _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today, future_days=_FUTURE_DAYS):
     """One weekly class per slot, as the owner would set up in the week plan.
 
     `generated_until` marks the explicitly seeded window as done, so the API's
     lazy generation only extends the plan beyond it.
     """
-    generated_until = (today + timedelta(days=_FUTURE_DAYS)).isoformat()
+    generated_until = (today + timedelta(days=future_days)).isoformat()
     template_ids = {}
     for weekdays, slots in ((_WEEKDAYS, _CLASS_WEEKDAY), (_WEEKEND_DAYS, _CLASS_WEEKEND)):
         for time_str, title, class_type, capacity in slots:
@@ -298,9 +298,11 @@ def _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today):
     return template_ids
 
 
-def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today):
-    template_ids = _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today)
-    for offset in range(-_PAST_DAYS, _FUTURE_DAYS + 1):
+def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today, *,
+                  timezone_name=GYM_TIMEZONE, past_days=_PAST_DAYS, future_days=_FUTURE_DAYS,
+                  max_fill=None):
+    template_ids = _seed_class_templates(conn, rng, gym_id, owner_id, trainer_ids, today, future_days)
+    for offset in range(-past_days, future_days + 1):
         day = today + timedelta(days=offset)
         is_weekend = day.weekday() >= 5
         templates = _CLASS_WEEKEND if is_weekend else _CLASS_WEEKDAY
@@ -309,7 +311,7 @@ def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today):
             # Store UTC like the API does, so template re-planning can match
             # seeded sessions against the class's local wall-clock time.
             local_start = datetime.combine(day, datetime.strptime(time_str, "%H:%M").time())
-            start_utc = utc_for_local(local_start, GYM_TIMEZONE)
+            start_utc = utc_for_local(local_start, timezone_name)
             start = isoformat(start_utc)
             end = isoformat(start_utc + timedelta(minutes=60))
             trainer = rng.choice(trainer_ids)
@@ -335,7 +337,7 @@ def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today):
                 fill = max(1, round(capacity * 0.375))  # low fill
             else:
                 fill = max(1, round(capacity * rng.uniform(0.5, 0.85)))
-            fill = min(fill, capacity, len(member_ids))
+            fill = min(fill, capacity, len(member_ids), max_fill or capacity)
 
             attendees = rng.sample(member_ids, fill)
             for uid in attendees:

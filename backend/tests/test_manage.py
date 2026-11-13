@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 
-from backend import manage, settings
+from backend import db, manage, settings
 from backend.tests.support import FastApiTestCase
 
 
@@ -141,3 +141,72 @@ class ProductionSettingsTests(FastApiTestCase):
         settings.CORS_ALLOW_ORIGINS = ["https://app.boxos-app.de"]
         settings.STRIPE_SECRET_KEY = ""
         self.assertEqual(settings.production_problems(), [])
+
+
+class SeedTestDataTests(FastApiTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.admin_headers, self.gym_id = self.create_gym_as_admin("Real Box")
+        self.member_id = self.add_active_membership(settings.DEMO_EMAIL, self.gym_id)
+        self.real_wod_day = "2000-01-01"
+        connection = db.get_connection()
+        try:
+            with connection:
+                owner = connection.execute("select id from users where email = ?", (settings.ADMIN_EMAIL,)).fetchone()
+                connection.execute(
+                    """insert into daily_workouts (gym_id, scheduled_date, title, status, created_by_user_id,
+                         updated_by_user_id, created_at, updated_at)
+                       values (?, ?, 'Owner WOD', 'draft', ?, ?, 'now', 'now')""",
+                    (self.gym_id, self.real_wod_day, owner["id"], owner["id"]),
+                )
+        finally:
+            connection.close()
+
+    def seed(self, *extra: str) -> str:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = manage.main(["seed-test-data", "--gym", "real-box", "--members", "6", "--trainers", "1",
+                                "--weeks", "1", *extra])
+        self.assertEqual(code, 0)
+        return out.getvalue()
+
+    def test_seeds_existing_gym_and_reruns_without_duplicates(self) -> None:
+        output = self.seed()
+        self.assertIn("--remove", output)
+        test_users = "email like '%@test.boxos.invalid'"
+        # 1 trainer + 6 members + 2 join requests
+        self.assertEqual(self.count_rows("users", test_users), 9)
+        self.assertEqual(self.count_rows("gym_memberships", "gym_id = ?", (self.gym_id,)), 1 + 1 + 1 + 6)
+        self.assertEqual(self.count_rows("gym_join_requests", "gym_id = ? and status = 'pending'", (self.gym_id,)), 2)
+        classes = self.count_rows("class_schedules", "gym_id = ?", (self.gym_id,))
+        self.assertGreater(classes, 0)
+        self.assertGreater(self.count_rows("daily_workouts", "gym_id = ? and title = 'Test WOD'", (self.gym_id,)), 0)
+        self.assertEqual(self.count_rows("gyms"), 1)
+
+        self.seed()
+        self.assertEqual(self.count_rows("users", test_users), 9)
+        self.assertEqual(self.count_rows("class_schedules", "gym_id = ?", (self.gym_id,)), classes)
+
+    def test_test_accounts_cannot_log_in(self) -> None:
+        self.seed()
+        connection = db.get_connection()
+        try:
+            emails = [row["email"] for row in connection.execute(
+                "select email from users where email like '%@test.boxos.invalid'").fetchall()]
+        finally:
+            connection.close()
+        for password in ("Passw0rd!123", "BoxOS123!", "BoxOS!demo1"):
+            response = self.client.post("/auth/login", json={"email": emails[0], "password": password})
+            self.assertEqual(response.status_code, 401, response.text)
+
+    def test_remove_keeps_owner_members_and_their_data(self) -> None:
+        self.seed()
+        self.seed("--remove")
+        self.assertEqual(self.count_rows("users", "email like '%@test.boxos.invalid'"), 0)
+        self.assertEqual(self.count_rows("class_schedules", "gym_id = ?", (self.gym_id,)), 0)
+        self.assertEqual(self.count_rows("membership_plans", "gym_id = ?", (self.gym_id,)), 0)
+        self.assertEqual(self.count_rows("chat_messages", "gym_id = ?", (self.gym_id,)), 0)
+        self.assertEqual(self.count_rows("gym_memberships", "gym_id = ?", (self.gym_id,)), 2)
+        self.assertEqual(self.count_rows("daily_workouts", "gym_id = ?", (self.gym_id,)), 1)
+        self.auth_headers(settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD)
+        self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)

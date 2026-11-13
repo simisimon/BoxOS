@@ -15,6 +15,7 @@ Commands:
     deactivate-user  sign the user out and lock the password (undo: reset-password)
     list-users       list accounts with role and gym
     list-gyms        list gyms with their slug
+    seed-test-data   fill a box with test members, classes and WODs (--remove deletes them)
 
 Roles: athlete, trainer (coaches classes) or admin (box owner; can create a
 box in the app). Passwords are generated unless --password is given.
@@ -28,7 +29,7 @@ import string
 import sys
 from typing import Any, Sequence
 
-from backend import db, security, validation
+from backend import db, security, test_data, validation
 from backend.membership_service import sync_user_context
 
 ROLE_SETS = {
@@ -222,6 +223,29 @@ def list_gyms() -> list[dict[str, Any]]:
         connection.close()
 
 
+def seed_test_data(*, gym: str, members: int, trainers: int, weeks: int, remove: bool) -> None:
+    connection = db.get_connection()
+    try:
+        gym_row = _find_gym(connection, gym)
+    finally:
+        connection.close()
+    if remove:
+        count = test_data.remove(gym_row["id"])
+        print(f"Removed {count} test account(s) and their classes, bookings, WODs, plans and messages "
+              f"from {gym_row['name']}.")
+        return
+    try:
+        counts = test_data.seed(gym_id=gym_row["id"], members=members, trainers=trainers, weeks=weeks)
+    except ValueError as error:
+        raise CommandError(str(error)) from error
+    print(f"Test data for {gym_row['name']} (replaces any earlier test data):")
+    print(f"  {counts['members']} members, {counts['trainers']} trainers, {counts['requests']} join requests")
+    print(f"  classes {weeks} week(s) back and ahead with bookings and attendance")
+    print(f"  {counts['wods']} WODs, {counts['plans']} member plans, an announcement and chat messages")
+    print(f"Test accounts use @{test_data.TEST_DOMAIN} and cannot log in.")
+    print(f"Remove it all with: python -m backend.manage seed-test-data --gym {gym_row['slug']} --remove")
+
+
 def _print_credentials(email: str, password: str) -> None:
     print(f"  Email:    {email}")
     print(f"  Password: {password}")
@@ -252,6 +276,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     commands.add_parser("list-gyms", help="List gyms.")
 
+    seed = commands.add_parser("seed-test-data", help="Fill a box with test data, or remove it.")
+    seed.add_argument("--gym", required=True, help="Gym name or slug.")
+    seed.add_argument("--members", type=int, default=20)
+    seed.add_argument("--trainers", type=int, default=2)
+    seed.add_argument("--weeks", type=int, default=2, help="Classes this many weeks back and ahead.")
+    seed.add_argument("--remove", action="store_true", help="Delete the box's test data instead.")
+
     args = parser.parse_args(argv)
     try:
         db.init_db()
@@ -281,6 +312,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "list-gyms":
             for row in list_gyms():
                 print(f"{row['slug']:<32} {row['name']}")
+        elif args.command == "seed-test-data":
+            seed_test_data(gym=args.gym, members=args.members, trainers=args.trainers,
+                           weeks=args.weeks, remove=args.remove)
     except (CommandError, validation.ApiError) as error:
         message = getattr(error, "detail", None) or str(error)
         print(f"Error: {message}", file=sys.stderr)

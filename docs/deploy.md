@@ -164,6 +164,17 @@ boxos exec backend python -m backend.manage create-user --email coach@example.co
 boxos exec backend python -m backend.manage create-user --email member@example.com --name "Member" --role athlete --gym "<slug>"
 ```
 
+Test data: fills an existing box with 20 test members, 2 trainers, two join
+requests, classes two weeks back and ahead with bookings, WODs, plans and a few
+messages. Test accounts use `@test.boxos.invalid` and cannot log in; running it
+again replaces the test data, `--remove` deletes it (real members, the owner and
+the box's own WODs stay):
+
+```bash
+boxos exec backend python -m backend.manage seed-test-data --gym "<slug>"
+boxos exec backend python -m backend.manage seed-test-data --gym "<slug>" --remove
+```
+
 Forgotten password: `... manage reset-password --email ...` (password reset by
 email is not available yet). Remove access: `... manage deactivate-user --email ...`.
 
