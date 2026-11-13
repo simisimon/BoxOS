@@ -2143,28 +2143,56 @@ def get_member_bookings(
     connection = db.get_connection()
     try:
         _require_member(connection, gym_id, user_id)
-        rows = connection.execute(
-            """
-            select class_schedules.id as class_id, class_schedules.title, class_schedules.class_type,
-                   class_schedules.start_time, class_schedules.end_time,
-                   trainers.display_name as trainer_name, entries.status
-            from (
-                select class_schedule_id, attendance_status as status
-                from class_bookings where user_id = ?
-                union all
-                select class_schedule_id, 'waitlist' as status
-                from class_waitlist_entries where user_id = ?
-            ) entries
-            join class_schedules on class_schedules.id = entries.class_schedule_id
-            left join users trainers on trainers.id = class_schedules.assigned_trainer_user_id
-            where class_schedules.gym_id = ?
-            order by class_schedules.start_time desc
-            """,
-            (user_id, user_id, gym_id),
-        ).fetchall()
-        return {"bookings": [dict(row) for row in rows]}
+        return {"bookings": _booking_history(connection, gym_id, user_id)}
     finally:
         connection.close()
+
+
+@app.get("/membership/me/bookings")
+def get_my_bookings(
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """The signed-in member's bookings, waitlist entries and cancellations at
+    the active box, newest class first, for Profile › Bookings."""
+    connection = db.get_connection()
+    try:
+        return {"bookings": _booking_history(connection, session["active_gym_id"], session["user_id"])}
+    finally:
+        connection.close()
+
+
+def _booking_history(connection: Any, gym_id: int, user_id: int) -> list[dict[str, Any]]:
+    """Bookings (status booked / attended / no_show), waitlist entries
+    (`waitlist`) and cancellations (`cancelled`, with `cancelled_at`) of one
+    member at one box. A cancellation is left out once the member booked or
+    waitlisted the same class again."""
+    rows = connection.execute(
+        """
+        select class_schedules.id as class_id, class_schedules.title, class_schedules.class_type,
+               class_schedules.start_time, class_schedules.end_time,
+               trainers.display_name as trainer_name, entries.status, entries.cancelled_at
+        from (
+            select class_schedule_id, attendance_status as status, null as cancelled_at
+            from class_bookings where user_id = ?
+            union all
+            select class_schedule_id, 'waitlist' as status, null as cancelled_at
+            from class_waitlist_entries where user_id = ?
+            union all
+            select class_schedule_id, 'cancelled' as status, max(cancelled_at) as cancelled_at
+            from class_booking_cancellations
+            where user_id = ?
+              and class_schedule_id not in (select class_schedule_id from class_bookings where user_id = ?)
+              and class_schedule_id not in (select class_schedule_id from class_waitlist_entries where user_id = ?)
+            group by class_schedule_id
+        ) entries
+        join class_schedules on class_schedules.id = entries.class_schedule_id
+        left join users trainers on trainers.id = class_schedules.assigned_trainer_user_id
+        where class_schedules.gym_id = ?
+        order by class_schedules.start_time desc
+        """,
+        (user_id, user_id, user_id, user_id, user_id, gym_id),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 @app.post("/membership/extra-tokens", status_code=HTTPStatus.CREATED.value)
@@ -3288,6 +3316,13 @@ def delete_class_booking(
             connection.execute(
                 "delete from class_bookings where class_schedule_id = ? and user_id = ?",
                 (schedule_id, user_id),
+            )
+            connection.execute(
+                """
+                insert into class_booking_cancellations (class_schedule_id, user_id, cancelled_at, cancelled_by_user_id)
+                values (?, ?, ?, ?)
+                """,
+                (schedule_id, user_id, security.isoformat(security.now_utc()), session["user_id"]),
             )
             promoted_user_id = plan_service.promote_next_eligible_waitlisted_user(connection, class_schedule_id=schedule_id)
             if promoted_user_id is not None:

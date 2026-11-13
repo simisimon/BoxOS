@@ -444,3 +444,50 @@ class ClassTemplateApiTests(FastApiTestCase):
             json={"class_id": class_id, "user_id": self.lookup_user_id(settings.DEMO_EMAIL), "attendance_status": "attended"},
         )
         self.assertNotEqual(attendance.status_code, 403, attendance.text)
+
+    def test_my_bookings_lists_upcoming_waitlist_and_cancelled(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("History Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+
+        def create_class(title: str, hours: int, capacity: int = 10) -> int:
+            created = self.client.post(
+                "/schedule/classes",
+                headers=admin_headers,
+                json={
+                    "title": title,
+                    "class_type": "WOD",
+                    "start_time": security.isoformat(security.now_utc() + timedelta(hours=hours)),
+                    "duration_minutes": 60,
+                    "capacity": capacity,
+                    "recurrence_frequency": "none",
+                },
+            )
+            self.assertEqual(created.status_code, 201, created.text)
+            return created.json()["class"]["id"]
+
+        kept = create_class("Kept", 5)
+        cancelled = create_class("Cancelled", 6)
+        rebooked = create_class("Rebooked", 7)
+        for class_id in (kept, cancelled, rebooked):
+            booked = self.client.post("/schedule/bookings", headers=athlete_headers, json={"class_id": class_id})
+            self.assertEqual(booked.status_code, 201, booked.text)
+        for class_id in (cancelled, rebooked):
+            gone = self.client.request("DELETE", "/schedule/bookings", headers=athlete_headers, json={"class_id": class_id})
+            self.assertEqual(gone.status_code, 200, gone.text)
+        again = self.client.post("/schedule/bookings", headers=athlete_headers, json={"class_id": rebooked})
+        self.assertEqual(again.status_code, 201, again.text)
+
+        response = self.client.get("/membership/me/bookings", headers=athlete_headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        statuses = {row["title"]: row["status"] for row in response.json()["bookings"]}
+        # A cancellation disappears once the member booked the class again.
+        self.assertEqual(statuses, {"Kept": "booked", "Cancelled": "cancelled", "Rebooked": "booked"})
+        cancelled_row = next(row for row in response.json()["bookings"] if row["title"] == "Cancelled")
+        self.assertIsNotNone(cancelled_row["cancelled_at"])
+
+        # The owner sees the same history in the member detail.
+        user_id = self.lookup_user_id(settings.DEMO_EMAIL)
+        owner_view = self.client.get(f"/membership/members/{user_id}/bookings", headers=admin_headers)
+        self.assertEqual(owner_view.status_code, 200, owner_view.text)
+        self.assertIn("cancelled", {row["status"] for row in owner_view.json()["bookings"]})

@@ -1,7 +1,7 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
-import 'package:app/features/calendar/presentation/widgets/class_type_badge.dart';
 import 'package:app/features/members/domain/member_booking.dart';
+import 'package:app/features/members/presentation/widgets/booking_table.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -498,13 +498,14 @@ class _ClassesTabState extends State<_ClassesTab> {
         if (!snapshot.hasData) return const AppLoadingState();
         final now = DateTime.now();
         final all = snapshot.data!;
+        // Cancelled bookings go to History, even for future classes.
         final upcoming = [
           for (final b in all.reversed)
-            if (b.end.isAfter(now)) b,
+            if (b.end.isAfter(now) && !b.isCancelled) b,
         ];
         final history = [
           for (final b in all)
-            if (!b.end.isAfter(now)) b,
+            if (!b.end.isAfter(now) || b.isCancelled) b,
         ];
         final monthAgo = now.subtract(const Duration(days: 30));
         final recent = history.where((b) => b.start.isAfter(monthAgo));
@@ -567,49 +568,11 @@ class _ClassesTabState extends State<_ClassesTab> {
               ),
               const SizedBox(height: appSpaceMd),
               Expanded(
-                child: AppDataTable<MemberBooking>(
-                  columns: const [
-                    AppTableColumn('Date', flex: 2),
-                    AppTableColumn('Time', flex: 2, hideWhenNarrow: true),
-                    AppTableColumn('Class', flex: 3),
-                    AppTableColumn('Coach', flex: 2, hideWhenNarrow: true),
-                    AppTableColumn('Status', flex: 2),
-                  ],
+                child: BookingTable(
                   rows: rows,
                   emptyText: _history
-                      ? 'No past classes yet.'
+                      ? 'No past or cancelled classes yet.'
                       : 'No upcoming classes booked.',
-                  cells: (b) => [
-                    _CellText(formatShortDate(b.start)),
-                    _CellText('${_hm(b.start)} – ${_hm(b.end)}'),
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: classTypeColor(b.type),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: appSpaceSm),
-                        Expanded(
-                          child: Text(
-                            b.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: appText,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    _CellText(b.trainerName.isEmpty ? '—' : b.trainerName),
-                    _bookingPill(b, now),
-                  ],
                 ),
               ),
               const SizedBox(height: appSpaceLg),
@@ -618,20 +581,6 @@ class _ClassesTabState extends State<_ClassesTab> {
         );
       },
     );
-  }
-
-  static String _hm(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
-  static Widget _bookingPill(MemberBooking b, DateTime now) {
-    final (label, intent) = switch (b.status) {
-      'attended' => ('Attended', AppPillIntent.success),
-      'no_show' => ('No-show', AppPillIntent.danger),
-      'waitlist' => ('Waiting list', AppPillIntent.warning),
-      _ when b.end.isAfter(now) => ('Registered', AppPillIntent.primary),
-      _ => ('Not checked in', AppPillIntent.neutral),
-    };
-    return AppPill(label: label, intent: intent, dense: true);
   }
 }
 
