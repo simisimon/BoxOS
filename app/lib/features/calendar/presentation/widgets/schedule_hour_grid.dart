@@ -23,8 +23,8 @@ DateTime _addDays(DateTime day, int days) =>
 /// Owners' and trainers' class calendar (docs/admin-ui-reference.md §2): a
 /// Mon–Sun grid with hour rows, today's date in an accent circle, a red line
 /// at the current time, and each class as a block sized by its duration,
-/// parallel classes side by side. Past classes are faded. Athletes keep
-/// [ScheduleWeekView].
+/// parallel classes side by side. Past classes are faded. Trainers can
+/// narrow it to the classes they coach. Athletes keep [ScheduleWeekView].
 class ScheduleHourGrid extends ConsumerStatefulWidget {
   const ScheduleHourGrid({
     super.key,
@@ -34,6 +34,7 @@ class ScheduleHourGrid extends ConsumerStatefulWidget {
     this.selectedClassId,
     this.onAddClass,
     this.onCreateSchedule,
+    this.coachUserId,
   });
 
   final DateTime weekStart;
@@ -47,12 +48,16 @@ class ScheduleHourGrid extends ConsumerStatefulWidget {
   /// The header's accent +: create recurring classes.
   final VoidCallback? onCreateSchedule;
 
+  /// A trainer's user id: shows a "Coached by me" filter for their classes.
+  final int? coachUserId;
+
   @override
   ConsumerState<ScheduleHourGrid> createState() => _ScheduleHourGridState();
 }
 
 class _ScheduleHourGridState extends ConsumerState<ScheduleHourGrid> {
   ScrollController? _vertical;
+  bool _onlyMine = false;
 
   /// Moves the current-time line and fades classes that just ended.
   late final Timer _clock = Timer.periodic(
@@ -82,7 +87,8 @@ class _ScheduleHourGridState extends ConsumerState<ScheduleHourGrid> {
     final inWeek = [
       for (final s in sessions)
         if (!_dateOnly(s.startTime).isBefore(widget.weekStart) &&
-            !_dateOnly(s.startTime).isAfter(weekEnd))
+            !_dateOnly(s.startTime).isAfter(weekEnd) &&
+            (!_onlyMine || s.assignedTrainer?.id == widget.coachUserId))
           s,
     ];
     // 05:00–21:00 by default, widened to fit the week's classes.
@@ -163,6 +169,18 @@ class _ScheduleHourGridState extends ConsumerState<ScheduleHourGrid> {
               ],
             ],
           ),
+          // Below the week header, which has no room left on phones.
+          if (widget.coachUserId != null) ...[
+            const SizedBox(height: appSpaceSm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                label: const Text('Coached by me'),
+                selected: _onlyMine,
+                onSelected: (value) => setState(() => _onlyMine = value),
+              ),
+            ),
+          ],
           const SizedBox(height: appSpaceMd),
           Expanded(
             child: LayoutBuilder(

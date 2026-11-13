@@ -194,6 +194,7 @@ class ApiProfileRepository implements ProfileRepository {
       throw Exception('Missing profile data.');
     }
     return UserProfile(
+      userId: (data['id'] as num?)?.toInt(),
       email: data['email'] as String? ?? '',
       accountType: accountTypeFromApi(
         data['account_type'] as String? ?? 'athlete',

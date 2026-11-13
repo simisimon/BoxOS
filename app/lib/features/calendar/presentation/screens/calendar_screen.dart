@@ -200,9 +200,16 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
-    final canManage =
-        profile?.activeGym != null &&
+    final hasGym = profile?.activeGym != null;
+    // The owner runs the timetable; trainers coach (attendance, the day's
+    // WOD) but neither create nor edit classes.
+    final canManage = hasGym && profile?.role == UserRole.admin;
+    final canCoach =
+        hasGym &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
+    final coachUserId = profile?.role == UserRole.trainer
+        ? profile?.userId
+        : null;
     final scheduleAsync = ref.watch(scheduleListProvider);
 
     return AppGridBackground(
@@ -231,7 +238,13 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
                     accentColor: appPrimary,
                   ),
                 ),
-                data: (items) => _buildScheduleBody(context, items, canManage),
+                data: (items) => _buildScheduleBody(
+                  context,
+                  items,
+                  canManage: canManage,
+                  canCoach: canCoach,
+                  coachUserId: coachUserId,
+                ),
               ),
       ),
     );
@@ -239,7 +252,11 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
 
   /// Class detail (docs/admin-ui-reference.md §2.1) as a right-side panel
   /// over the week; the week keeps the opened class highlighted meanwhile.
-  Future<void> _openClass(ScheduleClass item, bool canManage) async {
+  Future<void> _openClass(
+    ScheduleClass item, {
+    required bool canManage,
+    required bool canCoach,
+  }) async {
     setState(() => _selectedClassId = item.id);
     await showAppSidePanel<void>(
       context,
@@ -247,6 +264,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       builder: (_) => _ClassSidePanel(
         classId: item.id,
         canManage: canManage,
+        canCoach: canCoach,
         onToggleBooking: _toggleBooking,
         onToggleWaitlist: _toggleWaitlist,
         onUpdateAttendance: (item, booking, status) => _updateAttendance(
@@ -276,19 +294,28 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
 
   Widget _buildScheduleBody(
     BuildContext context,
-    List<ScheduleClass> items,
-    bool canManage,
-  ) {
-    // Owners and trainers plan in the hour grid; athletes keep the day
-    // columns with each day's WOD.
-    if (canManage) {
+    List<ScheduleClass> items, {
+    required bool canManage,
+    required bool canCoach,
+    int? coachUserId,
+  }) {
+    void open(ScheduleClass item) =>
+        _openClass(item, canManage: canManage, canCoach: canCoach);
+    // Owners and trainers work in the hour grid; only the owner creates
+    // classes. Athletes keep the day columns with each day's WOD.
+    if (canCoach) {
       return ScheduleHourGrid(
         weekStart: _weekStart,
         onWeekChanged: (monday) => setState(() => _weekStart = monday),
         selectedClassId: _selectedClassId,
-        onOpenClass: (item) => _openClass(item, canManage),
-        onAddClass: (date) => _showClassFormDialog(context, date: date),
-        onCreateSchedule: () => showClassTemplateDialog(context, ref),
+        onOpenClass: open,
+        onAddClass: canManage
+            ? (date) => _showClassFormDialog(context, date: date)
+            : null,
+        onCreateSchedule: canManage
+            ? () => showClassTemplateDialog(context, ref)
+            : null,
+        coachUserId: coachUserId,
       );
     }
     return ScheduleWeekView(
@@ -296,7 +323,7 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
       onWeekChanged: (monday) => setState(() => _weekStart = monday),
       canManage: false,
       selectedClassId: _selectedClassId,
-      onOpenClass: (item) => _openClass(item, canManage),
+      onOpenClass: open,
     );
   }
 
@@ -393,6 +420,7 @@ class _ClassSidePanel extends ConsumerWidget {
   const _ClassSidePanel({
     required this.classId,
     required this.canManage,
+    required this.canCoach,
     required this.onToggleBooking,
     required this.onToggleWaitlist,
     required this.onUpdateAttendance,
@@ -401,7 +429,12 @@ class _ClassSidePanel extends ConsumerWidget {
   });
 
   final int classId;
+
+  /// Owner: delete, the Details tab and taking members off the class.
   final bool canManage;
+
+  /// Owner or trainer: attendance and editing the day's WOD.
+  final bool canCoach;
   final void Function(ScheduleClass item) onToggleBooking;
   final void Function(ScheduleClass item) onToggleWaitlist;
   final Future<void> Function(
@@ -504,7 +537,7 @@ class _ClassSidePanel extends ConsumerWidget {
           child: _ScheduleClassCard(
             item: item,
             wodTitle: wodTitle,
-            canManage: canManage,
+            canManage: canCoach,
             onToggleBooking: () => onToggleBooking(item),
             onToggleWaitlist: () => onToggleWaitlist(item),
             onUpdateAttendance: (booking, status) =>
@@ -518,7 +551,7 @@ class _ClassSidePanel extends ConsumerWidget {
           'Program',
           child: item.type.showsWod
               // Managers can still edit the day's WOD from a class.
-              ? WodDaySection(date: date, canManage: canManage)
+              ? WodDaySection(date: date, canManage: canCoach)
               : Text(
                   '${item.type.label} classes have no program.',
                   style: const TextStyle(color: appSubtleText),

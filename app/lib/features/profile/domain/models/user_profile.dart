@@ -16,7 +16,11 @@ class UserProfile {
     required this.activeGym,
     required this.memberships,
     this.profileImageUrl = '',
+    this.userId,
   });
+
+  /// The signed-in user's id, e.g. to find the classes they coach.
+  final int? userId;
 
   final String email;
   final AccountType accountType;
@@ -27,6 +31,7 @@ class UserProfile {
   final NotificationPreferences notificationPreferences;
   final GymSummary? activeGym;
   final List<GymMembership> memberships;
+
   /// Server-relative path to the user's avatar (e.g. `/uploads/avatars/xyz.jpg`)
   /// or empty when none has been set. Use the resolved URL helper on the
   /// network layer when rendering rather than concatenating manually.

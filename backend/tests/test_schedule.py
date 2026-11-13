@@ -401,3 +401,46 @@ class ClassTemplateApiTests(FastApiTestCase):
         athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
         forbidden = self.client.post("/schedule/templates", headers=athlete_headers, json=self._template_body())
         self.assertEqual(forbidden.status_code, 403)
+
+    def test_trainer_cannot_manage_classes_but_can_take_attendance(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Trainer Rights Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id, roles=["athlete", "trainer"], active_role="trainer")
+        trainer_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+        class_body = {
+            "title": "Evening Class",
+            "class_type": "WOD",
+            "start_time": security.isoformat(security.now_utc() + timedelta(hours=2)),
+            "duration_minutes": 60,
+            "capacity": 10,
+            "recurrence_frequency": "none",
+        }
+
+        forbidden = self.client.post("/schedule/classes", headers=trainer_headers, json=class_body)
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+        template = self.client.post("/schedule/templates", headers=trainer_headers, json=self._template_body())
+        self.assertEqual(template.status_code, 403, template.text)
+
+        created = self.client.post("/schedule/classes", headers=admin_headers, json=class_body)
+        self.assertEqual(created.status_code, 201, created.text)
+        class_id = created.json()["class"]["id"]
+        edited = self.client.patch("/schedule/classes", headers=trainer_headers, json={"id": class_id, **class_body})
+        self.assertEqual(edited.status_code, 403, edited.text)
+        deleted = self.client.request("DELETE", "/schedule/classes", headers=trainer_headers, json={"id": class_id})
+        self.assertEqual(deleted.status_code, 403, deleted.text)
+
+        removed = self.client.request(
+            "DELETE",
+            "/schedule/bookings",
+            headers=trainer_headers,
+            json={"class_id": class_id, "user_id": self.lookup_user_id(settings.ADMIN_EMAIL)},
+        )
+        self.assertEqual(removed.status_code, 403, removed.text)
+
+        # Attendance stays open to trainers: the request passes the role check
+        # and fails only because the class has not started.
+        attendance = self.client.patch(
+            "/schedule/bookings/attendance",
+            headers=trainer_headers,
+            json={"class_id": class_id, "user_id": self.lookup_user_id(settings.DEMO_EMAIL), "attendance_status": "attended"},
+        )
+        self.assertNotEqual(attendance.status_code, 403, attendance.text)

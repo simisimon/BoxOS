@@ -2767,7 +2767,7 @@ def list_class_templates(
 @app.post("/schedule/templates", status_code=HTTPStatus.CREATED.value)
 def create_class_template(
     body: ClassTemplateRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     fields = _class_template_fields(body, session["active_gym_id"])
     connection = db.get_connection()
@@ -2823,7 +2823,7 @@ def create_class_template(
 @app.patch("/schedule/templates")
 def update_class_template(
     body: UpdateClassTemplateRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     template_id = validation.require_user_id(body.id)
     fields = _class_template_fields(body, session["active_gym_id"])
@@ -2887,7 +2887,7 @@ def update_class_template(
 @app.delete("/schedule/templates")
 def delete_class_template(
     body: EntityIdRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     template_id = body.id
     connection = db.get_connection()
@@ -2951,7 +2951,7 @@ def list_schedule_trainers(
 @app.post("/schedule/classes", status_code=HTTPStatus.CREATED.value)
 def create_schedule_class(
     body: ScheduleClassRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     title = validation.require_schedule_title(body.title)
     class_type = validation.require_class_type(body.class_type, _class_type_names(session["active_gym_id"]))
@@ -3057,7 +3057,7 @@ def create_schedule_class(
 @app.patch("/schedule/classes")
 def update_schedule_class(
     body: UpdateScheduleClassRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     schedule_id = validation.require_user_id(body.id)
     title = validation.require_schedule_title(body.title)
@@ -3153,7 +3153,7 @@ def update_schedule_class(
 @app.delete("/schedule/classes")
 def delete_schedule_class(
     body: ScheduleClassDeleteRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, bool | str]:
     schedule_id = body.id
     connection = db.get_connection()
@@ -3244,7 +3244,7 @@ def create_class_booking(
 
 class CancelBookingRequest(BaseModel):
     class_id: int
-    # Owners and trainers remove someone else's booking (e.g. they called to
+    # The owner removes someone else's booking (e.g. they called to
     # cancel); members always cancel their own.
     user_id: int | None = None
 
@@ -3257,10 +3257,11 @@ def delete_class_booking(
     schedule_id = body.class_id
     user_id = session["user_id"] if body.user_id is None else body.user_id
     removing_other = user_id != session["user_id"]
-    if removing_other and session["role"] not in {"admin", "trainer"}:
+    # Only the owner takes members off a class; trainers keep attendance.
+    if removing_other and session["role"] != "admin":
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN.value,
-            detail="The owner or trainer role is required for this action.",
+            detail="The owner role is required for this action.",
         )
     connection = db.get_connection()
     try:

@@ -82,6 +82,33 @@ const _athlete = UserProfile(
   ],
 );
 
+const _trainer = UserProfile(
+  userId: 7,
+  email: 'coach@boxos.app',
+  accountType: AccountType.athlete,
+  role: UserRole.trainer,
+  availableRoles: [UserRole.trainer, UserRole.athlete],
+  displayName: 'Coach Alex',
+  nickname: 'alex',
+  notificationPreferences: NotificationPreferences(
+    bookingConfirmations: true,
+    waitlistPromotions: true,
+    paymentIssues: true,
+    wodPosted: true,
+    prAchievements: true,
+    announcementActivity: true,
+  ),
+  activeGym: _gym,
+  memberships: [
+    GymMembership(
+      gym: _gym,
+      role: UserRole.trainer,
+      availableRoles: [UserRole.trainer, UserRole.athlete],
+      status: 'active',
+    ),
+  ],
+);
+
 DateTime _tomorrowAt(int hour) {
   final now = DateTime.now();
   return DateTime(now.year, now.month, now.day + 1, hour);
@@ -401,6 +428,66 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(repository.lastRemovedUserId, 42);
+    });
+
+    testWidgets('Trainers coach but cannot create or edit classes at $size', (
+      tester,
+    ) async {
+      await _pumpSchedule(
+        tester,
+        size,
+        profile: _trainer,
+        session: ScheduleClass(
+          id: 10,
+          gymId: 1,
+          title: 'CrossFit',
+          classType: 'WOD',
+          startTime: _tomorrowAt(17).add(const Duration(minutes: 30)),
+          durationMinutes: 60,
+          capacity: 20,
+          classTemplateId: 1,
+          remainingSpots: 19,
+          bookedCount: 1,
+          bookings: const [
+            ScheduleBooking(
+              userId: 42,
+              displayName: 'Clara Haas',
+              nickname: 'clara',
+              attendanceStatus: 'booked',
+              isCurrentUser: false,
+            ),
+          ],
+        ),
+      );
+      await tester.tap(find.byTooltip('Next week'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Create recurring classes'), findsNothing);
+      expect(find.byTooltip('Add class'), findsNothing);
+      await tester.tap(find.byTooltip('Previous week'));
+      await tester.pumpAndSettle();
+
+      // Trainers see who is booked, but the timetable stays the owner's.
+      await _openTomorrowClass(tester);
+      expect(find.text('Clara Haas'), findsOneWidget);
+      expect(find.byTooltip('Remove from class'), findsNothing);
+      expect(find.text('Details'), findsNothing);
+      expect(find.text('Delete class'), findsNothing);
+    });
+
+    testWidgets('Trainers narrow the week to their classes at $size', (
+      tester,
+    ) async {
+      await _pumpSchedule(tester, size, profile: _trainer);
+      if (_tomorrowAt(0).weekday == DateTime.monday) {
+        await tester.tap(find.byTooltip('Next week'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('CrossFit'), findsOneWidget);
+      // Nobody coaches the class, so "Coached by me" hides it.
+      await tester.tap(find.text('Coached by me'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(find.text('CrossFit'), findsNothing);
     });
 
     testWidgets('Athletes book a class from the week at $size', (tester) async {

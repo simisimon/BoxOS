@@ -168,6 +168,7 @@ def profile_payload(row: Row) -> dict[str, Any]:
     connection.close()
     keys = row.keys()
     return {
+        "id": int(row["id"]) if "id" in keys else None,
         "email": row["email"],
         "role": row["role"],
         "available_roles": decode_roles(row["roles_json"]),
