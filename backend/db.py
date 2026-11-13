@@ -547,7 +547,8 @@ def init_db() -> None:
             purge_deleted_users(connection)
     finally:
         connection.close()
-    seed_default_users()
+    if settings.SEED_DEMO_USERS:
+        seed_default_users()
 
 
 def _apply_schema(connection: ManagedConnection) -> None:

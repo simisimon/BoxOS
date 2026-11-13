@@ -1,4 +1,5 @@
 import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/routing/env.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/presentation/widgets/auth_stage.dart';
 import 'package:flutter/material.dart';
@@ -108,56 +109,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     )
                   : const Text('Sign In'),
             ),
-            const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: isLoading ? null : () => context.go('/sign-up'),
-              child: const Text('Create Account'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: isLoading ? null : () => context.go('/admin-sign-up'),
-              child: const Text('Create Box'),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: isLoading
-                  ? null
-                  : () => context.go('/forgot-password'),
-              child: const Text('Forgot Password?'),
-            ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            Text(
-              'Quick Login (Dev/Testing)',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: isLoading ? null : () => _quickLogin('owner@boxos.dev', 'BoxOS!demo1'),
-              icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
-              label: const Text('Demo Owner'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.purple,
+            if (AppEnv.current.inviteOnly) ...[
+              const SizedBox(height: 16),
+              Text(
+                'BoxOS is invite-only. Ask your box for an account, '
+                'or contact us if you forgot your password.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-            ),
-            const SizedBox(height: 8),
-            // Seeded by backend/db.py (seed_default_users) and joined to the
-            // demo box by `python -m backend.seed_demo`.
-            OutlinedButton.icon(
-              onPressed: isLoading
-                  ? null
-                  : () => _quickLogin('demo@boxos.app', 'BoxOS123!'),
-              icon: const Icon(Icons.fitness_center_rounded, size: 18),
-              label: const Text('Demo Member'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.teal,
+            ] else ...[
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: isLoading ? null : () => context.go('/sign-up'),
+                child: const Text('Create Account'),
               ),
-            ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: isLoading ? null : () => context.go('/admin-sign-up'),
+                child: const Text('Create Box'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: isLoading
+                    ? null
+                    : () => context.go('/forgot-password'),
+                child: const Text('Forgot Password?'),
+              ),
+            ],
+            if (AppEnv.current.isDev) ...[
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 16),
+              Text(
+                'Quick Login (Dev/Testing)',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: isLoading ? null : () => _quickLogin('owner@boxos.dev', 'BoxOS!demo1'),
+                icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                label: const Text('Demo Owner'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.purple,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Seeded by backend/db.py (seed_default_users) and joined to the
+              // demo box by `python -m backend.seed_demo`.
+              OutlinedButton.icon(
+                onPressed: isLoading
+                    ? null
+                    : () => _quickLogin('demo@boxos.app', 'BoxOS123!'),
+                icon: const Icon(Icons.fitness_center_rounded, size: 18),
+                label: const Text('Demo Member'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.teal,
+                ),
+              ),
+            ],
           ],
         ),
       ),

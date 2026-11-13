@@ -527,6 +527,11 @@ def require_admin_gym_session(
 
 
 def _signup(body: SignupRequest, *, account_type: str) -> dict[str, Any]:
+    if not settings.SIGNUP_ENABLED:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN.value,
+            detail="Sign-up is closed. Ask the BoxOS team for an account.",
+        )
     email = validation.require_email(body.email)
     password = validation.require_password(body.password)
     normalized_account_type = validation.require_account_type(account_type)
