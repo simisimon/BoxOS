@@ -1,0 +1,95 @@
+# Production stack: Postgres, FastAPI backend and the Flutter web build.
+# Runs on the VPS behind the host's reverse proxy (see docs/deploy.md):
+#   backend -> 127.0.0.1:8080 (api.boxos-app.de)
+#   web     -> 127.0.0.1:8090 (app.boxos-app.de)
+# Usage (from the repo root on the server):
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# Staging runs the same file with another project name, env file and ports:
+#   docker compose -p boxos-staging -f docker-compose.prod.yml --env-file .env.staging up -d --build
+
+name: boxos
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: boxos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}
+      POSTGRES_DB: boxos
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boxos -d boxos"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No published port: only the backend on the internal network reaches it.
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    # --proxy-headers so rate limits see the visitor's IP, not the proxy's.
+    command:
+      - python
+      - -m
+      - uvicorn
+      - backend.fastapi_app:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --proxy-headers
+      - --forwarded-allow-ips=*
+    environment:
+      BOXOS_ENV: production
+      BOXOS_DATABASE_URL: postgresql://boxos:${POSTGRES_PASSWORD}@db:5432/boxos
+      BOXOS_UPLOADS_ROOT: /app/uploads
+      BOXOS_CORS_ALLOW_ORIGINS: ${APP_URL:?set APP_URL in the env file}
+      BOXOS_APP_BASE_URL: ${APP_URL}
+      BOXOS_SIGNUP_ENABLED: ${SIGNUP_ENABLED:-0}
+      BOXOS_SEED_DEMO_USERS: ${SEED_DEMO_USERS:-0}
+      BOXOS_LOG_DELIVERY_TOKENS: "0"
+      BOXOS_STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      BOXOS_STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *logging
+
+  web:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+      args:
+        APP_ENV: production
+        API_BASE_URL: ${API_URL:?set API_URL in the env file}
+        AUTH_REDIRECT_URL: ${APP_URL}/auth/callback
+        INVITE_ONLY: ${INVITE_ONLY:-true}
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8090}:80"
+    logging: *logging
+
+volumes:
+  db_data:
+  uploads:

@@ -86,3 +86,45 @@ class ManageCommandTests(FastApiTestCase):
         with contextlib.redirect_stderr(err):
             self.assertEqual(manage.main(["reset-password", "--email", "missing@example.com"]), 1)
         self.assertIn("No account", err.getvalue())
+
+
+class ProductionSettingsTests(FastApiTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self._saved = (
+            settings.ENV,
+            settings.DATABASE_URL,
+            settings.SEED_DEMO_USERS,
+            settings.LOG_DELIVERY_TOKENS,
+            settings.CORS_ALLOW_ORIGINS,
+        )
+
+    def tearDown(self) -> None:
+        (
+            settings.ENV,
+            settings.DATABASE_URL,
+            settings.SEED_DEMO_USERS,
+            settings.LOG_DELIVERY_TOKENS,
+            settings.CORS_ALLOW_ORIGINS,
+        ) = self._saved
+        super().tearDown()
+
+    def test_dev_has_no_production_problems(self) -> None:
+        settings.ENV = "dev"
+        self.assertEqual(settings.production_problems(), [])
+
+    def test_production_flags_dev_defaults(self) -> None:
+        settings.ENV = "production"
+        settings.DATABASE_URL = "postgresql://boxos:boxos@db:5432/boxos"
+        settings.SEED_DEMO_USERS = True
+        settings.LOG_DELIVERY_TOKENS = True
+        settings.CORS_ALLOW_ORIGINS = ["http://localhost:3001"]
+        self.assertEqual(len(settings.production_problems()), 4)
+
+    def test_production_with_safe_settings_passes(self) -> None:
+        settings.ENV = "production"
+        settings.DATABASE_URL = "postgresql://boxos:s3cret@db:5432/boxos"
+        settings.SEED_DEMO_USERS = False
+        settings.LOG_DELIVERY_TOKENS = False
+        settings.CORS_ALLOW_ORIGINS = ["https://app.boxos-app.de"]
+        self.assertEqual(settings.production_problems(), [])

@@ -61,6 +61,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Local backend artifacts
 backend/boxos_dev.db

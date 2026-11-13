@@ -14,6 +14,8 @@ except ImportError:  # pragma: no cover - optional runtime fallback
     pytz = None
 
 BACKEND_ROOT = Path(__file__).resolve().parent
+# "production" turns on the startup checks in production_problems().
+ENV = os.getenv("BOXOS_ENV", "dev").strip().lower()
 # PostgreSQL connection string used by the backend. Format:
 # postgresql://user:password@host:port/database
 DATABASE_URL = os.getenv("BOXOS_DATABASE_URL", "postgresql://boxos:boxos@localhost:5432/boxos")
@@ -89,3 +91,19 @@ ADMIN_EMAIL = "admin@boxos.app"
 ADMIN_PASSWORD = "BoxOS123!"
 ACCESS_TOKEN_TTL_MINUTES = 15
 REFRESH_TOKEN_TTL_DAYS = 30
+
+
+def production_problems() -> list[str]:
+    """Settings that must not reach production. Empty outside BOXOS_ENV=production."""
+    if ENV != "production":
+        return []
+    problems = []
+    if "boxos:boxos@" in DATABASE_URL:
+        problems.append("BOXOS_DATABASE_URL still uses the dev password 'boxos'.")
+    if SEED_DEMO_USERS:
+        problems.append("BOXOS_SEED_DEMO_USERS is on; it creates accounts with public passwords.")
+    if LOG_DELIVERY_TOKENS:
+        problems.append("BOXOS_LOG_DELIVERY_TOKENS is on; reset and verification tokens would be logged.")
+    if any("localhost" in origin for origin in CORS_ALLOW_ORIGINS):
+        problems.append("BOXOS_CORS_ALLOW_ORIGINS still allows localhost.")
+    return problems
