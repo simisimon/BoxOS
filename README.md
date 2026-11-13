@@ -121,5 +121,6 @@ Docker über den Befehl von `frontend-dev` in `docker-compose.yml`.
 ## Weitere Dateien
 
 - `docs/wod-import.md` und `docs/sample-wods.csv`: Format für den CSV-Import von WODs
-- `app/Dockerfile` und `app/nginx.conf`: Release-Build der Web-App mit Nginx. Derzeit nicht
-  in Compose eingebunden, Grundlage für ein späteres Deployment.
+- `app/Dockerfile` und `app/nginx.conf`: Release-Build der Web-App mit Nginx, genutzt von
+  `docker-compose.prod.yml`
+- `docs/deploy.md`: Produktiv-Deployment auf einem VPS (Invite-only, ohne Zahlungen)
