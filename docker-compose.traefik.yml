@@ -1,0 +1,28 @@
+# Hooks the production stack into the Traefik that already serves the
+# marketing site on the VPS (Docker provider, entrypoint "websecure",
+# certificate resolver "letsencrypt"). Use it together with the prod file:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.traefik.yml --env-file .env.prod up -d --build
+# Traefik runs on the host network and reaches the containers on their own
+# network, so no shared network is needed. The 127.0.0.1 ports of the prod
+# file stay for health checks on the server.
+# Staging: set TRAEFIK_NAME=boxos-staging, APP_HOST and API_HOST in its env file.
+
+services:
+  backend:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-api.rule=Host(`${API_HOST:-api.boxos-app.de}`)
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-api.entrypoints=websecure
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-api.middlewares=${TRAEFIK_NAME:-boxos}-hsts
+      - traefik.http.services.${TRAEFIK_NAME:-boxos}-api.loadbalancer.server.port=8080
+      - traefik.http.middlewares.${TRAEFIK_NAME:-boxos}-hsts.headers.stsSeconds=31536000
+
+  web:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-app.rule=Host(`${APP_HOST:-app.boxos-app.de}`)
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-app.entrypoints=websecure
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-app.tls.certresolver=letsencrypt
+      - traefik.http.routers.${TRAEFIK_NAME:-boxos}-app.middlewares=${TRAEFIK_NAME:-boxos}-hsts
+      - traefik.http.services.${TRAEFIK_NAME:-boxos}-app.loadbalancer.server.port=80

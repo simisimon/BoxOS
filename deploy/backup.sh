@@ -7,14 +7,16 @@
 # backups with it; see docs/deploy.md.
 #
 # Cron (as the deploy user), every night at 03:15:
-#   15 3 * * * /srv/boxos/deploy/backup.sh >> /var/log/boxos-backup.log 2>&1
+#   15 3 * * * /docker/boxos/deploy/backup.sh >> /var/log/boxos-backup.log 2>&1
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-/srv/boxos}"
+REPO_DIR="${REPO_DIR:-/docker/boxos}"
 BACKUP_DIR="${BACKUP_DIR:-/srv/boxos-backups}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 PROJECT="${PROJECT:-boxos-prod}"
-COMPOSE=(docker compose -p "$PROJECT" -f "$REPO_DIR/docker-compose.prod.yml")
+# The env file is needed even for exec: the compose file requires its variables.
+ENV_FILE="${ENV_FILE:-$REPO_DIR/.env.prod}"
+COMPOSE=(docker compose -p "$PROJECT" -f "$REPO_DIR/docker-compose.prod.yml" --env-file "$ENV_FILE")
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$BACKUP_DIR"

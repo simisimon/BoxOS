@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Restore a backup made by backup.sh into a running stack.
 #   deploy/restore.sh /srv/boxos-backups/db-<stamp>.dump [/srv/boxos-backups/uploads-<stamp>.tar.gz]
-# Test it on staging first:  PROJECT=boxos-staging deploy/restore.sh ...
+# Test it on staging first:  PROJECT=boxos-staging ENV_FILE=.env.staging deploy/restore.sh ...
 # This replaces the target database. It asks before it starts.
 set -euo pipefail
 
 DUMP="${1:?usage: restore.sh <db dump> [uploads tar]}"
 UPLOADS="${2:-}"
-REPO_DIR="${REPO_DIR:-/srv/boxos}"
+REPO_DIR="${REPO_DIR:-/docker/boxos}"
 PROJECT="${PROJECT:-boxos-prod}"
-COMPOSE=(docker compose -p "$PROJECT" -f "$REPO_DIR/docker-compose.prod.yml")
+# The env file is needed even for exec: the compose file requires its variables.
+ENV_FILE="${ENV_FILE:-$REPO_DIR/.env.prod}"
+COMPOSE=(docker compose -p "$PROJECT" -f "$REPO_DIR/docker-compose.prod.yml" --env-file "$ENV_FILE")
 
 read -r -p "Replace the database of project '$PROJECT' with $DUMP? Type yes: " answer
 [ "$answer" = "yes" ] || { echo "Aborted."; exit 1; }
