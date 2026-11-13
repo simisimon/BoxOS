@@ -124,3 +124,4 @@ Docker über den Befehl von `frontend-dev` in `docker-compose.yml`.
 - `app/Dockerfile` und `app/nginx.conf`: Release-Build der Web-App mit Nginx, genutzt von
   `docker-compose.prod.yml`
 - `docs/deploy.md`: Produktiv-Deployment auf einem VPS (Invite-only, ohne Zahlungen)
+- `docs/release-workflow.md`: Ablauf von der Entwicklung bis zum Release auf dem Server

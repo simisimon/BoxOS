@@ -47,6 +47,9 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   no login; `--remove` deletes them).
   The login screen has a "Demo Owner" quick login for local testing.
 
+- Releases: develop locally, merge to `main`, then on the server
+  `git pull && boxos up -d --build` (steps, rollback, backups: `docs/release-workflow.md`).
+
 ## Checks
 
 - App: `cd app && flutter analyze lib test` — one known warning

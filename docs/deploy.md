@@ -1,5 +1,8 @@
 # Deploying BoxOS on a VPS
 
+First-time setup. For day-to-day releases, rollbacks and backups see
+[`release-workflow.md`](release-workflow.md).
+
 One server runs everything: Postgres, the FastAPI backend and the Flutter web
 build (`docker-compose.prod.yml`), behind the reverse proxy that already serves
 the marketing site.
