@@ -56,7 +56,29 @@ class ShellDestination {
   final List<(String, String)> children;
 }
 
-/// Athlete & trainer keep the original athlete-centric tab set.
+const _messagesDestination = ShellDestination(
+  branchIndex: kMessagesBranch,
+  icon: Icons.mail_outline_rounded,
+  activeIcon: Icons.mail_rounded,
+  label: 'Messages',
+);
+
+const _classesDestination = ShellDestination(
+  branchIndex: kMyBoxBranch,
+  icon: Icons.event_outlined,
+  activeIcon: Icons.event_rounded,
+  label: 'Classes',
+);
+
+const _profileDestination = ShellDestination(
+  branchIndex: kProfileBranch,
+  icon: Icons.person_outline_rounded,
+  activeIcon: Icons.person_rounded,
+  label: 'Profile',
+);
+
+/// Athletes: Home (WOD, booking, announcements), the class week, the box
+/// chat and their profile.
 const List<ShellDestination> _athleteDestinations = [
   ShellDestination(
     branchIndex: kHomeBranch,
@@ -64,24 +86,25 @@ const List<ShellDestination> _athleteDestinations = [
     activeIcon: Icons.home_rounded,
     label: 'Home',
   ),
+  _classesDestination,
+  // Chat only; announcements are on Home.
+  _messagesDestination,
+  _profileDestination,
+];
+
+/// Trainers coach classes and program WODs; the timetable, members and the
+/// business pages stay with the owner.
+const List<ShellDestination> _trainerDestinations = [
   ShellDestination(
-    branchIndex: kMyBoxBranch,
-    icon: Icons.fitness_center_outlined,
-    activeIcon: Icons.fitness_center_rounded,
-    label: 'My Box',
+    branchIndex: kHomeBranch,
+    icon: Icons.dashboard_outlined,
+    activeIcon: Icons.dashboard_rounded,
+    label: 'Dashboard',
   ),
-  ShellDestination(
-    branchIndex: kCommunityBranch,
-    icon: Icons.chat_bubble_outline_rounded,
-    activeIcon: Icons.chat_bubble_rounded,
-    label: 'Community',
-  ),
-  ShellDestination(
-    branchIndex: kProfileBranch,
-    icon: Icons.person_outline_rounded,
-    activeIcon: Icons.person_rounded,
-    label: 'Profile',
-  ),
+  _classesDestination,
+  _programsDestination,
+  _messagesDestination,
+  _profileDestination,
 ];
 
 /// Owner (admin account + admin role) gets an operations-centric tab set.
@@ -92,12 +115,7 @@ const List<ShellDestination> _ownerDestinations = [
     activeIcon: Icons.dashboard_rounded,
     label: 'Dashboard',
   ),
-  ShellDestination(
-    branchIndex: kMyBoxBranch,
-    icon: Icons.event_outlined,
-    activeIcon: Icons.event_rounded,
-    label: 'Classes',
-  ),
+  _classesDestination,
   _programsDestination,
   ShellDestination(
     branchIndex: kMembersBranch,
@@ -111,12 +129,7 @@ const List<ShellDestination> _ownerDestinations = [
     activeIcon: Icons.insert_chart_rounded,
     label: 'Reports',
   ),
-  ShellDestination(
-    branchIndex: kMessagesBranch,
-    icon: Icons.mail_outline_rounded,
-    activeIcon: Icons.mail_rounded,
-    label: 'Messages',
-  ),
+  _messagesDestination,
   ShellDestination(
     branchIndex: kMembershipsBranch,
     icon: Icons.card_membership_outlined,
@@ -138,12 +151,7 @@ const List<ShellDestination> _ownerDestinations = [
       ('Notifications', '/box-settings?section=notifications'),
     ],
   ),
-  ShellDestination(
-    branchIndex: kProfileBranch,
-    icon: Icons.person_outline_rounded,
-    activeIcon: Icons.person_rounded,
-    label: 'Profile',
-  ),
+  _profileDestination,
 ];
 
 /// Whether the given account/role pair should see the owner (box-operator)
@@ -160,10 +168,5 @@ List<ShellDestination> destinationsForView({
 }) => isOwnerView(accountType: accountType, role: role)
     ? _ownerDestinations
     : role == UserRole.trainer
-    // Trainers program WODs too; Programs sits after My Box.
-    ? [
-        ..._athleteDestinations.take(2),
-        _programsDestination,
-        ..._athleteDestinations.skip(2),
-      ]
+    ? _trainerDestinations
     : _athleteDestinations;

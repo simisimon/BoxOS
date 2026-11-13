@@ -114,7 +114,8 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     required bool owner,
     required bool manager,
   }) => switch ((notification.type, notification.entityType)) {
-    (_, 'announcement') => owner ? '/messages' : '/community',
+    // Managers write announcements in Messages; athletes read them on Home.
+    (_, 'announcement') => manager ? '/messages' : '/home',
     (_, 'daily_workout') => manager ? '/programs' : '/my-box',
     (_, 'schedule_class') => '/my-box',
     // Members see their plan and extra tokens on their profile.

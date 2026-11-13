@@ -15,10 +15,11 @@ void main() {
     );
 
     test('the athlete tab set fits the bottom-nav budget', () {
+      // Announcements are on Home, Messages is the box chat.
       expect(athlete().map((d) => d.label), [
         'Home',
-        'My Box',
-        'Community',
+        'Classes',
+        'Messages',
         'Profile',
       ]);
     });
@@ -54,22 +55,33 @@ void main() {
       );
     });
 
-    test('a trainer sees the athlete tab set plus Programs', () {
+    test('a trainer coaches and programs, without the business pages', () {
       final trainer = destinationsForView(
         accountType: AccountType.athlete,
         role: UserRole.trainer,
       );
       expect(trainer.map((d) => d.label), [
-        'Home',
-        'My Box',
+        'Dashboard',
+        'Classes',
         'Programs',
-        'Community',
+        'Messages',
         'Profile',
       ]);
+      expect(
+        trainer.map((d) => d.branchIndex),
+        isNot(contains(kMembersBranch)),
+      );
     });
 
     test('every destination points at a distinct branch', () {
-      for (final set in [athlete(), owner()]) {
+      for (final set in [
+        athlete(),
+        owner(),
+        destinationsForView(
+          accountType: AccountType.athlete,
+          role: UserRole.trainer,
+        ),
+      ]) {
         final branches = set.map((d) => d.branchIndex).toList();
         expect(branches.toSet(), hasLength(branches.length));
       }

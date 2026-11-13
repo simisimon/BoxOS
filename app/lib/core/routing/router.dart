@@ -148,6 +148,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/community',
                 name: 'community',
+                // Retired: announcements moved to Home (athletes) and
+                // Messages (owners, trainers), the chat to Messages.
+                redirect: (context, state) => '/messages',
                 builder: (context, state) => const CommunityScreen(),
               ),
             ],

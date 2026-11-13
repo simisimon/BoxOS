@@ -7,12 +7,15 @@ import 'package:app/features/announcements/data/repositories/api_announcement_re
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/presentation/widgets/announcement_composer_dialog.dart';
 import 'package:app/features/community/presentation/screens/community_screen.dart';
+import 'package:app/features/profile/application/profile_controller.dart';
+import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/features/members/presentation/widgets/member_roster.dart'
     show formatShortDate;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Messages page (docs/admin-ui-reference.md §5) for owners: Announcements
+/// Messages page (docs/admin-ui-reference.md §5). Owners and trainers get
+/// Announcements
 /// (a searchable list beside a reading pane; Compose and Edit open the
 /// composer panel) and Chat (the box chat, moved here from Community). BoxOS has no per-recipient read state or
 /// e-mail delivery, so there is no recipients dialog.
@@ -103,6 +106,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Athletes read announcements on Home; Messages is just the box chat.
+    final role = ref.watch(currentProfileProvider).value?.role;
+    if (role == UserRole.athlete) {
+      return const CommunityScreen(chatOnly: true);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
