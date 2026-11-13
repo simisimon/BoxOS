@@ -1586,7 +1586,7 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
   });
 
-  testWidgets('Home shows only the hero', (
+  testWidgets('Athlete Home shows booking, the WOD and announcements', (
     WidgetTester tester,
   ) async {
     final profileRepository = RecordingProfileRepository()
@@ -1668,16 +1668,13 @@ void main() {
     );
     await _settleApp(tester);
 
-    // Home is an entry point: today's hero (WOD + next booking). The weekly
-    // stat went with the logging feature.
-    expect(find.text('TODAY'), findsOneWidget);
+    // Athletes book from Home, read the WOD there, and announcements moved
+    // here from Community; Messages is the chat. No logging stats.
+    expect(find.text('WOD of the day'), findsOneWidget);
+    expect(find.textContaining('Book a class'), findsOneWidget);
+    expect(find.text('Announcements'), findsOneWidget);
+    expect(find.text('Murph briefing'), findsOneWidget);
     expect(find.text('This Week'), findsNothing);
-
-    // The booking rail, the news feed and the shortcut grid moved out.
-    expect(find.text('Your Bookings'), findsNothing);
-    expect(find.text('Class access'), findsNothing);
-    expect(find.text('News'), findsNothing);
-    expect(find.text('Murph briefing'), findsNothing);
     expect(find.text('Quick actions'), findsNothing);
   });
 

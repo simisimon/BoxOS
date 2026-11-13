@@ -20,7 +20,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// handlers. Home now shows only today's WOD, the next booking and the weekly
 /// stat, so the news feed lives wherever box communication belongs.
 class AnnouncementFeedSection extends ConsumerStatefulWidget {
-  const AnnouncementFeedSection({super.key});
+  const AnnouncementFeedSection({super.key, this.showHeader = true});
+
+  /// False when the page already titles the section (athlete Home).
+  final bool showHeader;
 
   @override
   ConsumerState<AnnouncementFeedSection> createState() =>
@@ -218,8 +221,10 @@ class _AnnouncementFeedSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const AppSectionHeader(title: 'News', eyebrow: 'From your box'),
-        const SizedBox(height: appSpaceMd),
+        if (widget.showHeader) ...[
+          const AppSectionHeader(title: 'News', eyebrow: 'From your box'),
+          const SizedBox(height: appSpaceMd),
+        ],
         AnnouncementFeed(
           announcementsFuture: _announcementsFuture,
           canManageAnnouncements: canManageAnnouncements,

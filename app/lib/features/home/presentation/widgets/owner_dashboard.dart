@@ -12,7 +12,10 @@ import 'package:app/features/programming/data/repositories/api_programming_repos
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:app/features/announcements/presentation/widgets/announcement_feed_section.dart';
 import 'package:go_router/go_router.dart';
+
+part 'role_dashboards.dart';
 
 /// Owner dashboard (docs/admin-ui-reference.md §1): metrics, six-month
 /// charts, and the day's activity (classes and the WOD). The review-window
@@ -512,9 +515,23 @@ class _AreaPainter extends CustomPainter {
 }
 
 /// Activity: the selected day's classes (left) and its WOD (right), with
-/// Today and ‹ › to move between days.
+/// Today and ‹ › to move between days. Shared by every role's start page:
+/// trainers get a "Coached by me" filter ([coachUserId]), athletes book
+/// right in the rows ([bookable]) and read the full WOD.
 class _Activity extends ConsumerStatefulWidget {
-  const _Activity();
+  const _Activity({
+    this.title = 'Activity',
+    this.coachUserId,
+    this.bookable = false,
+    this.manager = true,
+  });
+
+  final String title;
+  final int? coachUserId;
+  final bool bookable;
+
+  /// Owners and trainers: draft/published state and "Manage programs".
+  final bool manager;
 
   @override
   ConsumerState<_Activity> createState() => _ActivityState();
@@ -522,6 +539,43 @@ class _Activity extends ConsumerStatefulWidget {
 
 class _ActivityState extends ConsumerState<_Activity> {
   DateTime _day = _dateOnly(DateTime.now());
+  late bool _onlyMine = widget.coachUserId != null;
+  int? _busyClassId;
+
+  /// Book, cancel, or join / leave the waiting list, by the class's state.
+  Future<void> _toggle(ScheduleClass item) async {
+    final repository = ref.read(scheduleRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busyClassId = item.id);
+    try {
+      final String done;
+      if (item.isBooked) {
+        await repository.cancelBooking(classId: item.id);
+        done = 'Booking cancelled.';
+      } else if (item.isWaitlisted) {
+        await repository.leaveWaitlist(classId: item.id);
+        done = 'Removed from the waiting list.';
+      } else if (item.isFull) {
+        await repository.joinWaitlist(classId: item.id);
+        done = 'Added to the waiting list.';
+      } else {
+        await repository.bookClass(classId: item.id);
+        done = 'Class booked.';
+      }
+      ref.invalidate(scheduleListProvider);
+      messenger.showSnackBar(SnackBar(content: Text(done)));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Could not update the booking'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyClassId = null);
+    }
+  }
 
   void _shift(int days) =>
       setState(() => _day = DateTime(_day.year, _day.month, _day.day + days));
@@ -531,7 +585,9 @@ class _ActivityState extends ConsumerState<_Activity> {
     final localizations = MaterialLocalizations.of(context);
     final classes = [
       for (final c in ref.watch(scheduleListProvider).value ?? const [])
-        if (_dateOnly(c.startTime) == _day) c,
+        if (_dateOnly(c.startTime) == _day &&
+            (!_onlyMine || c.assignedTrainer?.id == widget.coachUserId))
+          c,
     ]..sort((a, b) => a.startTime.compareTo(b.startTime));
     final workout = (ref.watch(programmingListProvider).value ?? const [])
         .where((w) => _dateOnly(w.scheduledDate) == _day)
@@ -544,18 +600,41 @@ class _ActivityState extends ConsumerState<_Activity> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Classes ${classes.length}',
-            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Classes ${classes.length}',
+                  style: const TextStyle(
+                    color: appText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (widget.coachUserId != null)
+                FilterChip(
+                  label: const Text('Coached by me'),
+                  visualDensity: VisualDensity.compact,
+                  selected: _onlyMine,
+                  onSelected: (value) => setState(() => _onlyMine = value),
+                ),
+            ],
           ),
           const SizedBox(height: appSpaceMd),
           if (classes.isEmpty)
-            const Text(
-              'No classes on this day.',
-              style: TextStyle(color: appSubtleText),
+            Text(
+              _onlyMine
+                  ? 'You coach no classes on this day.'
+                  : 'No classes on this day.',
+              style: const TextStyle(color: appSubtleText),
             )
           else
-            for (final c in classes) _ClassRow(item: c),
+            for (final c in classes)
+              _ClassRow(
+                item: c,
+                busy: _busyClassId == c.id,
+                onToggle: widget.bookable ? () => _toggle(c) : null,
+              ),
         ],
       ),
     );
@@ -565,9 +644,9 @@ class _ActivityState extends ConsumerState<_Activity> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Programs',
-            style: TextStyle(color: appText, fontWeight: FontWeight.w700),
+          Text(
+            widget.manager ? 'Programs' : 'WOD of the day',
+            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: appSpaceMd),
           if (workout == null)
@@ -587,35 +666,43 @@ class _ActivityState extends ConsumerState<_Activity> {
                     ),
                   ),
                 ),
-                AppPill(
-                  label: workout.isPublished ? 'Published' : 'Draft',
-                  intent: workout.isPublished
-                      ? AppPillIntent.success
-                      : AppPillIntent.warning,
-                  dense: true,
-                ),
+                if (widget.manager)
+                  AppPill(
+                    label: workout.isPublished ? 'Published' : 'Draft',
+                    intent: workout.isPublished
+                        ? AppPillIntent.success
+                        : AppPillIntent.warning,
+                    dense: true,
+                  ),
               ],
             ),
             const SizedBox(height: appSpaceSm),
-            for (var i = 0; i < workout.sections.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: appSpaceXs),
-                child: Text(
-                  '${i + 1}  ${_sectionLabel(workout.sections[i])}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: appMutedText, fontSize: 13),
+            // Athletes read the whole workout here.
+            if (!widget.manager)
+              for (final section in workout.sections)
+                _WodSection(section: section)
+            else
+              for (var i = 0; i < workout.sections.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: appSpaceXs),
+                  child: Text(
+                    '${i + 1}  ${_sectionLabel(workout.sections[i])}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: appMutedText, fontSize: 13),
+                  ),
                 ),
-              ),
           ],
-          const SizedBox(height: appSpaceSm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => context.go('/programs'),
-              child: const Text('Manage programs'),
+          if (widget.manager) ...[
+            const SizedBox(height: appSpaceSm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => context.go('/programs'),
+                child: const Text('Manage programs'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -624,7 +711,7 @@ class _ActivityState extends ConsumerState<_Activity> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SectionTitle(
-          'Activity · ${localizations.formatMediumDate(_day)}',
+          '${widget.title} · ${localizations.formatMediumDate(_day)}',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -678,9 +765,14 @@ DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
 class _ClassRow extends StatelessWidget {
-  const _ClassRow({required this.item});
+  const _ClassRow({required this.item, this.onToggle, this.busy = false});
 
   final ScheduleClass item;
+
+  /// Athletes: book, cancel, or join / leave the waiting list. Null hides
+  /// the button.
+  final VoidCallback? onToggle;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -749,11 +841,111 @@ class _ClassRow extends StatelessWidget {
               ],
             ),
           ),
-          AppPill(
-            label: '${item.bookedCount} of ${item.capacity}',
-            intent: item.isFull ? AppPillIntent.warning : AppPillIntent.neutral,
-            dense: true,
-          ),
+          if (item.isBooked)
+            const AppPill(
+              label: 'Booked',
+              intent: AppPillIntent.primary,
+              dense: true,
+            )
+          else if (item.isWaitlisted)
+            const AppPill(
+              label: 'Waiting list',
+              intent: AppPillIntent.warning,
+              dense: true,
+            )
+          else
+            AppPill(
+              label: '${item.bookedCount} of ${item.capacity}',
+              intent: item.isFull
+                  ? AppPillIntent.warning
+                  : AppPillIntent.neutral,
+              dense: true,
+            ),
+          if (onToggle != null) ...[
+            const SizedBox(width: appSpaceSm),
+            SizedBox(
+              width: 118,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: appSpaceSm),
+                ),
+                // Only classes that have not started can be booked.
+                onPressed: busy || !item.startTime.isAfter(now)
+                    ? null
+                    : onToggle,
+                child: Text(
+                  item.isBooked
+                      ? 'Cancel'
+                      : item.isWaitlisted
+                      ? 'Leave list'
+                      : item.isFull
+                      ? 'Join waitlist'
+                      : 'Book',
+                  maxLines: 1,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+const _wodText = TextStyle(color: appMutedText, fontSize: 13, height: 1.45);
+
+/// `5 reps @ 80 %` or `5 reps @ RPE 8`.
+String _setLabel(WorkoutSet set, SetUnit unit) {
+  final value = set.value;
+  if (value == null) return '${set.reps} reps';
+  final number = value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
+  return unit == SetUnit.rpe
+      ? '${set.reps} reps @ RPE $number'
+      : '${set.reps} reps @ $number %';
+}
+
+/// One block of the WOD for athletes: its title and everything in it.
+class _WodSection extends StatelessWidget {
+  const _WodSection({required this.section});
+
+  final DailyWorkoutSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: appSpaceMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (section.title.isNotEmpty)
+            Text(
+              section.title,
+              style: const TextStyle(
+                color: appText,
+                fontWeight: FontWeight.w600,
+                fontSize: 13.5,
+              ),
+            ),
+          if (section.kind == BlockKind.exercise &&
+              section.exerciseName.isNotEmpty &&
+              section.exerciseName != section.title)
+            Text(section.exerciseName, style: _wodText),
+          if (section.description.trim().isNotEmpty)
+            Text(section.description.trim(), style: _wodText),
+          for (var i = 0; i < section.sets.length; i++)
+            Text(
+              '${i + 1}.  ${_setLabel(section.sets[i], section.setUnit)}',
+              style: _wodText,
+            ),
+          // Member notes are meant for the member app; coach notes are not.
+          if (section.memberNotes.trim().isNotEmpty)
+            Text(
+              section.memberNotes.trim(),
+              style: _wodText.copyWith(fontStyle: FontStyle.italic),
+            ),
         ],
       ),
     );
