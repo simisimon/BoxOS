@@ -301,29 +301,20 @@ class _MyBoxScreenState extends ConsumerState<MyBoxScreen> {
   }) {
     void open(ScheduleClass item) =>
         _openClass(item, canManage: canManage, canCoach: canCoach);
-    // Owners and trainers work in the hour grid; only the owner creates
-    // classes. Athletes keep the day columns with each day's WOD.
-    if (canCoach) {
-      return ScheduleHourGrid(
-        weekStart: _weekStart,
-        onWeekChanged: (monday) => setState(() => _weekStart = monday),
-        selectedClassId: _selectedClassId,
-        onOpenClass: open,
-        onAddClass: canManage
-            ? (date) => _showClassFormDialog(context, date: date)
-            : null,
-        onCreateSchedule: canManage
-            ? () => showClassTemplateDialog(context, ref)
-            : null,
-        coachUserId: coachUserId,
-      );
-    }
-    return ScheduleWeekView(
+    // One week view for every role; only the owner creates classes.
+    // Athletes book from the class panel and see the WOD in its Program tab.
+    return ScheduleHourGrid(
       weekStart: _weekStart,
       onWeekChanged: (monday) => setState(() => _weekStart = monday),
-      canManage: false,
       selectedClassId: _selectedClassId,
       onOpenClass: open,
+      onAddClass: canManage
+          ? (date) => _showClassFormDialog(context, date: date)
+          : null,
+      onCreateSchedule: canManage
+          ? () => showClassTemplateDialog(context, ref)
+          : null,
+      coachUserId: coachUserId,
     );
   }
 

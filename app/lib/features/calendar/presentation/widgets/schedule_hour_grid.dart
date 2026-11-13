@@ -20,11 +20,12 @@ DateTime _dateOnly(DateTime value) =>
 DateTime _addDays(DateTime day, int days) =>
     DateTime(day.year, day.month, day.day + days);
 
-/// Owners' and trainers' class calendar (docs/admin-ui-reference.md §2): a
+/// The class calendar (docs/admin-ui-reference.md §2): a
 /// Mon–Sun grid with hour rows, today's date in an accent circle, a red line
 /// at the current time, and each class as a block sized by its duration,
-/// parallel classes side by side. Past classes are faded. Trainers can
-/// narrow it to the classes they coach. Athletes keep [ScheduleWeekView].
+/// parallel classes side by side. Past classes are faded. One week view for
+/// every role: trainers can narrow it to the classes they coach, athletes
+/// see their bookings marked and book from the class panel.
 class ScheduleHourGrid extends ConsumerStatefulWidget {
   const ScheduleHourGrid({
     super.key,
@@ -492,8 +493,12 @@ class _ClassBlock extends StatelessWidget {
         color: Color.alphaBlend(color.withValues(alpha: 0.14), appSurfaceAlt),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(appRadiusSm),
+          // The member's own booking stands out in the accent.
           side: BorderSide(
-            color: selected ? appPrimary : color.withValues(alpha: 0.5),
+            color: selected || session.isBooked
+                ? appPrimary
+                : color.withValues(alpha: 0.5),
+            width: session.isBooked && !selected ? 1.5 : 1,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -510,10 +515,27 @@ class _ClassBlock extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      hm(session.startTime),
-                      maxLines: 1,
-                      style: appMono(fontSize: 9.5, color: appMutedText),
+                    Row(
+                      children: [
+                        Text(
+                          hm(session.startTime),
+                          maxLines: 1,
+                          style: appMono(fontSize: 9.5, color: appMutedText),
+                        ),
+                        if (session.isBooked || session.isWaitlisted) ...[
+                          const SizedBox(width: 3),
+                          Icon(
+                            session.isBooked
+                                ? Icons.check_circle_rounded
+                                : Icons.hourglass_top_rounded,
+                            size: 10,
+                            color: session.isBooked ? appPrimary : appWarning,
+                            semanticLabel: session.isBooked
+                                ? 'Booked'
+                                : 'On the waiting list',
+                          ),
+                        ],
+                      ],
                     ),
                     Text(
                       session.title,

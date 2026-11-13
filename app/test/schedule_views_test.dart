@@ -275,37 +275,39 @@ Future<void> _openTomorrowClass(WidgetTester tester) async {
 
 void main() {
   for (final size in const [Size(1280, 800), Size(390, 844)]) {
-    testWidgets('Week view shows WODs per day and switches weeks at $size', (
+    testWidgets('Athletes see their bookings in the week at $size', (
       tester,
     ) async {
-      // The day columns with WODs are the athletes' view.
-      await _pumpSchedule(tester, size, profile: _athlete);
+      // One week view for every role: athletes get the hour grid too.
+      await _pumpSchedule(
+        tester,
+        size,
+        profile: _athlete,
+        session: ScheduleClass(
+          id: 10,
+          gymId: 1,
+          title: 'CrossFit',
+          classType: 'WOD',
+          startTime: _tomorrowAt(17).add(const Duration(minutes: 30)),
+          durationMinutes: 60,
+          capacity: 20,
+          remainingSpots: 19,
+          bookedCount: 1,
+          isBooked: true,
+        ),
+      );
       _expectNoException(tester);
-      // Today's WOD shows on its day slip; tapping it opens the full card.
-      expect(find.text('Fran'), findsOneWidget);
-      await tester.tap(find.text('Fran'));
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('Log Results'), findsNothing);
-      expect(find.text('Whiteboard'), findsNothing);
-      await tester.tapAt(const Offset(4, 4));
-      await tester.pumpAndSettle();
-      expect(find.byType(Dialog), findsNothing);
-      expect(find.text('Today'), findsNothing);
-
-      await tester.tap(find.byTooltip('Next week'));
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.text('Today'), findsOneWidget);
-
-      // Programming moved to the Programs page: the week shows WODs only.
+      if (_tomorrowAt(0).weekday == DateTime.monday) {
+        await tester.tap(find.byTooltip('Next week'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('CrossFit'), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+      // No planning tools for athletes.
+      expect(find.byTooltip('Create recurring classes'), findsNothing);
+      expect(find.byTooltip('Add class'), findsNothing);
+      expect(find.text('Coached by me'), findsNothing);
       expect(find.text('Add WOD'), findsNothing);
-
-      await tester.tap(find.text('Today'));
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.text('Today'), findsNothing);
     });
 
     testWidgets('Week adds a weekly class right in the day at $size', (
