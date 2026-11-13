@@ -1,4 +1,5 @@
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
@@ -19,7 +20,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// handlers. Home now shows only today's WOD, the next booking and the weekly
 /// stat, so the news feed lives wherever box communication belongs.
 class AnnouncementFeedSection extends ConsumerStatefulWidget {
-  const AnnouncementFeedSection({super.key});
+  const AnnouncementFeedSection({super.key, this.showHeader = true});
+
+  /// False when the page already titles the section (athlete Home).
+  final bool showHeader;
 
   @override
   ConsumerState<AnnouncementFeedSection> createState() =>
@@ -48,9 +52,8 @@ class _AnnouncementFeedSectionState
 
   Future<void> _openAnnouncementComposer() async {
     final repository = ref.read(announcementRepositoryProvider);
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
+    final saved = await showAppSidePanel<bool>(
+      context,
       builder: (context) => AnnouncementComposerDialog(repository: repository),
     );
     if (saved == true) {
@@ -60,9 +63,8 @@ class _AnnouncementFeedSectionState
 
   Future<void> _openAnnouncementEditor(Announcement announcement) async {
     final repository = ref.read(announcementRepositoryProvider);
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
+    final saved = await showAppSidePanel<bool>(
+      context,
       builder: (context) => AnnouncementComposerDialog(
         existing: announcement,
         repository: repository,
@@ -212,14 +214,17 @@ class _AnnouncementFeedSectionState
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.hasValue ? profileAsync.value : null;
     final hasActiveGym = profile?.activeGym != null;
-    final canManageAnnouncements = hasActiveGym &&
+    final canManageAnnouncements =
+        hasActiveGym &&
         (profile?.role == UserRole.admin || profile?.role == UserRole.trainer);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const AppSectionHeader(title: 'News', eyebrow: 'From your box'),
-        const SizedBox(height: appSpaceMd),
+        if (widget.showHeader) ...[
+          const AppSectionHeader(title: 'News', eyebrow: 'From your box'),
+          const SizedBox(height: appSpaceMd),
+        ],
         AnnouncementFeed(
           announcementsFuture: _announcementsFuture,
           canManageAnnouncements: canManageAnnouncements,

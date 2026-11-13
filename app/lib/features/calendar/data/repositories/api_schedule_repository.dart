@@ -186,10 +186,10 @@ class ApiScheduleRepository implements ScheduleRepository {
   }
 
   @override
-  Future<void> cancelBooking({required int classId}) async {
+  Future<void> cancelBooking({required int classId, int? userId}) async {
     await _dio.delete<void>(
       '/schedule/bookings',
-      data: {'class_id': classId},
+      data: {'class_id': classId, 'user_id': ?userId},
       options: Options(headers: await _authHeaders()),
     );
   }

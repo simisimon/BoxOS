@@ -1,5 +1,6 @@
 import 'package:app/features/admin_analytics/data/repositories/api_admin_analytics_repository.dart';
 import 'package:app/features/admin_analytics/domain/models/admin_analytics_overview.dart';
+import 'package:app/features/admin_analytics/domain/models/owner_dashboard_data.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final adminAnalyticsWindowDaysProvider =
@@ -23,3 +24,7 @@ final adminAnalyticsOverviewProvider = FutureProvider<AdminAnalyticsOverview>((
   final windowDays = ref.watch(adminAnalyticsWindowDaysProvider);
   return repository.fetchOverview(windowDays: windowDays);
 });
+
+final ownerDashboardProvider = FutureProvider.autoDispose<OwnerDashboardData>(
+  (ref) => ref.read(adminAnalyticsRepositoryProvider).fetchDashboard(),
+);

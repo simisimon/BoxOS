@@ -1,3 +1,5 @@
+import 'package:app/features/admin_analytics/presentation/screens/reports_screen.dart';
+import 'package:app/features/announcements/presentation/screens/messages_screen.dart';
 import 'package:app/features/auth/application/auth_controller.dart';
 import 'package:app/features/auth/application/auth_state.dart';
 import 'package:app/features/auth/presentation/screens/auth_loading_screen.dart';
@@ -17,9 +19,10 @@ import 'package:app/features/calendar/presentation/screens/calendar_screen.dart'
 import 'package:app/features/community/presentation/screens/community_screen.dart';
 import 'package:app/features/home/presentation/screens/authenticated_shell_screen.dart';
 import 'package:app/features/home/presentation/screens/home_screen.dart';
-import 'package:app/features/logbook/presentation/screens/logbook_screen.dart';
+import 'package:app/features/members/presentation/screens/member_detail_screen.dart';
 import 'package:app/features/members/presentation/screens/members_screen.dart';
-import 'package:app/features/tracking/presentation/screens/tracking_screen.dart';
+import 'package:app/features/memberships/presentation/screens/memberships_screen.dart';
+import 'package:app/features/programming/presentation/screens/programs_screen.dart';
 import 'package:app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:app/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
@@ -121,18 +124,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/logbook',
-                name: 'logbook',
-                builder: (context, state) => const LogbookScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
                 path: '/members',
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':userId',
+                    name: 'member-detail',
+                    redirect: (context, state) =>
+                        int.tryParse(state.pathParameters['userId']!) == null
+                        ? '/members'
+                        : null,
+                    builder: (context, state) => MemberDetailScreen(
+                      userId: int.parse(state.pathParameters['userId']!),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -141,6 +148,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/community',
                 name: 'community',
+                // Retired: announcements moved to Home (athletes) and
+                // Messages (owners, trainers), the chat to Messages.
+                redirect: (context, state) => '/messages',
                 builder: (context, state) => const CommunityScreen(),
               ),
             ],
@@ -150,16 +160,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/profile',
                 name: 'profile',
-                builder: (context, state) => const ProfileScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/tracking',
-                name: 'tracking',
-                builder: (context, state) => const TrackingScreen(),
+                builder: (context, state) => ProfileScreen(
+                  section: ProfileSection.fromSlug(
+                    state.uri.queryParameters['section'],
+                  ),
+                ),
               ),
             ],
           ),
@@ -168,7 +173,47 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/box-settings',
                 name: 'box-settings',
-                builder: (context, state) => const BoxSettingsScreen(),
+                builder: (context, state) => BoxSettingsScreen(
+                  section: SettingsSection.fromSlug(
+                    state.uri.queryParameters['section'],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/memberships',
+                name: 'memberships',
+                builder: (context, state) => const MembershipsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/programs',
+                name: 'programs',
+                builder: (context, state) => const ProgramsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/reports',
+                name: 'reports',
+                builder: (context, state) => const ReportsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/messages',
+                name: 'messages',
+                builder: (context, state) => const MessagesScreen(),
               ),
             ],
           ),
@@ -190,7 +235,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const NotificationSettingsScreen(),
       ),
       // Full analytics now unfold inside the owner dashboard.
-      GoRoute(path: '/admin-analytics', redirect: (context, state) => '/home'),
+      GoRoute(
+        path: '/admin-analytics',
+        redirect: (context, state) => '/reports',
+      ),
       GoRoute(
         path: '/change-password',
         name: 'change-password',

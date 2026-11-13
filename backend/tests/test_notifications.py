@@ -110,19 +110,16 @@ class NotificationCoreTests(FastApiTestCase):
         self.assertEqual(notification["type"], "waitlist_promoted")
         self.assertEqual(notification["title"], "You are in the class")
 
-    def test_wod_and_pr_notifications_respect_membership_and_preferences(self) -> None:
+    def test_wod_notifications_respect_membership_and_preferences(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Wod Notify Box")
         athlete_user_id = self.add_active_membership(settings.DEMO_EMAIL, gym_id)
         self.create_verified_user("no-wod@boxos.app")
         muted_user_id = self.add_active_membership("no-wod@boxos.app", gym_id)
-        self.create_verified_user("other-gym@boxos.app")
-        other_user_id = self.lookup_user_id("other-gym@boxos.app")
 
         connection = db.get_connection()
         try:
             with connection:
                 connection.execute("update users set notify_wod_posted = 0 where id = ?", (muted_user_id,))
-                connection.execute("update users set notify_pr_achievements = 0 where id = ?", (muted_user_id,))
                 notifications_core.create_wod_notifications(
                     connection,
                     gym_id=gym_id,
@@ -131,36 +128,9 @@ class NotificationCoreTests(FastApiTestCase):
                     title="Fran",
                     is_update=False,
                 )
-                notifications_core.create_pr_achievement_notification(
-                    connection,
-                    user_id=athlete_user_id,
-                    gym_id=gym_id,
-                    workout_id=11,
-                    workout_title="Fran",
-                    score_label="5:55",
-                )
-                notifications_core.create_pr_achievement_notification(
-                    connection,
-                    user_id=muted_user_id,
-                    gym_id=gym_id,
-                    workout_id=11,
-                    workout_title="Fran",
-                    score_label="6:10",
-                )
-                notifications_core.create_pr_achievement_notification(
-                    connection,
-                    user_id=other_user_id,
-                    gym_id=gym_id,
-                    workout_id=11,
-                    workout_title="Fran",
-                    score_label="4:50",
-                )
 
             wod_notifications = connection.execute(
                 "select user_id from notifications where type = 'wod_posted' order by user_id"
-            ).fetchall()
-            pr_notifications = connection.execute(
-                "select user_id, body from notifications where type = 'pr_achieved' order by user_id"
             ).fetchall()
         finally:
             connection.close()
@@ -168,9 +138,6 @@ class NotificationCoreTests(FastApiTestCase):
         wod_user_ids = [row["user_id"] for row in wod_notifications]
         self.assertIn(athlete_user_id, wod_user_ids)
         self.assertNotIn(muted_user_id, wod_user_ids)
-
-        self.assertEqual([row["user_id"] for row in pr_notifications], [athlete_user_id, other_user_id])
-        self.assertEqual(pr_notifications[0]["body"], "Fran: 5:55")
 
     def test_announcement_activity_notifications_skip_self_and_truncate_comments(self) -> None:
         _, gym_id = self.create_gym_as_admin("Announcement Notify Box")

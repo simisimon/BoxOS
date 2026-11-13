@@ -1,7 +1,7 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
-import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:flutter/material.dart';
@@ -58,8 +58,8 @@ Future<bool> showWodEditorDialog(
   required DateTime date,
   DailyWorkout? existing,
 }) async {
-  final saved = await showDialog<bool>(
-    context: context,
+  final saved = await showAppSidePanel<bool>(
+    context,
     builder: (_) => _WorkoutEditorDialog(existing: existing, prefillDate: date),
   );
   if (saved == true) {
@@ -90,6 +90,80 @@ Future<void> showWodDetailsDialog(
       child: WodDaySection(date: date, canManage: canManage),
     ),
   );
+}
+
+/// Publishes or unpublishes [workout] and refreshes the programming list.
+Future<void> publishWod(
+  BuildContext context,
+  WidgetRef ref,
+  DailyWorkout workout, {
+  required bool publish,
+}) async {
+  try {
+    final repository = ref.read(programmingRepositoryProvider);
+    if (publish) {
+      await repository.publishWorkout(id: workout.id);
+    } else {
+      await repository.unpublishWorkout(id: workout.id);
+    }
+    ref.invalidate(programmingListProvider);
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          errorMessageFrom(
+            error,
+            fallback: publish
+                ? 'Failed to publish workout'
+                : 'Failed to unpublish workout',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Copies [workout] to a picked day as a draft ("Copy to day…").
+Future<void> duplicateWod(
+  BuildContext context,
+  WidgetRef ref,
+  DailyWorkout workout,
+) async {
+  final today = _dateOnly(DateTime.now());
+  final weekLater = workout.scheduledDate.add(const Duration(days: 7));
+  final target = await showDatePicker(
+    context: context,
+    // Never before firstDate: a WOD from weeks ago would assert.
+    initialDate: weekLater.isBefore(today) ? today : weekLater,
+    firstDate: _dateOnly(DateTime.now()),
+    lastDate: DateTime.now().add(const Duration(days: 365)),
+  );
+  if (target == null) return;
+  try {
+    await ref
+        .read(programmingRepositoryProvider)
+        .duplicateWorkout(
+          sourceDate: workout.scheduledDate,
+          targetDate: target,
+        );
+    ref.invalidate(programmingListProvider);
+    if (!context.mounted) return;
+    final formatted =
+        '${target.year}-${target.month.toString().padLeft(2, '0')}-${target.day.toString().padLeft(2, '0')}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Duplicated to $formatted (as draft).')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          errorMessageFrom(error, fallback: 'Failed to duplicate workout'),
+        ),
+      ),
+    );
+  }
 }
 
 class _WodErrorCard extends StatelessWidget {
@@ -123,15 +197,8 @@ class _WodEmptyState extends ConsumerWidget {
 
   bool get _isPast => _dateOnly(date).isBefore(_dateOnly(DateTime.now()));
 
-  Future<void> _openEditor(BuildContext context, WidgetRef ref) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _WorkoutEditorDialog(existing: null, prefillDate: date),
-    );
-    if (saved == true) {
-      ref.invalidate(programmingListProvider);
-    }
-  }
+  Future<void> _openEditor(BuildContext context, WidgetRef ref) =>
+      showWodEditorDialog(context, ref, date: date);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -221,89 +288,6 @@ class _WorkoutCard extends ConsumerWidget {
   final DailyWorkout workout;
   final bool canManage;
 
-  Future<void> _openEditor(BuildContext context, WidgetRef ref) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _WorkoutEditorDialog(
-        existing: workout,
-        prefillDate: workout.scheduledDate,
-      ),
-    );
-    if (saved == true) {
-      ref.invalidate(programmingListProvider);
-    }
-  }
-
-  Future<void> _publish(BuildContext context, WidgetRef ref) async {
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .publishWorkout(id: workout.id);
-      ref.invalidate(programmingListProvider);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to publish workout'),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _unpublish(BuildContext context, WidgetRef ref) async {
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .unpublishWorkout(id: workout.id);
-      ref.invalidate(programmingListProvider);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to unpublish workout'),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _duplicate(BuildContext context, WidgetRef ref) async {
-    final target = await showDatePicker(
-      context: context,
-      initialDate: workout.scheduledDate.add(const Duration(days: 7)),
-      firstDate: _dateOnly(DateTime.now()),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (target == null) return;
-    try {
-      await ref
-          .read(programmingRepositoryProvider)
-          .duplicateWorkout(
-            sourceDate: workout.scheduledDate,
-            targetDate: target,
-          );
-      ref.invalidate(programmingListProvider);
-      if (!context.mounted) return;
-      final formatted =
-          '${target.year}-${target.month.toString().padLeft(2, '0')}-${target.day.toString().padLeft(2, '0')}';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Duplicated to $formatted (as draft).')),
-      );
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to duplicate workout'),
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -368,17 +352,18 @@ class _WorkoutCard extends ConsumerWidget {
                   onSelected: (value) {
                     switch (value) {
                       case 'edit':
-                        _openEditor(context, ref);
-                        break;
+                        showWodEditorDialog(
+                          context,
+                          ref,
+                          date: workout.scheduledDate,
+                          existing: workout,
+                        );
                       case 'publish':
-                        _publish(context, ref);
-                        break;
+                        publishWod(context, ref, workout, publish: true);
                       case 'unpublish':
-                        _unpublish(context, ref);
-                        break;
+                        publishWod(context, ref, workout, publish: false);
                       case 'duplicate':
-                        _duplicate(context, ref);
-                        break;
+                        duplicateWod(context, ref, workout);
                     }
                   },
                   itemBuilder: (context) => [
@@ -405,10 +390,6 @@ class _WorkoutCard extends ConsumerWidget {
           for (var i = 0; i < workout.sections.length; i++) ...[
             if (i > 0) const SizedBox(height: 10),
             _SectionRow(index: i, section: workout.sections[i]),
-          ],
-          if (workout.isPublished) ...[
-            const SizedBox(height: 16),
-            _PanelSection(child: _WorkoutLogSection(workout: workout)),
           ],
         ],
       ),
@@ -467,6 +448,22 @@ class _SectionRow extends StatelessWidget {
               height: 1.4,
             ),
           ),
+          // Member notes for everyone; coach notes only reach coaches (the
+          // server blanks them for members).
+          for (final (label, note) in [
+            ('Notes', section.memberNotes),
+            ('Coach notes', section.coachNotes),
+          ])
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '$label: $note',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: appMutedText,
+                  height: 1.4,
+                ),
+              ),
+            ],
         ],
       ),
     );
@@ -524,114 +521,13 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _PanelSection extends StatelessWidget {
-  const _PanelSection({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: appSurfaceAlt,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: appBorder),
-      ),
-      child: child,
-    );
-  }
-}
-
-String _scoreLabel(String value) {
-  switch (value) {
-    case 'time':
-      return 'For time';
-    case 'reps':
-      return 'Reps';
-    case 'load':
-      return 'Load';
-    default:
-      return value;
-  }
-}
-
-class _WorkoutLogSection extends ConsumerWidget {
-  const _WorkoutLogSection({required this.workout});
-  final DailyWorkout workout;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Log Results',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: appText,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final updated = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => _WorkoutLogDialog(workout: workout),
-                );
-                if (updated == true) {
-                  ref.invalidate(programmingListProvider);
-                }
-              },
-              icon: const Icon(Icons.edit_note_outlined),
-              // Theme buttons are full-width; next to the title in a Row
-              // they need a finite minimum width.
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-              label: Text(workout.myWorkoutLog == null ? 'Log' : 'Update'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (workout.myWorkoutLog == null)
-          Text(
-            'No personal workout log yet.',
-            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: appSurface,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${workout.myWorkoutLog!.scoreLabel} '
-                    '(${_scoreLabel(workout.myWorkoutLog!.scoreType)})'
-                    '${workout.myWorkoutLog!.notesText.isEmpty ? '' : '\n${workout.myWorkoutLog!.notesText}'}',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: appText),
-                  ),
-                ),
-                if (workout.myWorkoutLog!.isPr) const Chip(label: Text('PR')),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 /// Mutable draft of a section while the editor dialog is open.
 class _SectionDraft {
   _SectionDraft({
     required this.titleController,
     required this.descriptionController,
     required this.scoreType,
+    this.source,
   });
 
   factory _SectionDraft.empty() => _SectionDraft(
@@ -644,17 +540,34 @@ class _SectionDraft {
     titleController: TextEditingController(text: section.title),
     descriptionController: TextEditingController(text: section.description),
     scoreType: section.scoreType,
+    source: section,
   );
+
+  /// The block this draft edits; its structured fields (sets, notes) are not
+  /// shown here and must survive a save.
+  final DailyWorkoutSection? source;
 
   final TextEditingController titleController;
   final TextEditingController descriptionController;
   WorkoutSectionScore scoreType;
 
-  DailyWorkoutSection toSection() => DailyWorkoutSection(
-    title: titleController.text.trim(),
-    description: descriptionController.text.trim(),
-    scoreType: scoreType,
-  );
+  DailyWorkoutSection toSection() {
+    final description = descriptionController.text.trim();
+    // An exercise block whose text was edited here no longer matches its
+    // sets; the text wins and it becomes a plain workout block.
+    final keepStructure = source?.description == description;
+    return DailyWorkoutSection(
+      title: titleController.text.trim(),
+      description: description,
+      scoreType: scoreType,
+      kind: keepStructure ? source!.kind : BlockKind.workout,
+      exerciseName: keepStructure ? source!.exerciseName : '',
+      setUnit: source?.setUnit ?? SetUnit.percent,
+      sets: keepStructure ? source!.sets : const [],
+      coachNotes: source?.coachNotes ?? '',
+      memberNotes: source?.memberNotes ?? '',
+    );
+  }
 
   void dispose() {
     titleController.dispose();
@@ -780,7 +693,7 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
       context,
     ).formatFullDate(_selectedDate);
     final isCreating = widget.existing == null;
-    return AppFormDialog(
+    return AppSidePanel(
       title: isCreating ? 'New WOD' : 'Edit WOD',
       subtitle: dateLabel,
       child: Form(
@@ -1023,143 +936,6 @@ class _SectionCard extends StatelessWidget {
                   },
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkoutLogDialog extends ConsumerStatefulWidget {
-  const _WorkoutLogDialog({required this.workout});
-  final DailyWorkout workout;
-
-  @override
-  ConsumerState<_WorkoutLogDialog> createState() => _WorkoutLogDialogState();
-}
-
-class _WorkoutLogDialogState extends ConsumerState<_WorkoutLogDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late String _scoreType;
-  late TextEditingController _scoreValueController;
-  late TextEditingController _notesController;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scoreType = widget.workout.myWorkoutLog?.scoreType ?? 'time';
-    _scoreValueController = TextEditingController(
-      text: widget.workout.myWorkoutLog?.scoreLabel ?? '',
-    );
-    _notesController = TextEditingController(
-      text: widget.workout.myWorkoutLog?.notesText ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _scoreValueController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _isSaving = true);
-    try {
-      await ref
-          .read(logbookRepositoryProvider)
-          .submitEntry(
-            workoutId: widget.workout.id,
-            scoreType: _scoreType,
-            scoreValue: _scoreValueController.text.trim(),
-            notesText: _notesController.text.trim(),
-          );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to save workout log'),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppFormDialog(
-      title: 'Log Workout Result',
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isSaving ? null : _submit,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
-        ),
-      ],
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: _scoreType,
-                decoration: const InputDecoration(labelText: 'Score Type'),
-                items: const [
-                  DropdownMenuItem(value: 'time', child: Text('For time')),
-                  DropdownMenuItem(value: 'reps', child: Text('Reps')),
-                  DropdownMenuItem(value: 'load', child: Text('Load')),
-                ],
-                onChanged: _isSaving
-                    ? null
-                    : (value) {
-                        if (value != null) {
-                          setState(() => _scoreType = value);
-                        }
-                      },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _scoreValueController,
-                decoration: InputDecoration(
-                  labelText: _scoreType == 'time'
-                      ? 'Score (mm:ss or hh:mm:ss)'
-                      : _scoreType == 'reps'
-                      ? 'Score (reps)'
-                      : 'Score (load)',
-                ),
-                validator: (value) =>
-                    (value ?? '').trim().isEmpty ? 'Enter a score' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _notesController,
-                decoration: const InputDecoration(labelText: 'Notes'),
-                minLines: 2,
-                maxLines: 4,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

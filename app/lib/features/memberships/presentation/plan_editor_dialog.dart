@@ -1,19 +1,23 @@
 import 'package:app/core/presentation/app_chrome.dart';
-import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/components/components.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Create or edit a membership plan. Resolves to the draft on save, null on
-/// cancel. Saving is left to the caller.
-Future<MembershipPlanDraft?> showPlanEditorDialog(
+/// Create or edit a membership plan in a side panel. Resolves to the draft on
+/// save, null on cancel. Saving is left to the caller. [menu] fills the
+/// panel's `⋯` menu (e.g. Archive).
+Future<MembershipPlanDraft?> showPlanEditorPanel(
   BuildContext context, {
   MembershipPlan? plan,
   required String currency,
+  List<(String, VoidCallback)> menu = const [],
 }) {
-  return showDialog<MembershipPlanDraft>(
-    context: context,
-    builder: (_) => _PlanEditorDialog(plan: plan, currency: currency),
+  return showAppSidePanel<MembershipPlanDraft>(
+    context,
+    builder: (_) =>
+        _PlanEditorDialog(plan: plan, currency: currency, menu: menu),
   );
 }
 
@@ -35,10 +39,15 @@ String priceInputText(int cents) {
 }
 
 class _PlanEditorDialog extends StatefulWidget {
-  const _PlanEditorDialog({required this.plan, required this.currency});
+  const _PlanEditorDialog({
+    required this.plan,
+    required this.currency,
+    required this.menu,
+  });
 
   final MembershipPlan? plan;
   final String currency;
+  final List<(String, VoidCallback)> menu;
 
   @override
   State<_PlanEditorDialog> createState() => _PlanEditorDialogState();
@@ -148,8 +157,12 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
     final theme = Theme.of(context);
     final isEdit = widget.plan != null;
     final digitsOnly = [FilteringTextInputFormatter.digitsOnly];
-    return AppFormDialog(
-      title: isEdit ? 'Edit plan' : 'New plan',
+    return AppSidePanel(
+      title: isEdit ? widget.plan!.name : 'Create plan',
+      status: widget.plan?.isArchived ?? false
+          ? const AppPill(label: 'Archived', dense: true)
+          : null,
+      menu: widget.menu,
       subtitle: isEdit
           ? 'Changes apply to new members. Members already on this plan keep '
                 'their price and limits.'
@@ -231,6 +244,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
                   const SizedBox(width: appSpaceMd),
                   Expanded(
                     child: DropdownButtonFormField<TokenPeriod>(
+                      isExpanded: true,
                       initialValue: _tokenPeriod,
                       decoration: const InputDecoration(labelText: 'Every'),
                       items: [
@@ -325,6 +339,7 @@ class _PlanEditorDialogState extends State<_PlanEditorDialog> {
                 const SizedBox(width: appSpaceMd),
                 Expanded(
                   child: DropdownButtonFormField<BillingPeriod>(
+                    isExpanded: true,
                     // initialValue is read once; the key resets it when the
                     // plan type switches the billing period.
                     key: ValueKey(_billing),

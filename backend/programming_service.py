@@ -4,40 +4,12 @@ import json
 from http import HTTPStatus
 from typing import Any, TYPE_CHECKING
 
-from backend.notifications_core import create_notification
 from backend.security import now_utc
 from backend.validation import ApiError
 from backend import workout_service
 
 if TYPE_CHECKING:
-    from backend.db import ManagedConnection, Row
-
-
-def create_pr_achievement_notification(
-    connection: ManagedConnection,
-    *,
-    user_id: int,
-    gym_id: int,
-    workout_id: int,
-    workout_title: str,
-    score_label: str,
-) -> None:
-    user = connection.execute(
-        "select notify_pr_achievements from users where id = ? and deleted_at is null",
-        (user_id,),
-    ).fetchone()
-    if user is None or not bool(user["notify_pr_achievements"]):
-        return
-    create_notification(
-        connection,
-        user_id=user_id,
-        gym_id=gym_id,
-        type="pr_achieved",
-        title="New personal record",
-        body=f"{workout_title}: {score_label}",
-        entity_type="daily_workout",
-        entity_id=workout_id,
-    )
+    from backend.db import Row
 
 
 def audit_log_payload(row: Row) -> dict[str, Any]:
@@ -77,12 +49,7 @@ def require_admin_analytics_window_days(value: Any) -> int:
 # re-export workout/programming payload helpers from workout_service
 
 daily_workout_payload = workout_service.daily_workout_payload
-workout_log_payload = workout_service.workout_log_payload
 exercise_payload = workout_service.exercise_payload
-benchmark_workout_payload = workout_service.benchmark_workout_payload
-personal_workout_payload = workout_service.personal_workout_payload
-get_workout_log_for_user = workout_service.get_workout_log_for_user
-refresh_pr_flags_for_workout_title = workout_service.refresh_pr_flags_for_workout_title
 DAILY_WORKOUT_COLUMNS = workout_service.DAILY_WORKOUT_COLUMNS
 replace_workout_sections = workout_service.replace_workout_sections
 fetch_workout_sections = workout_service.fetch_workout_sections

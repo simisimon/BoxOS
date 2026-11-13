@@ -21,20 +21,20 @@ class AppPill extends StatelessWidget {
   final bool dense;
 
   Color get _foreground => switch (intent) {
-        AppPillIntent.neutral => appMutedText,
-        AppPillIntent.primary => appPrimary,
-        AppPillIntent.success => appSuccess,
-        AppPillIntent.warning => appWarning,
-        AppPillIntent.danger => appDanger,
-      };
+    AppPillIntent.neutral => appMutedText,
+    AppPillIntent.primary => appPrimary,
+    AppPillIntent.success => appSuccess,
+    AppPillIntent.warning => appWarning,
+    AppPillIntent.danger => appDanger,
+  };
 
   Color get _background => switch (intent) {
-        AppPillIntent.neutral => appSurfaceAlt,
-        AppPillIntent.primary => appPrimarySoft,
-        AppPillIntent.success => const Color(0x333DDC97),
-        AppPillIntent.warning => const Color(0x33FFB454),
-        AppPillIntent.danger => appDangerSoft,
-      };
+    AppPillIntent.neutral => appSurfaceAlt,
+    AppPillIntent.primary => appPrimarySoft,
+    AppPillIntent.success => const Color(0x333DDC97),
+    AppPillIntent.warning => const Color(0x33FFB454),
+    AppPillIntent.danger => appDangerSoft,
+  };
 
   Color get _border => intent == AppPillIntent.neutral
       ? appBorder
@@ -59,13 +59,19 @@ class AppPill extends StatelessWidget {
             Icon(icon, size: dense ? 10 : 12, color: _foreground),
             const SizedBox(width: 4),
           ],
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              color: _foreground,
-              fontWeight: FontWeight.w800,
-              fontSize: dense ? 9.5 : 10.5,
-              letterSpacing: 1.2,
+          // Flexible + ellipsis so a pill in a narrow table cell clips
+          // instead of overflowing.
+          Flexible(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _foreground,
+                fontWeight: FontWeight.w800,
+                fontSize: dense ? 9.5 : 10.5,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
         ],

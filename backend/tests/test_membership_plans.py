@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from backend import settings
+from backend import db, settings
 from backend.tests.support import FastApiTestCase
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -79,8 +79,72 @@ class MembershipPlanTests(FastApiTestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["class"]["id"]
 
+    def run_sql(self, sql: str, params: tuple) -> None:
+        connection = db.get_connection()
+        try:
+            with connection:
+                connection.execute(sql, params)
+        finally:
+            connection.close()
+
     def book(self, class_id: int, headers: dict | None = None):
         return self.client.post("/schedule/bookings", headers=headers or self.athlete_headers, json={"class_id": class_id})
+
+    # --- member bookings (owner's member detail) -----------------------------
+
+    def test_owner_lists_a_members_bookings_and_waitlist(self) -> None:
+        day = self.next_week_day(1)
+        early = self.create_class(day, hour=8)
+        full = self.create_class(day, hour=18, capacity=1)
+        self.assertEqual(self.book(early).status_code, 201)
+        self.create_verified_user("first@boxos.app")
+        self.add_active_membership("first@boxos.app", self.gym_id)
+        self.assertEqual(self.book(full, self.auth_headers("first@boxos.app", "BoxOS123!")).status_code, 201)
+        waitlisted = self.client.post("/schedule/waitlist", headers=self.athlete_headers, json={"class_id": full})
+        self.assertEqual(waitlisted.status_code, 201, waitlisted.text)
+
+        response = self.client.get(f"/membership/members/{self.athlete_id}/bookings", headers=self.admin_headers)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        rows = response.json()["bookings"]
+        self.assertEqual([(r["class_id"], r["status"]) for r in rows], [(full, "waitlist"), (early, "booked")])
+        # Athletes cannot read another member's bookings.
+        self.assertEqual(
+            self.client.get(f"/membership/members/{self.athlete_id}/bookings", headers=self.athlete_headers).status_code,
+            403,
+        )
+
+    def test_owner_dashboard_counts_and_monthly_series(self) -> None:
+        plan = self.create_plan(UNLIMITED)
+        today = datetime.now(BERLIN).date()
+        # Ends within the next two weeks: counts as expiring.
+        self.assign(plan["id"], starts_on=today.isoformat())
+        self.run_sql(
+            "update member_plans set ends_on = ? where user_id = ?",
+            ((today + timedelta(days=5)).isoformat(), self.athlete_id),
+        )
+        # Joined long ago and never booked: at risk.
+        self.create_verified_user("quiet@boxos.app")
+        self.add_active_membership("quiet@boxos.app", self.gym_id)
+        self.run_sql(
+            "update gym_memberships set created_at = ? where user_id = ?",
+            ("2025-01-01T00:00:00+00:00", self.lookup_user_id("quiet@boxos.app")),
+        )
+
+        response = self.client.get("/admin/dashboard", headers=self.admin_headers)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["expiring_memberships"], 1)
+        self.assertEqual(body["members_at_risk"], 1)
+        months = body["months"]
+        self.assertEqual(len(months), 6)
+        self.assertEqual(months[-1]["month"], today.isoformat()[:7])
+        self.assertGreaterEqual(months[-1]["new_members"], 1)
+        self.assertEqual(months[-1]["new_memberships"], 1)
+        self.assertEqual(
+            self.client.get("/admin/dashboard", headers=self.athlete_headers).status_code, 403
+        )
 
     # --- plan definition ------------------------------------------------------
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
@@ -10,7 +9,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -18,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation, workout_service
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation
 
 logger = logging.getLogger("boxos.backend")
 
@@ -343,33 +342,22 @@ class AvatarUploadRequest(BaseModel):
     data_base64: str
 
 
-class ReactionRequest(BaseModel):
-    reaction: str
-
-
-class PersonalWorkoutRequest(BaseModel):
-    title: str
-    type: str
-    structure: Any
-
-
-class PersonalWorkoutDeleteRequest(BaseModel):
-    id: int
-
-
-class TrackingSessionRequest(BaseModel):
-    source_kind: str
-    source_key: str
-    workout_title: str
-    score_type: str
-    score_value: Any
-    notes_text: str | None = None
+class DailyWorkoutSetPayload(BaseModel):
+    reps: int
+    value: float | None = None
 
 
 class DailyWorkoutSectionPayload(BaseModel):
     title: str | None = None
     description: str
     score_type: str
+    # Structured block (docs/admin-ui-reference.md §3.1); all optional.
+    kind: str | None = None
+    exercise_name: str | None = None
+    set_unit: str | None = None
+    sets: list[DailyWorkoutSetPayload] | None = None
+    coach_notes: str | None = None
+    member_notes: str | None = None
 
 
 class DailyWorkoutRequest(BaseModel):
@@ -401,14 +389,6 @@ class DailyWorkoutPublishRequest(BaseModel):
 class DailyWorkoutDuplicateRequest(BaseModel):
     source_date: str
     target_date: str
-
-
-class WorkoutLogRequest(BaseModel):
-    workout_id: int
-    class_id: int | None = None
-    score_type: str
-    score_value: Any
-    notes_text: str | None = None
 
 
 class ChatMessageCreateRequest(BaseModel):
@@ -1407,35 +1387,7 @@ def list_role_users(
                      join class_schedules on class_schedules.id = class_bookings.class_schedule_id
                      where class_bookings.user_id = gym_memberships.user_id
                        and class_schedules.gym_id = gym_memberships.gym_id
-                   ) as last_booking_at,
-                   (
-                     select daily_workouts.title
-                     from workout_logs
-                     join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_title,
-                   (
-                     select workout_logs.score_label
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_score,
-                   (
-                     select workout_logs.updated_at
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_at
+                   ) as last_booking_at
             from gym_memberships
             join users on users.id = gym_memberships.user_id
             where gym_memberships.gym_id = ?
@@ -1576,35 +1528,7 @@ def assign_role(
                      join class_schedules on class_schedules.id = class_bookings.class_schedule_id
                      where class_bookings.user_id = gym_memberships.user_id
                        and class_schedules.gym_id = gym_memberships.gym_id
-                   ) as last_booking_at,
-                   (
-                     select daily_workouts.title
-                     from workout_logs
-                     join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_title,
-                   (
-                     select workout_logs.score_label
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_score,
-                   (
-                     select workout_logs.updated_at
-                     from workout_logs
-                     where workout_logs.user_id = gym_memberships.user_id
-                       and workout_logs.gym_id = gym_memberships.gym_id
-                       and workout_logs.is_pr = 1
-                     order by workout_logs.updated_at desc, workout_logs.id desc
-                     limit 1
-                   ) as newest_pr_at
+                   ) as last_booking_at
             from gym_memberships
             join users on users.id = gym_memberships.user_id
             where gym_memberships.id = ? and users.deleted_at is null
@@ -1835,7 +1759,7 @@ def create_membership_plan(
     session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     gym_id = session["active_gym_id"]
-    fields = plan_service.require_plan_fields(body.model_dump())
+    fields = plan_service.require_plan_fields(body.model_dump(), _class_type_names(session["active_gym_id"]))
     connection = db.get_connection()
     try:
         gym = plan_service.gym_plan_settings(connection, gym_id)
@@ -1890,7 +1814,7 @@ def update_membership_plan(
     """Edit a plan. Members already on the plan keep the price and limits they
     were given; the change applies to new requests and assignments."""
     gym_id = session["active_gym_id"]
-    fields = plan_service.require_plan_fields(body.model_dump())
+    fields = plan_service.require_plan_fields(body.model_dump(), _class_type_names(session["active_gym_id"]))
     connection = db.get_connection()
     try:
         gym = plan_service.gym_plan_settings(connection, gym_id)
@@ -2206,6 +2130,69 @@ def get_member_plans(
         }
     finally:
         connection.close()
+
+
+@app.get("/membership/members/{user_id}/bookings")
+def get_member_bookings(
+    user_id: int,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """A member's class bookings and waitlist entries, newest class first, for
+    the Classes tab of the owner's member detail. Read-only."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        _require_member(connection, gym_id, user_id)
+        return {"bookings": _booking_history(connection, gym_id, user_id)}
+    finally:
+        connection.close()
+
+
+@app.get("/membership/me/bookings")
+def get_my_bookings(
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """The signed-in member's bookings, waitlist entries and cancellations at
+    the active box, newest class first, for Profile › Bookings."""
+    connection = db.get_connection()
+    try:
+        return {"bookings": _booking_history(connection, session["active_gym_id"], session["user_id"])}
+    finally:
+        connection.close()
+
+
+def _booking_history(connection: Any, gym_id: int, user_id: int) -> list[dict[str, Any]]:
+    """Bookings (status booked / attended / no_show), waitlist entries
+    (`waitlist`) and cancellations (`cancelled`, with `cancelled_at`) of one
+    member at one box. A cancellation is left out once the member booked or
+    waitlisted the same class again."""
+    rows = connection.execute(
+        """
+        select class_schedules.id as class_id, class_schedules.title, class_schedules.class_type,
+               class_schedules.start_time, class_schedules.end_time,
+               trainers.display_name as trainer_name, entries.status, entries.cancelled_at
+        from (
+            select class_schedule_id, attendance_status as status, null as cancelled_at
+            from class_bookings where user_id = ?
+            union all
+            select class_schedule_id, 'waitlist' as status, null as cancelled_at
+            from class_waitlist_entries where user_id = ?
+            union all
+            select class_schedule_id, 'cancelled' as status, max(cancelled_at) as cancelled_at
+            from class_booking_cancellations
+            where user_id = ?
+              and class_schedule_id not in (select class_schedule_id from class_bookings where user_id = ?)
+              and class_schedule_id not in (select class_schedule_id from class_waitlist_entries where user_id = ?)
+            group by class_schedule_id
+        ) entries
+        join class_schedules on class_schedules.id = entries.class_schedule_id
+        left join users trainers on trainers.id = class_schedules.assigned_trainer_user_id
+        where class_schedules.gym_id = ?
+        order by class_schedules.start_time desc
+        """,
+        (user_id, user_id, user_id, user_id, user_id, gym_id),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 @app.post("/membership/extra-tokens", status_code=HTTPStatus.CREATED.value)
@@ -2756,10 +2743,23 @@ def _require_gym_trainer(connection: Any, gym_id: int, trainer_user_id: int | No
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Selected trainer is not active in this gym.")
 
 
-def _class_template_fields(body: ClassTemplateRequest) -> dict[str, Any]:
+def _class_type_names(gym_id: int) -> list[str]:
+    """Built-in class types plus the ones the gym's owner added."""
+    connection = db.get_connection()
+    try:
+        rows = connection.execute(
+            "select name from gym_class_types where gym_id = ? order by created_at, id",
+            (gym_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [*validation.BUILTIN_CLASS_TYPES, *(row["name"] for row in rows)]
+
+
+def _class_template_fields(body: ClassTemplateRequest, gym_id: int) -> dict[str, Any]:
     return {
         "title": validation.require_schedule_title(body.title),
-        "class_type": validation.require_class_type(body.class_type),
+        "class_type": validation.require_class_type(body.class_type, _class_type_names(gym_id)),
         "weekdays": validation.require_weekdays(body.weekdays),
         "start_local_time": validation.require_local_time(body.start_time),
         "duration_minutes": validation.require_duration_minutes(body.duration_minutes),
@@ -2795,9 +2795,9 @@ def list_class_templates(
 @app.post("/schedule/templates", status_code=HTTPStatus.CREATED.value)
 def create_class_template(
     body: ClassTemplateRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
-    fields = _class_template_fields(body)
+    fields = _class_template_fields(body, session["active_gym_id"])
     connection = db.get_connection()
     try:
         gym_timezone = _gym_timezone(connection, session["active_gym_id"])
@@ -2851,10 +2851,10 @@ def create_class_template(
 @app.patch("/schedule/templates")
 def update_class_template(
     body: UpdateClassTemplateRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     template_id = validation.require_user_id(body.id)
-    fields = _class_template_fields(body)
+    fields = _class_template_fields(body, session["active_gym_id"])
     connection = db.get_connection()
     try:
         existing = connection.execute(
@@ -2915,7 +2915,7 @@ def update_class_template(
 @app.delete("/schedule/templates")
 def delete_class_template(
     body: EntityIdRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     template_id = body.id
     connection = db.get_connection()
@@ -2979,10 +2979,10 @@ def list_schedule_trainers(
 @app.post("/schedule/classes", status_code=HTTPStatus.CREATED.value)
 def create_schedule_class(
     body: ScheduleClassRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     title = validation.require_schedule_title(body.title)
-    class_type = validation.require_class_type(body.class_type)
+    class_type = validation.require_class_type(body.class_type, _class_type_names(session["active_gym_id"]))
     start_time = validation.require_future_datetime(body.start_time, label="Start time")
     duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
     capacity = validation.require_capacity(body.capacity)
@@ -3085,11 +3085,11 @@ def create_schedule_class(
 @app.patch("/schedule/classes")
 def update_schedule_class(
     body: UpdateScheduleClassRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, Any]:
     schedule_id = validation.require_user_id(body.id)
     title = validation.require_schedule_title(body.title)
-    class_type = validation.require_class_type(body.class_type)
+    class_type = validation.require_class_type(body.class_type, _class_type_names(session["active_gym_id"]))
     start_time = validation.require_future_datetime(body.start_time, label="Start time")
     duration_minutes = validation.require_schedule_duration_minutes(body.model_dump())
     capacity = validation.require_capacity(body.capacity)
@@ -3181,7 +3181,7 @@ def update_schedule_class(
 @app.delete("/schedule/classes")
 def delete_schedule_class(
     body: ScheduleClassDeleteRequest,
-    session: dict[str, Any] = Depends(require_schedule_manager_session),
+    session: dict[str, Any] = Depends(require_admin_gym_session),
 ) -> dict[str, bool | str]:
     schedule_id = body.id
     connection = db.get_connection()
@@ -3270,12 +3270,27 @@ def create_class_booking(
         connection.close()
 
 
+class CancelBookingRequest(BaseModel):
+    class_id: int
+    # The owner removes someone else's booking (e.g. they called to
+    # cancel); members always cancel their own.
+    user_id: int | None = None
+
+
 @app.delete("/schedule/bookings")
 def delete_class_booking(
-    body: ClassIdRequest,
+    body: CancelBookingRequest,
     session: dict[str, Any] = Depends(require_active_gym_member_session),
 ) -> dict[str, str]:
     schedule_id = body.class_id
+    user_id = session["user_id"] if body.user_id is None else body.user_id
+    removing_other = user_id != session["user_id"]
+    # Only the owner takes members off a class; trainers keep attendance.
+    if removing_other and session["role"] != "admin":
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN.value,
+            detail="The owner role is required for this action.",
+        )
     connection = db.get_connection()
     try:
         schedule_row = connection.execute(
@@ -3288,14 +3303,26 @@ def delete_class_booking(
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="Only future classes can be cancelled.")
         existing_booking = connection.execute(
             "select id from class_bookings where class_schedule_id = ? and user_id = ?",
-            (schedule_id, session["user_id"]),
+            (schedule_id, user_id),
         ).fetchone()
         if existing_booking is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="You do not have a booking for this class.")
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND.value,
+                detail="This member has no booking for this class."
+                if removing_other
+                else "You do not have a booking for this class.",
+            )
         with connection:
             connection.execute(
                 "delete from class_bookings where class_schedule_id = ? and user_id = ?",
-                (schedule_id, session["user_id"]),
+                (schedule_id, user_id),
+            )
+            connection.execute(
+                """
+                insert into class_booking_cancellations (class_schedule_id, user_id, cancelled_at, cancelled_by_user_id)
+                values (?, ?, ?, ?)
+                """,
+                (schedule_id, user_id, security.isoformat(security.now_utc()), session["user_id"]),
             )
             promoted_user_id = plan_service.promote_next_eligible_waitlisted_user(connection, class_schedule_id=schedule_id)
             if promoted_user_id is not None:
@@ -4245,370 +4272,6 @@ def import_daily_workouts(
         connection.close()
 
 
-@app.get("/logbook/entries")
-def list_workout_logs(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select
-              workout_logs.id,
-              workout_logs.daily_workout_id,
-              workout_logs.class_schedule_id,
-              workout_logs.score_type,
-              workout_logs.score_value,
-              workout_logs.score_label,
-              workout_logs.notes_text,
-              workout_logs.created_at,
-              workout_logs.updated_at,
-              daily_workouts.scheduled_date,
-              daily_workouts.title as workout_title,
-              class_schedules.title as class_title,
-              class_schedules.start_time as class_start_time,
-              workout_logs.is_pr,
-              workout_logs.pr_rank
-            from workout_logs
-            join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-            left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
-            where workout_logs.user_id = ? and workout_logs.gym_id = ?
-            order by daily_workouts.scheduled_date desc, workout_logs.updated_at desc
-            """,
-            (session["user_id"], session["active_gym_id"]),
-        ).fetchall()
-        entries = [programming_service.workout_log_payload(row) for row in rows]
-        summary = workout_service.list_reaction_summary(
-            connection,
-            workout_log_ids=[row["id"] for row in entries],
-            viewer_user_id=session["user_id"],
-        )
-        workout_service.attach_reaction_summary(entries, summary)
-        return {"entries": entries}
-    finally:
-        connection.close()
-
-
-@app.post("/logbook/entries/{entry_id}/reactions", status_code=HTTPStatus.CREATED.value)
-def set_workout_log_reaction(
-    entry_id: int,
-    body: ReactionRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    reaction = (body.reaction or "").strip().lower()
-    if reaction not in workout_service.SUPPORTED_REACTIONS:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value,
-            detail="Unsupported reaction.",
-        )
-    connection = db.get_connection()
-    try:
-        entry = connection.execute(
-            "select id, gym_id from workout_logs where id = ?",
-            (entry_id,),
-        ).fetchone()
-        if entry is None or entry["gym_id"] != session["active_gym_id"]:
-            # Same-gym scope: scoped lookup keeps members from reacting to logs
-            # in gyms they don't belong to.
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Log not found.")
-        timestamp = security.isoformat(security.now_utc())
-        with connection:
-            # Upsert: a single user's reaction is replaced rather than stacked
-            # so the kind always reflects their latest choice.
-            connection.execute(
-                """
-                insert into workout_log_reactions (workout_log_id, user_id, gym_id, reaction, created_at)
-                values (?, ?, ?, ?, ?)
-                on conflict (workout_log_id, user_id) do update set
-                  reaction = excluded.reaction
-                """,
-                (entry_id, session["user_id"], session["active_gym_id"], reaction, timestamp),
-            )
-        summary = workout_service.list_reaction_summary(
-            connection,
-            workout_log_ids=[entry_id],
-            viewer_user_id=session["user_id"],
-        )
-        return {"summary": summary.get(entry_id, {"reaction_count": 0, "reactions": {}, "my_reaction": reaction})}
-    finally:
-        connection.close()
-
-
-@app.delete("/logbook/entries/{entry_id}/reactions")
-def clear_workout_log_reaction(
-    entry_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        entry = connection.execute(
-            "select id, gym_id from workout_logs where id = ?",
-            (entry_id,),
-        ).fetchone()
-        if entry is None or entry["gym_id"] != session["active_gym_id"]:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Log not found.")
-        with connection:
-            connection.execute(
-                "delete from workout_log_reactions where workout_log_id = ? and user_id = ?",
-                (entry_id, session["user_id"]),
-            )
-        summary = workout_service.list_reaction_summary(
-            connection,
-            workout_log_ids=[entry_id],
-            viewer_user_id=session["user_id"],
-        )
-        return {"summary": summary.get(entry_id, {"reaction_count": 0, "reactions": {}, "my_reaction": None})}
-    finally:
-        connection.close()
-
-
-@app.post("/logbook/entries")
-def submit_workout_log(
-    body: WorkoutLogRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
-) -> dict[str, Any]:
-    workout_id = validation.require_user_id(body.workout_id)
-    class_id = validation.require_optional_user_id(body.class_id)
-    score_type, score_value, score_label = validation.require_score(body.score_type, body.score_value)
-    notes_text = validation.require_result_notes(body.notes_text)
-    connection = db.get_connection()
-    try:
-        workout = connection.execute(
-            "select id, gym_id, scheduled_date, title, status from daily_workouts where id = ? and gym_id = ?",
-            (workout_id, session["active_gym_id"]),
-        ).fetchone()
-        if workout is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-        if workout["status"] != "published" and not programming_service.can_view_drafts(session["role"]):
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-        if class_id is not None:
-            class_row = connection.execute(
-                "select id from class_schedules where id = ? and gym_id = ?",
-                (class_id, session["active_gym_id"]),
-            ).fetchone()
-            if class_row is None:
-                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class not found.")
-        timestamp = security.isoformat(security.now_utc())
-        with connection:
-            existing = connection.execute(
-                "select id from workout_logs where user_id = ? and daily_workout_id = ?",
-                (session["user_id"], workout_id),
-            ).fetchone()
-            if existing is None:
-                connection.execute(
-                    """
-                    insert into workout_logs (
-                      user_id, gym_id, daily_workout_id, class_schedule_id, score_type,
-                      score_value, score_label, notes_text, created_at, updated_at
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (session["user_id"], session["active_gym_id"], workout_id, class_id, score_type, score_value, score_label, notes_text, timestamp, timestamp),
-                )
-                action = "workout_log_created"
-            else:
-                connection.execute(
-                    """
-                    update workout_logs
-                    set class_schedule_id = ?, score_type = ?, score_value = ?, score_label = ?, notes_text = ?, updated_at = ?
-                    where id = ?
-                    """,
-                    (class_id, score_type, score_value, score_label, notes_text, timestamp, existing["id"]),
-                )
-                action = "workout_log_updated"
-            programming_service.refresh_pr_flags_for_workout_title(connection, user_id=session["user_id"], gym_id=session["active_gym_id"], workout_title=workout["title"], score_type=score_type)
-            row = connection.execute(
-                """
-                select
-                  workout_logs.id,
-                  workout_logs.daily_workout_id,
-                  workout_logs.class_schedule_id,
-                  workout_logs.score_type,
-                  workout_logs.score_value,
-                  workout_logs.score_label,
-                  workout_logs.notes_text,
-                  workout_logs.created_at,
-                  workout_logs.updated_at,
-                  daily_workouts.scheduled_date,
-                  daily_workouts.title as workout_title,
-                  class_schedules.title as class_title,
-                  class_schedules.start_time as class_start_time,
-                  workout_logs.is_pr,
-                  workout_logs.pr_rank
-                from workout_logs
-                join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-                left join class_schedules on class_schedules.id = workout_logs.class_schedule_id
-                where workout_logs.user_id = ? and workout_logs.daily_workout_id = ?
-                """,
-                (session["user_id"], workout_id),
-            ).fetchone()
-            if row is not None and row["is_pr"]:
-                programming_service.create_pr_achievement_notification(connection, user_id=session["user_id"], gym_id=session["active_gym_id"], workout_id=workout_id, workout_title=workout["title"], score_label=score_label)
-            audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], target_user_id=session["user_id"], action=action, entity_type="workout_log", entity_id=row["id"] if row is not None else None, details={"workout_id": workout_id, "score_type": score_type, "score_label": score_label})
-        if row is None:
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Workout log could not be saved.")
-        return {"entry": programming_service.workout_log_payload(row)}
-    finally:
-        connection.close()
-
-
-@app.get("/personal-workouts")
-def list_personal_workouts(session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select id, type, title, structure_json, created_at, updated_at
-            from personal_workouts
-            where user_id = ?
-            order by updated_at desc
-            """,
-            (session["user_id"],),
-        ).fetchall()
-        return {"workouts": [programming_service.personal_workout_payload(row) for row in rows]}
-    finally:
-        connection.close()
-
-
-@app.post("/personal-workouts")
-def create_personal_workout(body: PersonalWorkoutRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    title = validation.require_personal_workout_title(body.title)
-    workout_type = validation.require_personal_workout_type(body.type)
-    structure = validation.require_personal_workout_structure(body.structure)
-    timestamp = security.isoformat(security.now_utc())
-    connection = db.get_connection()
-    try:
-        with connection:
-            cursor = connection.execute(
-                """
-                insert into personal_workouts (
-                  user_id, type, title, structure_json, created_at, updated_at
-                ) values (?, ?, ?, ?, ?, ?)
-                returning id
-                """,
-                (
-                    session["user_id"],
-                    workout_type,
-                    title,
-                    json.dumps(structure),
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            new_workout_id = int(cursor.fetchone()["id"])
-            row = connection.execute(
-                """
-                select id, type, title, structure_json, created_at, updated_at
-                from personal_workouts
-                where id = ?
-                """,
-                (new_workout_id,),
-            ).fetchone()
-        return {"workout": programming_service.personal_workout_payload(row)}
-    finally:
-        connection.close()
-
-
-@app.delete("/personal-workouts")
-def delete_personal_workout(body: PersonalWorkoutDeleteRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    workout_id = validation.require_personal_workout_id(body.id)
-    connection = db.get_connection()
-    try:
-        with connection:
-            existing = connection.execute(
-                "select id from personal_workouts where id = ? and user_id = ?",
-                (workout_id, session["user_id"]),
-            ).fetchone()
-            if existing is None:
-                raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
-            connection.execute("delete from personal_workouts where id = ?", (workout_id,))
-        return {"deleted": True}
-    finally:
-        connection.close()
-
-
-def _tracking_session_payload(row: Any) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "source_kind": row["source_kind"],
-        "source_key": row["source_key"],
-        "workout_title": row["workout_title"],
-        "score_type": row["score_type"],
-        "score_value": row["score_value"],
-        "score_label": row["score_label"],
-        "notes_text": row["notes_text"],
-        "created_at": row["created_at"],
-    }
-
-
-@app.get("/tracking-sessions")
-def list_tracking_sessions(
-    source_kind: str,
-    source_key: str,
-    limit: int = 20,
-    session: dict[str, Any] = Depends(require_session),
-) -> dict[str, Any]:
-    kind = validation.require_tracking_source_kind(source_kind)
-    key = validation.require_tracking_source_key(source_key)
-    capped_limit = max(1, min(limit, 100))
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select id, source_kind, source_key, workout_title, score_type,
-                   score_value, score_label, notes_text, created_at
-            from tracking_sessions
-            where user_id = ? and source_kind = ? and source_key = ?
-            order by created_at desc, id desc
-            limit ?
-            """,
-            (session["user_id"], kind, key, capped_limit),
-        ).fetchall()
-        return {"sessions": [_tracking_session_payload(row) for row in rows]}
-    finally:
-        connection.close()
-
-
-@app.post("/tracking-sessions", status_code=HTTPStatus.CREATED.value)
-def create_tracking_session(
-    body: TrackingSessionRequest,
-    session: dict[str, Any] = Depends(require_session),
-) -> dict[str, Any]:
-    kind = validation.require_tracking_source_kind(body.source_kind)
-    key = validation.require_tracking_source_key(body.source_key)
-    title = validation.require_tracking_workout_title(body.workout_title)
-    score_type, score_value, score_label = validation.require_tracking_score(
-        body.score_type, body.score_value
-    )
-    notes = validation.require_tracking_notes(body.notes_text)
-    timestamp = security.isoformat(security.now_utc())
-    connection = db.get_connection()
-    try:
-        with connection:
-            cursor = connection.execute(
-                """
-                insert into tracking_sessions (
-                  user_id, source_kind, source_key, workout_title,
-                  score_type, score_value, score_label, notes_text, created_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                returning id, source_kind, source_key, workout_title, score_type,
-                          score_value, score_label, notes_text, created_at
-                """,
-                (
-                    session["user_id"],
-                    kind,
-                    key,
-                    title,
-                    score_type,
-                    score_value,
-                    score_label,
-                    notes,
-                    timestamp,
-                ),
-            )
-            row = cursor.fetchone()
-        return {"session": _tracking_session_payload(row)}
-    finally:
-        connection.close()
-
-
 @app.get("/exercises")
 def list_exercises(
     query: str = "",
@@ -4643,22 +4306,6 @@ def list_exercises(
                 (normalized_limit,),
             ).fetchall()
         return {"exercises": [programming_service.exercise_payload(row) for row in rows]}
-    finally:
-        connection.close()
-
-
-@app.get("/benchmark-workouts")
-def list_benchmark_workouts(_: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            """
-            select id, name, category, structure_json
-            from benchmark_workouts
-            order by sort_order, name
-            """
-        ).fetchall()
-        return {"workouts": [programming_service.benchmark_workout_payload(row) for row in rows]}
     finally:
         connection.close()
 
@@ -4902,6 +4549,194 @@ def admin_analytics_overview(
         connection.close()
 
 
+AT_RISK_DAYS = 21
+EXPIRING_DAYS = 14
+
+
+@app.get("/admin/dashboard")
+def admin_dashboard(session: dict[str, Any] = Depends(require_admin_gym_session)) -> dict[str, Any]:
+    """Owner dashboard (docs/admin-ui-reference.md §1): headline member counts
+    and month-by-month series for the last six calendar months. Read-only."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    # shortcut: months are cut at the gym's local "today", but rows are
+    # bucketed by their UTC timestamp, so a class in the first hours of a
+    # month can count for the previous one; convert in SQL if that matters.
+    today = schedule_service.local_today(_gym_timezone(connection, gym_id))
+    # First day of the month five months back, then six month keys "YYYY-MM".
+    first = date(today.year, today.month, 1)
+    months = []
+    for _ in range(6):
+        months.insert(0, first)
+        first = date(first.year - (first.month == 1), (first.month - 2) % 12 + 1, 1)
+    keys = [month.isoformat()[:7] for month in months]
+    since = months[0].isoformat()
+    at_risk_cutoff = (today - timedelta(days=AT_RISK_DAYS)).isoformat()
+    now = security.isoformat(security.now_utc())
+    try:
+        at_risk = connection.execute(
+            """
+            select count(*) as count from gym_memberships
+            where gym_id = ? and status = 'active' and active_role = 'athlete'
+              and substr(created_at, 1, 10) < ?
+              and not exists (
+                select 1 from class_bookings
+                join class_schedules on class_schedules.id = class_bookings.class_schedule_id
+                where class_bookings.user_id = gym_memberships.user_id and class_schedules.gym_id = ?
+                  and substr(class_schedules.start_time, 1, 10) >= ?
+                  -- Only classes that happened and that they showed up for.
+                  and class_schedules.start_time <= ? and class_bookings.attendance_status <> 'no_show'
+              )
+            """,
+            (gym_id, at_risk_cutoff, gym_id, at_risk_cutoff, now),
+        ).fetchone()["count"]
+        expiring = connection.execute(
+            """
+            select count(*) as count from member_plans
+            where gym_id = ? and status = 'active' and ends_on between ? and ?
+            """,
+            (gym_id, today.isoformat(), (today + timedelta(days=EXPIRING_DAYS)).isoformat()),
+        ).fetchone()["count"]
+
+        def per_month(sql: str, params: tuple) -> dict[str, dict[str, Any]]:
+            return {row["month"]: dict(row) for row in connection.execute(sql, params).fetchall()}
+
+        churned = per_month(
+            """
+            select substr(updated_at, 1, 7) as month, count(*) as count from gym_memberships
+            where gym_id = ? and status = 'removed' and substr(updated_at, 1, 10) >= ?
+            group by substr(updated_at, 1, 7)
+            """,
+            (gym_id, since),
+        )
+        new_members = per_month(
+            """
+            select substr(created_at, 1, 7) as month, count(*) as count from gym_memberships
+            where gym_id = ? and active_role = 'athlete' and substr(created_at, 1, 10) >= ?
+            group by substr(created_at, 1, 7)
+            """,
+            (gym_id, since),
+        )
+        new_memberships = per_month(
+            """
+            select substr(starts_on, 1, 7) as month, count(*) as count from member_plans
+            where gym_id = ? and status in ('active', 'ended') and starts_on >= ?
+            group by substr(starts_on, 1, 7)
+            """,
+            (gym_id, since),
+        )
+        classes = per_month(
+            """
+            select per_class.month, coalesce(sum(per_class.capacity), 0) as capacity,
+              coalesce(sum(per_class.bookings), 0) as bookings, coalesce(sum(per_class.attended), 0) as attended
+            from (
+              select substr(class_schedules.start_time, 1, 7) as month, class_schedules.capacity as capacity,
+                count(class_bookings.id) as bookings,
+                coalesce(sum(case when class_bookings.attendance_status = 'attended' then 1 else 0 end), 0) as attended
+              from class_schedules
+              left join class_bookings on class_bookings.class_schedule_id = class_schedules.id
+              where class_schedules.gym_id = ? and substr(class_schedules.start_time, 1, 10) between ? and ?
+              group by class_schedules.id, substr(class_schedules.start_time, 1, 7), class_schedules.capacity
+            ) per_class
+            group by per_class.month
+            """,
+            (gym_id, since, today.isoformat()),
+        )
+        series = []
+        for key in keys:
+            month_classes = classes.get(key, {})
+            capacity = int(month_classes.get("capacity") or 0)
+            bookings = int(month_classes.get("bookings") or 0)
+            series.append({
+                "month": key,
+                "new_members": int(new_members.get(key, {}).get("count") or 0),
+                "new_memberships": int(new_memberships.get(key, {}).get("count") or 0),
+                "churned_members": int(churned.get(key, {}).get("count") or 0),
+                "registrations": bookings,
+                "attended": int(month_classes.get("attended") or 0),
+                # Percent of booked seats over offered seats, 0–100.
+                "utilization_percent": 0.0 if capacity <= 0 else round(bookings * 100 / capacity, 1),
+            })
+        return {
+            "members_at_risk": int(at_risk),
+            "at_risk_days": AT_RISK_DAYS,
+            "expiring_memberships": int(expiring),
+            "expiring_days": EXPIRING_DAYS,
+            "months": series,
+        }
+    finally:
+        connection.close()
+
+
+class NewClassTypeRequest(BaseModel):
+    name: str
+    color: str = "info"
+    default_capacity: int = 12
+
+
+def _class_type_rows(connection: Any, gym_id: int) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "select id, name, color, default_capacity from gym_class_types where gym_id = ? order by created_at, id",
+        (gym_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get("/class-types")
+def list_class_types(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
+    """The gym's own class types; the four built-ins are fixed in the app."""
+    connection = db.get_connection()
+    try:
+        return {"class_types": _class_type_rows(connection, session["active_gym_id"])}
+    finally:
+        connection.close()
+
+
+@app.post("/class-types", status_code=HTTPStatus.CREATED.value)
+def create_class_type(
+    body: NewClassTypeRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    gym_id = session["active_gym_id"]
+    fields = validation.require_new_class_type(body.model_dump(), _class_type_names(gym_id))
+    connection = db.get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "insert into gym_class_types (gym_id, name, color, default_capacity, created_at) values (?, ?, ?, ?, ?)",
+                (gym_id, fields["name"], fields["color"], fields["default_capacity"], security.isoformat(security.now_utc())),
+            )
+        return {"class_types": _class_type_rows(connection, gym_id)}
+    finally:
+        connection.close()
+
+
+class ClassTypeIdRequest(BaseModel):
+    id: int
+
+
+@app.delete("/class-types")
+def delete_class_type(
+    body: ClassTypeIdRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Removes a custom type from the pickers. Classes and plans that use it
+    keep its name."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        with connection:
+            deleted = connection.execute(
+                "delete from gym_class_types where id = ? and gym_id = ? returning id",
+                (body.id, gym_id),
+            ).fetchone()
+        if deleted is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Class type not found.")
+        return {"class_types": _class_type_rows(connection, gym_id)}
+    finally:
+        connection.close()
+
+
 @app.get("/community/dashboard")
 def get_community_dashboard(
     session: dict[str, Any] = Depends(require_active_gym_member_session),
@@ -4912,7 +4747,6 @@ def get_community_dashboard(
     because the community view is a shared owner/trainer/member space.
     """
     now = security.now_utc()
-    thirty_days_ago = security.isoformat(now - timedelta(days=30))
     seven_days_ago = security.isoformat(now - timedelta(days=7))
     connection = db.get_connection()
     try:
@@ -4935,16 +4769,6 @@ def get_community_dashboard(
             """,
             (session["active_gym_id"],),
         ).fetchone()
-        pr_count_row = connection.execute(
-            """
-            select count(*) as count
-            from workout_logs
-            where gym_id = ?
-              and is_pr = 1
-              and updated_at >= ?
-            """,
-            (session["active_gym_id"], thirty_days_ago),
-        ).fetchone()
         message_count_row = connection.execute(
             """
             select count(*) as count
@@ -4955,50 +4779,15 @@ def get_community_dashboard(
             """,
             (session["active_gym_id"], seven_days_ago),
         ).fetchone()
-        pr_rows = connection.execute(
-            """
-            select
-              workout_logs.user_id,
-              users.display_name,
-              users.nickname,
-              daily_workouts.title as workout_title,
-              workout_logs.score_label,
-              workout_logs.updated_at
-            from workout_logs
-            join users on users.id = workout_logs.user_id
-            join gym_memberships on gym_memberships.user_id = workout_logs.user_id
-              and gym_memberships.gym_id = workout_logs.gym_id
-            join daily_workouts on daily_workouts.id = workout_logs.daily_workout_id
-            where workout_logs.gym_id = ?
-              and workout_logs.is_pr = 1
-              and users.deleted_at is null
-              and gym_memberships.status = 'active'
-            order by workout_logs.updated_at desc, workout_logs.id desc
-            limit 5
-            """,
-            (session["active_gym_id"],),
-        ).fetchall()
         return {
             "stats": {
                 "active_members": int(stats_row["active_members"] if stats_row else 0),
                 "active_trainers": int(stats_row["active_trainers"] if stats_row else 0),
                 "owners": int(stats_row["owners"] if stats_row else 0),
-                "prs_last_30_days": int(pr_count_row["count"] if pr_count_row else 0),
                 "messages_last_7_days": int(
                     message_count_row["count"] if message_count_row else 0
                 ),
             },
-            "newest_prs": [
-                {
-                    "user_id": int(row["user_id"]),
-                    "display_name": row["display_name"],
-                    "nickname": row["nickname"],
-                    "workout_title": row["workout_title"],
-                    "score_label": row["score_label"],
-                    "updated_at": row["updated_at"],
-                }
-                for row in pr_rows
-            ],
         }
     finally:
         connection.close()

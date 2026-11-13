@@ -81,7 +81,9 @@ def require_price_cents(value: Any) -> int:
     return _int_field(value, "Price", minimum=0, maximum=MAX_PRICE_CENTS)
 
 
-def require_plan_fields(payload: dict[str, Any]) -> dict[str, Any]:
+def require_plan_fields(
+    payload: dict[str, Any], class_types: Any = CLASS_TYPES
+) -> dict[str, Any]:
     """Validate a full plan definition and return the columns to store."""
     name = str(payload.get("name") or "").strip()
     if not name:
@@ -119,12 +121,12 @@ def require_plan_fields(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_types, list):
         raise ApiError(HTTPStatus.BAD_REQUEST, "Allowed class types must be a list.")
     requested_types = {str(item).strip() for item in raw_types}
-    unknown = requested_types - set(CLASS_TYPES)
+    unknown = requested_types - set(class_types)
     if unknown:
-        raise ApiError(HTTPStatus.BAD_REQUEST, "Class types must be WOD, Open Gym, Skill, or PT.")
-    # Canonical order; all four selected is stored as "all" (empty list).
-    allowed_class_types = [item for item in CLASS_TYPES if item in requested_types]
-    if len(allowed_class_types) == len(CLASS_TYPES):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Unknown class type.")
+    # Canonical order; every type selected is stored as "all" (empty list).
+    allowed_class_types = [item for item in class_types if item in requested_types]
+    if len(allowed_class_types) == len(class_types):
         allowed_class_types = []
 
     return {
@@ -169,7 +171,10 @@ def _class_types(row: Row) -> list[str]:
         decoded = json.loads(row["allowed_class_types_json"] or "[]")
     except (TypeError, ValueError):
         decoded = []
-    return [item for item in CLASS_TYPES if item in decoded]
+    # Built-ins in their usual order, then the gym's own types.
+    return [item for item in CLASS_TYPES if item in decoded] + [
+        item for item in decoded if item not in CLASS_TYPES
+    ]
 
 
 def plan_payload(row: Row, *, currency: str) -> dict[str, Any]:

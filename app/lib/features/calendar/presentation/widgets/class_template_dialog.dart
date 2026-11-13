@@ -1,6 +1,7 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
@@ -19,8 +20,8 @@ Future<void> showClassTemplateDialog(
   ClassTemplate? existing,
   int? initialWeekday,
 }) async {
-  final message = await showDialog<String>(
-    context: context,
+  final message = await showAppSidePanel<String>(
+    context,
     builder: (_) =>
         ClassTemplateDialog(existing: existing, initialWeekday: initialWeekday),
   );
@@ -72,7 +73,8 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
   void initState() {
     super.initState();
     final existing = widget.existing;
-    _type = existing?.classType ?? ClassType.wod;
+    // Re-resolve: the model may predate the custom types loading.
+    _type = ClassType.fromWire(existing?.classType.wireValue ?? '');
     _weekdays = {
       ...?existing?.weekdays,
       if (existing == null) widget.initialWeekday ?? 1,
@@ -87,7 +89,7 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
       text: existing?.title ?? _type.defaultTitle,
     );
     _capacityController = TextEditingController(
-      text: '${existing?.capacity ?? 12}',
+      text: '${existing?.capacity ?? _type.defaultCapacity}',
     );
     _trainersFuture = ref.read(scheduleRepositoryProvider).fetchTrainers();
   }
@@ -104,6 +106,9 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
       // Follow the type with the title until the owner has typed their own.
       if (_titleController.text.trim() == _type.defaultTitle) {
         _titleController.text = type.defaultTitle;
+      }
+      if (_capacityController.text.trim() == '${_type.defaultCapacity}') {
+        _capacityController.text = '${type.defaultCapacity}';
       }
       _type = type;
     });
@@ -205,8 +210,8 @@ class _ClassTemplateDialogState extends ConsumerState<ClassTemplateDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AppFormDialog(
-      title: _isCreating ? 'Add class' : 'Edit class',
+    return AppSidePanel(
+      title: _isCreating ? 'Create recurring classes' : 'Edit schedule',
       subtitle: _isCreating
           ? null
           : 'Changes apply to all upcoming dates. Booked dates keep their time.',

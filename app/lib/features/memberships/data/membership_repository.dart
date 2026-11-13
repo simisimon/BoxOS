@@ -1,4 +1,5 @@
 import 'package:app/core/network/dio_client.dart';
+import 'package:app/features/members/domain/member_booking.dart';
 import 'package:app/features/auth/data/session/secure_token_storage.dart';
 import 'package:app/features/auth/data/session/token_storage.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
@@ -15,6 +16,12 @@ final membershipRepositoryProvider = Provider<MembershipRepository>((ref) {
 /// Open plan requests of the active box (owners only). Counted into the
 /// Members nav badge next to join requests.
 /// Errors count as "none" so the badge never blocks or retries the shell.
+/// The signed-in athlete's bookings, waitlist spots and cancellations
+/// (Profile › Bookings).
+final myBookingsProvider = FutureProvider.autoDispose<List<MemberBooking>>(
+  (ref) => ref.read(membershipRepositoryProvider).fetchMyBookings(),
+);
+
 final pendingPlanRequestsProvider =
     FutureProvider.autoDispose<List<MemberPlan>>((ref) async {
       try {
@@ -215,6 +222,29 @@ class MembershipRepository {
           ?.toInt(),
       currency: response.data?['currency'] as String? ?? 'EUR',
     );
+  }
+
+  /// The signed-in member's own bookings, waitlist spots and cancellations.
+  Future<List<MemberBooking>> fetchMyBookings() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/membership/me/bookings',
+      options: await _options(),
+    );
+    return [
+      for (final row in response.data?['bookings'] as List? ?? const [])
+        MemberBooking.fromJson(row as Map<String, dynamic>),
+    ];
+  }
+
+  Future<List<MemberBooking>> fetchMemberBookings(int userId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/membership/members/$userId/bookings',
+      options: await _options(),
+    );
+    return [
+      for (final row in response.data?['bookings'] as List? ?? const [])
+        MemberBooking.fromJson(row as Map<String, dynamic>),
+    ];
   }
 
   /// Owner adds [tokens] extra tokens; [priceCents] is the total paid

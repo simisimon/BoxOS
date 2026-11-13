@@ -14,28 +14,26 @@ void main() {
       role: UserRole.admin,
     );
 
-    test('the athlete tab set fits the five-tab bottom-nav budget', () {
-      expect(athlete().length, 5);
+    test('the athlete tab set fits the bottom-nav budget', () {
+      // Announcements are on Home, Messages is the box chat.
       expect(athlete().map((d) => d.label), [
         'Home',
-        'My Box',
-        'Community',
-        'Logbook',
+        'Classes',
+        'Messages',
         'Profile',
       ]);
     });
 
-    test('the owner tab set puts Settings between Logbook and Profile', () {
-      // Box settings left the profile for a tab of its own, so the owner set
-      // is two over the five-tab bottom-nav budget. One goes when the logbook
-      // rebuild moves athlete history into the member detail.
-      expect(owner().length, 7);
+    test('the owner tab set follows the admin reference', () {
+      // The box chat is a tab of Messages; there is no logbook.
       expect(owner().map((d) => d.label), [
         'Dashboard',
-        'Schedule',
+        'Classes',
+        'Programs',
         'Members',
-        'Community',
-        'Logbook',
+        'Reports',
+        'Messages',
+        'Memberships',
         'Settings',
         'Profile',
       ]);
@@ -57,71 +55,36 @@ void main() {
       );
     });
 
-    test('Tracking has no tab of its own', () {
-      expect(
-        athlete().map((d) => d.branchIndex),
-        isNot(contains(kTrackingBranch)),
-      );
-      expect(
-        owner().map((d) => d.branchIndex),
-        isNot(contains(kTrackingBranch)),
-      );
-      expect(athlete().map((d) => d.label), isNot(contains('Tracking')));
-      expect(owner().map((d) => d.label), isNot(contains('Tracking')));
-    });
-
-    test('both roles keep the logbook, which is where tracking is entered', () {
-      expect(athlete().map((d) => d.branchIndex), contains(kLogbookBranch));
-      expect(owner().map((d) => d.branchIndex), contains(kLogbookBranch));
-    });
-
-    test('a trainer sees the athlete tab set', () {
+    test('a trainer coaches and programs, without the business pages', () {
       final trainer = destinationsForView(
         accountType: AccountType.athlete,
         role: UserRole.trainer,
       );
-      expect(trainer.map((d) => d.label), athlete().map((d) => d.label));
+      expect(trainer.map((d) => d.label), [
+        'Dashboard',
+        'Classes',
+        'Programs',
+        'Messages',
+        'Profile',
+      ]);
+      expect(
+        trainer.map((d) => d.branchIndex),
+        isNot(contains(kMembersBranch)),
+      );
     });
 
     test('every destination points at a distinct branch', () {
-      for (final set in [athlete(), owner()]) {
+      for (final set in [
+        athlete(),
+        owner(),
+        destinationsForView(
+          accountType: AccountType.athlete,
+          role: UserRole.trainer,
+        ),
+      ]) {
         final branches = set.map((d) => d.branchIndex).toList();
         expect(branches.toSet(), hasLength(branches.length));
       }
-    });
-  });
-
-  group('navBranchFor', () {
-    test('tracking lights the Logbook tab instead of falling back to Home', () {
-      expect(navBranchFor(kTrackingBranch), kLogbookBranch);
-    });
-
-    test('every other branch maps to itself', () {
-      for (final branch in [
-        kHomeBranch,
-        kMyBoxBranch,
-        kLogbookBranch,
-        kMembersBranch,
-        kCommunityBranch,
-        kProfileBranch,
-        kBoxSettingsBranch,
-      ]) {
-        expect(navBranchFor(branch), branch);
-      }
-    });
-
-    test('the mapped branch is always a visible tab for some role', () {
-      final visible = {
-        ...destinationsForView(
-          accountType: AccountType.athlete,
-          role: UserRole.athlete,
-        ).map((d) => d.branchIndex),
-        ...destinationsForView(
-          accountType: AccountType.admin,
-          role: UserRole.admin,
-        ).map((d) => d.branchIndex),
-      };
-      expect(visible, contains(navBranchFor(kTrackingBranch)));
     });
   });
 }

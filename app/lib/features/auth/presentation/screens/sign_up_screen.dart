@@ -87,7 +87,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       eyebrow: 'Onboarding',
       headline: 'Start clean. Move fast.',
       description:
-          'Create your athlete account, verify your email, and get into programming, classes, and tracking without friction.',
+          'Create your athlete account, verify your email, and get into programming and classes without friction.',
       child: Form(
         key: _formKey,
         child: Column(

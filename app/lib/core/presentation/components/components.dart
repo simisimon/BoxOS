@@ -6,6 +6,7 @@
 export 'app_avatar.dart';
 export 'app_buttons.dart';
 export 'app_card.dart';
+export 'app_data_table.dart';
 export 'app_metric.dart';
 export 'app_mobile_scaffold.dart';
 export 'app_pill.dart';

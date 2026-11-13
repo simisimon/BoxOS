@@ -100,6 +100,108 @@ class ScheduleApiTests(FastApiTestCase):
         self.assertTrue(promoted_class["is_booked"])
         self.assertEqual(promoted_class["waitlist_count"], 0)
 
+    def test_owner_removes_a_members_booking_and_promotes_the_waitlist(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Remove Box")
+        athlete_id = self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        self.create_verified_user("next@boxos.app")
+        self.add_active_membership("next@boxos.app", gym_id)
+        class_id = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Cap One",
+                "class_type": "WOD",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 45,
+                "capacity": 1,
+                "recurrence_frequency": "none",
+            },
+        ).json()["class"]["id"]
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+        next_headers = self.auth_headers("next@boxos.app", "BoxOS123!")
+        self.assertEqual(self.client.post("/schedule/bookings", headers=athlete_headers, json={"class_id": class_id}).status_code, 201)
+        self.assertEqual(self.client.post("/schedule/waitlist", headers=next_headers, json={"class_id": class_id}).status_code, 201)
+
+        # Members cannot remove someone else.
+        refused = self.client.request(
+            "DELETE", "/schedule/bookings", headers=next_headers, json={"class_id": class_id, "user_id": athlete_id}
+        )
+        self.assertEqual(refused.status_code, 403)
+
+        removed = self.client.request(
+            "DELETE", "/schedule/bookings", headers=admin_headers, json={"class_id": class_id, "user_id": athlete_id}
+        )
+        self.assertEqual(removed.status_code, 200, removed.text)
+        promoted = self.client.get("/schedule/classes", headers=next_headers).json()["classes"][0]
+        self.assertTrue(promoted["is_booked"])
+
+    def test_owner_adds_a_class_type_and_uses_it(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Types Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+
+        created = self.client.post(
+            "/class-types", headers=admin_headers, json={"name": "Hyrox", "color": "danger", "default_capacity": 16}
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertEqual(
+            [(t["name"], t["color"], t["default_capacity"]) for t in created.json()["class_types"]],
+            [("Hyrox", "danger", 16)],
+        )
+        # Names are unique per gym, built-ins included; members cannot add.
+        self.assertEqual(self.client.post("/class-types", headers=admin_headers, json={"name": "hyrox"}).status_code, 409)
+        self.assertEqual(self.client.post("/class-types", headers=admin_headers, json={"name": "wod"}).status_code, 409)
+        self.assertEqual(self.client.post("/class-types", headers=athlete_headers, json={"name": "Yoga"}).status_code, 403)
+
+        listed = self.client.get("/class-types", headers=athlete_headers)
+        self.assertEqual([t["name"] for t in listed.json()["class_types"]], ["Hyrox"])
+
+        class_created = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Hyrox Prep",
+                "class_type": "Hyrox",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 16,
+                "recurrence_frequency": "none",
+            },
+        )
+        self.assertEqual(class_created.status_code, 201, class_created.text)
+        unknown = self.client.post(
+            "/schedule/classes",
+            headers=admin_headers,
+            json={
+                "title": "Mystery",
+                "class_type": "Pilates",
+                "start_time": security.isoformat(security.now_utc() + timedelta(days=1)),
+                "duration_minutes": 60,
+                "capacity": 8,
+                "recurrence_frequency": "none",
+            },
+        )
+        self.assertEqual(unknown.status_code, 400)
+
+        plan = self.client.post(
+            "/membership/plans",
+            headers=admin_headers,
+            json={
+                "name": "Hyrox only",
+                "plan_type": "unlimited",
+                "price_cents": 5000,
+                "billing_period": "monthly",
+                "allowed_class_types": ["Hyrox"],
+            },
+        )
+        self.assertEqual(plan.status_code, 201, plan.text)
+        self.assertEqual(plan.json()["plan"]["allowed_class_types"], ["Hyrox"])
+
+        type_id = created.json()["class_types"][0]["id"]
+        deleted = self.client.request("DELETE", "/class-types", headers=admin_headers, json={"id": type_id})
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertEqual(deleted.json()["class_types"], [])
+
     def test_cannot_reduce_capacity_below_existing_bookings(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Capacity Box")
         self.add_active_membership(settings.DEMO_EMAIL, gym_id)
@@ -299,3 +401,93 @@ class ClassTemplateApiTests(FastApiTestCase):
         athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
         forbidden = self.client.post("/schedule/templates", headers=athlete_headers, json=self._template_body())
         self.assertEqual(forbidden.status_code, 403)
+
+    def test_trainer_cannot_manage_classes_but_can_take_attendance(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Trainer Rights Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id, roles=["athlete", "trainer"], active_role="trainer")
+        trainer_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+        class_body = {
+            "title": "Evening Class",
+            "class_type": "WOD",
+            "start_time": security.isoformat(security.now_utc() + timedelta(hours=2)),
+            "duration_minutes": 60,
+            "capacity": 10,
+            "recurrence_frequency": "none",
+        }
+
+        forbidden = self.client.post("/schedule/classes", headers=trainer_headers, json=class_body)
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+        template = self.client.post("/schedule/templates", headers=trainer_headers, json=self._template_body())
+        self.assertEqual(template.status_code, 403, template.text)
+
+        created = self.client.post("/schedule/classes", headers=admin_headers, json=class_body)
+        self.assertEqual(created.status_code, 201, created.text)
+        class_id = created.json()["class"]["id"]
+        edited = self.client.patch("/schedule/classes", headers=trainer_headers, json={"id": class_id, **class_body})
+        self.assertEqual(edited.status_code, 403, edited.text)
+        deleted = self.client.request("DELETE", "/schedule/classes", headers=trainer_headers, json={"id": class_id})
+        self.assertEqual(deleted.status_code, 403, deleted.text)
+
+        removed = self.client.request(
+            "DELETE",
+            "/schedule/bookings",
+            headers=trainer_headers,
+            json={"class_id": class_id, "user_id": self.lookup_user_id(settings.ADMIN_EMAIL)},
+        )
+        self.assertEqual(removed.status_code, 403, removed.text)
+
+        # Attendance stays open to trainers: the request passes the role check
+        # and fails only because the class has not started.
+        attendance = self.client.patch(
+            "/schedule/bookings/attendance",
+            headers=trainer_headers,
+            json={"class_id": class_id, "user_id": self.lookup_user_id(settings.DEMO_EMAIL), "attendance_status": "attended"},
+        )
+        self.assertNotEqual(attendance.status_code, 403, attendance.text)
+
+    def test_my_bookings_lists_upcoming_waitlist_and_cancelled(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("History Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+
+        def create_class(title: str, hours: int, capacity: int = 10) -> int:
+            created = self.client.post(
+                "/schedule/classes",
+                headers=admin_headers,
+                json={
+                    "title": title,
+                    "class_type": "WOD",
+                    "start_time": security.isoformat(security.now_utc() + timedelta(hours=hours)),
+                    "duration_minutes": 60,
+                    "capacity": capacity,
+                    "recurrence_frequency": "none",
+                },
+            )
+            self.assertEqual(created.status_code, 201, created.text)
+            return created.json()["class"]["id"]
+
+        kept = create_class("Kept", 5)
+        cancelled = create_class("Cancelled", 6)
+        rebooked = create_class("Rebooked", 7)
+        for class_id in (kept, cancelled, rebooked):
+            booked = self.client.post("/schedule/bookings", headers=athlete_headers, json={"class_id": class_id})
+            self.assertEqual(booked.status_code, 201, booked.text)
+        for class_id in (cancelled, rebooked):
+            gone = self.client.request("DELETE", "/schedule/bookings", headers=athlete_headers, json={"class_id": class_id})
+            self.assertEqual(gone.status_code, 200, gone.text)
+        again = self.client.post("/schedule/bookings", headers=athlete_headers, json={"class_id": rebooked})
+        self.assertEqual(again.status_code, 201, again.text)
+
+        response = self.client.get("/membership/me/bookings", headers=athlete_headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        statuses = {row["title"]: row["status"] for row in response.json()["bookings"]}
+        # A cancellation disappears once the member booked the class again.
+        self.assertEqual(statuses, {"Kept": "booked", "Cancelled": "cancelled", "Rebooked": "booked"})
+        cancelled_row = next(row for row in response.json()["bookings"] if row["title"] == "Cancelled")
+        self.assertIsNotNone(cancelled_row["cancelled_at"])
+
+        # The owner sees the same history in the member detail.
+        user_id = self.lookup_user_id(settings.DEMO_EMAIL)
+        owner_view = self.client.get(f"/membership/members/{user_id}/bookings", headers=admin_headers)
+        self.assertEqual(owner_view.status_code, 200, owner_view.text)
+        self.assertIn("cancelled", {row["status"] for row in owner_view.json()["bookings"]})

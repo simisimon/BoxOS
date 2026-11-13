@@ -14,9 +14,6 @@ import 'package:app/features/announcements/data/repositories/api_announcement_re
 import 'package:app/features/announcements/domain/models/announcement.dart';
 import 'package:app/features/announcements/domain/repositories/announcement_repository.dart';
 import 'package:app/features/announcements/presentation/widgets/announcement_feed_section.dart';
-import 'package:app/features/logbook/data/repositories/api_logbook_repository.dart';
-import 'package:app/features/logbook/domain/models/workout_log_entry.dart';
-import 'package:app/features/logbook/domain/repositories/logbook_repository.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/programming/domain/repositories/programming_repository.dart';
@@ -333,9 +330,6 @@ class RecordingProfileRepository implements ProfileRepository {
       noShowBookings: updated.noShowBookings,
       bookingRate: updated.bookingRate,
       lastBookingAt: updated.lastBookingAt,
-      newestPrTitle: updated.newestPrTitle,
-      newestPrScore: updated.newestPrScore,
-      newestPrAt: updated.newestPrAt,
     );
     managedUsers = [
       for (final user in managedUsers)
@@ -627,7 +621,7 @@ class RecordingScheduleRepository implements ScheduleRepository {
   }
 
   @override
-  Future<void> cancelBooking({required int classId}) async {
+  Future<void> cancelBooking({required int classId, int? userId}) async {
     lastCancelledClassId = classId;
     classes = [
       for (final item in classes)
@@ -1067,15 +1061,6 @@ Future<void> _configureTestViewport(WidgetTester tester) async {
 class _StubProgrammingRepository implements ProgrammingRepository {
   @override
   Future<List<DailyWorkout>> fetchWorkouts() async => const [];
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError(invocation.memberName.toString());
-}
-
-class _StubLogbookRepository implements LogbookRepository {
-  @override
-  Future<List<WorkoutLogEntry>> fetchEntries() async => const [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
@@ -1601,7 +1586,7 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
   });
 
-  testWidgets('Home shows only the hero and the weekly stat', (
+  testWidgets('Athlete Home shows booking, the WOD and announcements', (
     WidgetTester tester,
   ) async {
     final profileRepository = RecordingProfileRepository()
@@ -1671,7 +1656,6 @@ void main() {
         programmingRepositoryProvider.overrideWithValue(
           _StubProgrammingRepository(),
         ),
-        logbookRepositoryProvider.overrideWithValue(_StubLogbookRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -1684,22 +1668,14 @@ void main() {
     );
     await _settleApp(tester);
 
-    // Home is an entry point: today's hero (WOD + next booking) and one
-    // weekly stat. Everything else was removed because it duplicated a tab.
-    expect(find.text('This Week'), findsOneWidget);
-    expect(find.text('PERFORMANCE'), findsOneWidget);
-
-    // The booking rail, the news feed and the shortcut grid moved out.
-    expect(find.text('Your Bookings'), findsNothing);
-    expect(find.text('Class access'), findsNothing);
-    expect(find.text('News'), findsNothing);
-    expect(find.text('Murph briefing'), findsNothing);
+    // Athletes book from Home, read the WOD there, and announcements moved
+    // here from Community; Messages is the chat. No logging stats.
+    expect(find.text('WOD of the day'), findsOneWidget);
+    expect(find.textContaining('Book a class'), findsOneWidget);
+    expect(find.text('Announcements'), findsOneWidget);
+    expect(find.text('Murph briefing'), findsOneWidget);
+    expect(find.text('This Week'), findsNothing);
     expect(find.text('Quick actions'), findsNothing);
-
-    // The hero sits above the weekly stat.
-    final heroTop = tester.getTopLeft(find.text('TODAY')).dy;
-    final statTop = tester.getTopLeft(find.text('This Week')).dy;
-    expect(heroTop, lessThan(statTop));
   });
 
   testWidgets('Coach can create and expand announcements in the feed', (
@@ -1934,15 +1910,12 @@ void main() {
     expect(find.text('Control what reaches you'), findsOneWidget);
     await tester.tap(find.byType(Switch).at(3));
     await _settleApp(tester);
-    await tester.tap(find.byType(Switch).at(4));
-    await _settleApp(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Save Settings'));
     await _settleApp(tester);
 
     final updated = profileRepository.updatedNotificationPreferences;
     expect(updated, isNotNull);
     expect(updated!.wodPosted, isFalse);
-    expect(updated.prAchievements, isFalse);
   });
 
   testWidgets('Notifications screen shows empty placeholder', (
@@ -2071,10 +2044,6 @@ void main() {
     await _settleApp(tester);
     expect(router.routeInformationProvider.value.uri.path, '/profile');
     expect(find.text('Switch gym context fast'), findsOneWidget);
-
-    router.go('/logbook');
-    await _settleApp(tester);
-    expect(router.routeInformationProvider.value.uri.path, '/logbook');
 
     router.go('/home');
     await _settleApp(tester);
@@ -2640,15 +2609,13 @@ void main() {
       initialLocation: '/profile',
     );
 
-    final switchButton = find.widgetWithText(
-      OutlinedButton,
-      'Switch to This Gym',
-    );
+    // The Boxes card lists every box; the others get a Switch action.
+    final switchButton = find.widgetWithText(TextButton, 'Switch');
     await tester.ensureVisible(switchButton);
     await _settleApp(tester);
 
-    expect(find.text('Switch gym context fast'), findsOneWidget);
-    expect(find.text('CURRENT GYM'), findsOneWidget);
+    expect(find.text('Boxes'), findsOneWidget);
+    expect(find.text('CURRENT'), findsOneWidget);
     expect(switchButton, findsOneWidget);
   });
 

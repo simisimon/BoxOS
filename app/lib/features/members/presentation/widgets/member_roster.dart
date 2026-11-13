@@ -1,5 +1,7 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
+import 'package:app/features/members/domain/member_booking.dart';
+import 'package:app/features/members/presentation/widgets/booking_table.dart';
 import 'package:app/features/memberships/domain/membership_models.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
@@ -23,372 +25,561 @@ class MemberDraft {
   final String adminNote;
 }
 
-/// Sort options exposed in the table header.
-enum _MemberSort {
-  joinedNewest,
-  joinedOldest,
-  nameAsc;
-
-  String get label {
-    switch (this) {
-      case _MemberSort.joinedNewest:
-        return 'Newest first';
-      case _MemberSort.joinedOldest:
-        return 'Oldest first';
-      case _MemberSort.nameAsc:
-        return 'A → Z';
-    }
-  }
+String memberDisplayName(RoleManagedUser user) {
+  final name = user.displayName.trim();
+  return name.isEmpty ? user.email : name;
 }
 
-typedef _RoleFilter = UserRole?;
+AppPillIntent _rolePillIntent(UserRole role) => switch (role) {
+  UserRole.admin || UserRole.trainer => AppPillIntent.primary,
+  UserRole.athlete => AppPillIntent.neutral,
+};
 
-/// Members table with search, role filter, sort menu, and inline-expand rows
-/// for full editing. Pure view widget: the parent provides the users list and
-/// receives a [MemberDraft] on every save.
+/// Members table (docs/admin-ui-reference.md §4.1): role filter chips, then
+/// Name · Email · Role · Date joined, sortable by name and date. A row click
+/// hands the member to [onOpen]; the detail is a page of its own.
 class MemberRoster extends StatefulWidget {
   const MemberRoster({
     super.key,
     required this.users,
-    required this.onSave,
-    this.savingUserId,
+    required this.onOpen,
+    this.query = '',
     this.onRefresh,
-    this.detailExtra,
   });
 
   final List<RoleManagedUser> users;
+  final ValueChanged<RoleManagedUser> onOpen;
 
-  /// Persist the draft. The parent is responsible for showing snackbars and
-  /// updating its source-of-truth list afterwards. Must return when the save
-  /// resolves so the widget can clear its in-flight indicator.
-  final Future<void> Function(MemberDraft draft) onSave;
+  /// Search text from the page toolbar: matches name, nickname or email.
+  final String query;
 
-  /// Optional external override of the spinning row — useful when the parent
-  /// owns the in-flight state for snackbars / refresh side effects.
-  final int? savingUserId;
-
-  /// Pull-to-refresh on the member list; null disables it.
+  /// Pull-to-refresh on the table; null disables it.
   final Future<void> Function()? onRefresh;
-
-  /// Extra section in the member detail, below the header (e.g. the
-  /// member's plan). The widget owns its own loading and saving.
-  final Widget Function(RoleManagedUser user)? detailExtra;
 
   @override
   State<MemberRoster> createState() => _MemberRosterState();
 }
 
 class _MemberRosterState extends State<MemberRoster> {
-  int? _internalSavingUserId;
-  int? _selectedUserId;
-  String _query = '';
-  _RoleFilter _roleFilter;
-  _MemberSort _sort = _MemberSort.joinedNewest;
-  late final TextEditingController _searchController;
+  UserRole? _roleFilter;
 
-  _MemberRosterState() : _roleFilter = null;
+  /// Column index of [_columns] the table is sorted by.
+  int _sortColumn = 0;
+  bool _sortAscending = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _searchController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  int? get _effectiveSavingId => widget.savingUserId ?? _internalSavingUserId;
+  static const _columns = [
+    AppTableColumn('Name', flex: 3, sortable: true),
+    AppTableColumn('Email', flex: 3, hideWhenNarrow: true),
+    AppTableColumn('Role', flex: 2),
+    AppTableColumn(
+      'Date joined',
+      flex: 2,
+      sortable: true,
+      hideWhenNarrow: true,
+    ),
+  ];
 
   List<RoleManagedUser> _visibleUsers() {
-    final users = widget.users;
-    final query = _query.trim().toLowerCase();
-    final filtered = users.where((user) {
+    final query = widget.query.trim().toLowerCase();
+    final filtered = widget.users.where((user) {
       if (_roleFilter != null && user.role != _roleFilter) return false;
       if (query.isEmpty) return true;
       return user.displayName.toLowerCase().contains(query) ||
           user.nickname.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query);
     }).toList();
-    int joinedDir(_MemberSort sort) =>
-        sort == _MemberSort.joinedNewest ? -1 : 1;
+    final dir = _sortAscending ? 1 : -1;
     filtered.sort((a, b) {
-      switch (_sort) {
-        case _MemberSort.joinedNewest:
-        case _MemberSort.joinedOldest:
-          final aDate = a.joinedAt;
-          final bDate = b.joinedAt;
-          if (aDate == null && bDate == null) return 0;
-          if (aDate == null) return 1;
-          if (bDate == null) return -1;
-          return aDate.compareTo(bDate) * joinedDir(_sort);
-        case _MemberSort.nameAsc:
-          return _displayKey(a).compareTo(_displayKey(b));
+      if (_sortColumn == 3) {
+        final aDate = a.joinedAt;
+        final bDate = b.joinedAt;
+        // Members without a date go last either way.
+        if (aDate == null || bDate == null) {
+          return aDate == bDate ? 0 : (aDate == null ? 1 : -1);
+        }
+        return aDate.compareTo(bDate) * dir;
       }
+      return memberDisplayName(
+            a,
+          ).toLowerCase().compareTo(memberDisplayName(b).toLowerCase()) *
+          dir;
     });
     return filtered;
-  }
-
-  static String _displayKey(RoleManagedUser user) {
-    final name = user.displayName.trim();
-    return (name.isEmpty ? user.email : name).toLowerCase();
-  }
-
-  Future<void> _save(MemberDraft draft) async {
-    setState(() => _internalSavingUserId = draft.user.id);
-    try {
-      await widget.onSave(draft);
-    } finally {
-      if (mounted) setState(() => _internalSavingUserId = null);
-    }
-  }
-
-  RoleManagedUser? _selectedUser(List<RoleManagedUser> visible) {
-    if (visible.isEmpty) return null;
-    for (final user in visible) {
-      if (user.id == _selectedUserId) return user;
-    }
-    return visible.first;
-  }
-
-  /// Phones have no room for a side panel: the detail opens as its own page.
-  void _openDetailPage(RoleManagedUser user) {
-    setState(() => _selectedUserId = user.id);
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => _MemberDetailPage(
-          user: user,
-          onSave: _save,
-          detailExtra: widget.detailExtra,
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final visible = _visibleUsers();
-    final selectedUser = _selectedUser(visible);
-    // Fills the height its parent gives it: the list and the detail each
-    // scroll on their own, so the detail never moves with the list.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _MemberToolbar(
-          total: widget.users.length,
-          visible: visible.length,
-          searchController: _searchController,
-          query: _query,
-          onQueryChanged: (value) => setState(() => _query = value),
-          roleFilter: _roleFilter,
-          onRoleFilterChanged: (filter) => setState(() => _roleFilter = filter),
-          sort: _sort,
-          onSortChanged: (sort) => setState(() => _sort = sort),
+        Wrap(
+          spacing: appSpaceSm,
+          runSpacing: appSpaceSm,
+          children: [
+            for (final role in const [
+              null,
+              UserRole.athlete,
+              UserRole.trainer,
+              UserRole.admin,
+            ])
+              _FilterChip(
+                // Counts replace the old role-mix summary.
+                label:
+                    '${role?.label ?? 'All'} '
+                    '${role == null ? widget.users.length : widget.users.where((u) => u.role == role).length}',
+                selected: _roleFilter == role,
+                onTap: () => setState(() => _roleFilter = role),
+              ),
+          ],
         ),
         const SizedBox(height: appSpaceMd),
         Expanded(
-          child: visible.isEmpty
-              ? Align(
-                  alignment: Alignment.topCenter,
-                  child: AppEmptyState(
-                    icon: Icons.search_off_rounded,
-                    title: 'No matches',
-                    subtitle: 'No members match the current search or filter.',
-                    compact: true,
-                  ),
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth >= 720;
-                    Widget list = _MemberList(
-                      users: visible,
-                      selectedUserId: wide ? selectedUser?.id : null,
-                      savingUserId: _effectiveSavingId,
-                      onSelected: wide
-                          ? (user) => setState(() => _selectedUserId = user.id)
-                          : _openDetailPage,
-                    );
-                    if (widget.onRefresh != null) {
-                      list = RefreshIndicator(
-                        onRefresh: widget.onRefresh!,
-                        child: list,
-                      );
-                    }
-                    if (!wide || selectedUser == null) {
-                      return list;
-                    }
-                    final detailWidth = (constraints.maxWidth * 0.48)
-                        .clamp(360.0, 480.0)
-                        .toDouble();
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: list),
-                        const SizedBox(width: appSpaceMd),
-                        SizedBox(
-                          width: detailWidth,
-                          child: SingleChildScrollView(
-                            // A fresh member starts at the top of the panel.
-                            key: ValueKey(selectedUser.id),
-                            child: _MemberDetailPanel(
-                              user: selectedUser,
-                              saving: _effectiveSavingId == selectedUser.id,
-                              onSave: _save,
-                              detailExtra: widget.detailExtra,
-                            ),
-                          ),
+          child: _withRefresh(
+            AppDataTable<RoleManagedUser>(
+              columns: _columns,
+              rows: visible,
+              total: widget.users.length,
+              sortColumn: _sortColumn,
+              sortAscending: _sortAscending,
+              onSort: (column) => setState(() {
+                _sortAscending = column == _sortColumn ? !_sortAscending : true;
+                _sortColumn = column;
+              }),
+              onRowTap: widget.onOpen,
+              emptyText: 'No members match the current search or filter.',
+              cells: (user) => [
+                Row(
+                  children: [
+                    AppAvatar(
+                      displayName: memberDisplayName(user),
+                      imageUrl: user.profileImageUrl.isEmpty
+                          ? null
+                          : user.profileImageUrl,
+                      size: 28,
+                    ),
+                    const SizedBox(width: appSpaceSm + 2),
+                    Expanded(
+                      child: Text(
+                        memberDisplayName(user),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: appText,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
-                    );
-                  },
+                      ),
+                    ),
+                  ],
                 ),
+                _CellText(user.email),
+                Wrap(
+                  spacing: appSpaceXs,
+                  runSpacing: appSpaceXs,
+                  children: [
+                    AppPill(
+                      label: user.role.label,
+                      intent: _rolePillIntent(user.role),
+                      dense: true,
+                    ),
+                    ..._attentionPills(user),
+                  ],
+                ),
+                _CellText(
+                  user.joinedAt == null ? '—' : formatShortDate(user.joinedAt!),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
+
+  Widget _withRefresh(Widget table) => widget.onRefresh == null
+      ? table
+      : RefreshIndicator(onRefresh: widget.onRefresh!, child: table);
 }
 
-/// Full-screen member detail for phones, with its own saving state; closes
-/// once the save went through.
-class _MemberDetailPage extends StatefulWidget {
-  const _MemberDetailPage({
+/// Status that needs the owner's eye: paused/removed, a plan request, or an
+/// overdue payment.
+List<Widget> _attentionPills(RoleManagedUser user) => [
+  if (user.status != MembershipStatus.active)
+    AppPill(
+      label: user.status.label,
+      intent: user.status == MembershipStatus.paused
+          ? AppPillIntent.warning
+          : AppPillIntent.danger,
+      dense: true,
+    ),
+  if (user.hasPlanRequest)
+    const AppPill(
+      label: 'Plan request',
+      intent: AppPillIntent.warning,
+      dense: true,
+    )
+  else if (user.plan?.paymentStatus == PaymentStatus.overdue)
+    const AppPill(label: 'Overdue', intent: AppPillIntent.danger, dense: true),
+];
+
+class _CellText extends StatelessWidget {
+  const _CellText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(color: appMutedText, fontSize: 13),
+  );
+}
+
+/// Member details page body (docs/admin-ui-reference.md §4.2): header card,
+/// then tabs Overview | Memberships | Classes. [planSection] is the member's
+/// plan card, [membershipsTab] the full plan table, [bookings] feeds Classes.
+class MemberDetailView extends StatelessWidget {
+  const MemberDetailView({
+    super.key,
     required this.user,
+    required this.saving,
     required this.onSave,
-    this.detailExtra,
+    required this.planSection,
+    required this.membershipsTab,
+    required this.bookings,
+    this.onBack,
   });
 
   final RoleManagedUser user;
+  final bool saving;
   final Future<void> Function(MemberDraft draft) onSave;
-  final Widget Function(RoleManagedUser user)? detailExtra;
-
-  @override
-  State<_MemberDetailPage> createState() => _MemberDetailPageState();
-}
-
-class _MemberDetailPageState extends State<_MemberDetailPage> {
-  bool _saving = false;
-
-  Future<void> _save(MemberDraft draft) async {
-    setState(() => _saving = true);
-    try {
-      await widget.onSave(draft);
-      if (mounted) Navigator.of(context).pop();
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
+  final Widget planSection;
+  final Widget membershipsTab;
+  final Future<List<MemberBooking>> bookings;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: appPageBackground,
-      appBar: AppBar(title: Text(_MemberHeader.displayName(widget.user))),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(appSpaceLg),
-        child: _MemberDetailPanel(
-          user: widget.user,
-          saving: _saving,
-          onSave: _save,
-          detailExtra: widget.detailExtra,
+    return DefaultTabController(
+      length: 3,
+      child: NestedScrollView(
+        headerSliverBuilder: (context, _) => [
+          SliverToBoxAdapter(
+            child: _MemberDetailHeader(user: user, onBack: onBack),
+          ),
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.only(top: appSpaceMd),
+              child: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [
+                  Tab(text: 'Overview'),
+                  Tab(text: 'Memberships'),
+                  Tab(text: 'Classes'),
+                ],
+              ),
+            ),
+          ),
+        ],
+        body: TabBarView(
+          children: [
+            _OverviewTab(
+              user: user,
+              saving: saving,
+              onSave: onSave,
+              planSection: planSection,
+            ),
+            membershipsTab,
+            _ClassesTab(bookings: bookings),
+          ],
         ),
       ),
     );
   }
 }
 
-class _MemberToolbar extends StatelessWidget {
-  const _MemberToolbar({
-    required this.total,
-    required this.visible,
-    required this.searchController,
-    required this.query,
-    required this.onQueryChanged,
-    required this.roleFilter,
-    required this.onRoleFilterChanged,
-    required this.sort,
-    required this.onSortChanged,
-  });
+class _MemberDetailHeader extends StatelessWidget {
+  const _MemberDetailHeader({required this.user, this.onBack});
 
-  final int total;
-  final int visible;
-  final TextEditingController searchController;
-  final String query;
-  final ValueChanged<String> onQueryChanged;
-  final _RoleFilter roleFilter;
-  final ValueChanged<_RoleFilter> onRoleFilterChanged;
-  final _MemberSort sort;
-  final ValueChanged<_MemberSort> onSortChanged;
+  final RoleManagedUser user;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: searchController,
-          onChanged: onQueryChanged,
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            hintText: 'Search by name, nickname, or email',
-            suffixIcon: query.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    onPressed: () {
-                      searchController.clear();
-                      onQueryChanged('');
-                    },
-                  ),
-          ),
-        ),
-        const SizedBox(height: appSpaceMd),
-        Row(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All',
-                      selected: roleFilter == null,
-                      onTap: () => onRoleFilterChanged(null),
-                    ),
-                    const SizedBox(width: 6),
-                    for (final role in const [
-                      UserRole.athlete,
-                      UserRole.trainer,
-                      UserRole.admin,
-                    ]) ...[
-                      _FilterChip(
-                        label: role.label,
-                        selected: roleFilter == role,
-                        onTap: () => onRoleFilterChanged(role),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                  ],
-                ),
-              ),
+    final name = memberDisplayName(user);
+    final joined = user.joinedAt;
+    return Container(
+      padding: const EdgeInsets.all(appSpaceLg),
+      decoration: BoxDecoration(
+        color: appSurface,
+        borderRadius: BorderRadius.circular(appRadiusLg),
+        border: Border.all(color: appBorder),
+      ),
+      child: Row(
+        children: [
+          if (onBack != null) ...[
+            IconButton(
+              tooltip: 'Back to members',
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_rounded, color: appMutedText),
             ),
             const SizedBox(width: appSpaceSm),
-            _SortMenu(sort: sort, onChanged: onSortChanged),
+          ],
+          AppAvatar(
+            displayName: name,
+            imageUrl: user.profileImageUrl.isEmpty
+                ? null
+                : user.profileImageUrl,
+            size: 52,
+          ),
+          const SizedBox(width: appSpaceLg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: appSpaceSm,
+                  runSpacing: appSpaceXs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: appText,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    AppPill(
+                      label: user.role.label,
+                      intent: _rolePillIntent(user.role),
+                      dense: true,
+                    ),
+                    ..._attentionPills(user),
+                  ],
+                ),
+                const SizedBox(height: appSpaceXs),
+                Text(
+                  [
+                    user.email,
+                    if (user.nickname.isNotEmpty) '@${user.nickname}',
+                    if (joined != null) 'Joined ${formatShortDate(joined)}',
+                  ].join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: appSubtleText, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Overview: plan card and KPIs on the left, profile and member settings on
+/// the right; one column on narrow screens.
+class _OverviewTab extends StatelessWidget {
+  const _OverviewTab({
+    required this.user,
+    required this.saving,
+    required this.onSave,
+    required this.planSection,
+  });
+
+  final RoleManagedUser user;
+  final bool saving;
+  final Future<void> Function(MemberDraft draft) onSave;
+  final Widget planSection;
+
+  @override
+  Widget build(BuildContext context) {
+    final main = [
+      _Card(child: planSection),
+      const SizedBox(height: appSpaceLg),
+      _MemberStats(user: user),
+    ];
+    final side = _Card(
+      child: Padding(
+        padding: const EdgeInsets.all(appSpaceLg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _EditLabel('Profile'),
+            const SizedBox(height: appSpaceSm),
+            _MemberDetails(user: user),
+            const SizedBox(height: appSpaceLg),
+            const Divider(height: 1, color: appBorder),
+            const SizedBox(height: appSpaceLg),
+            _MemberEditForm(user: user, saving: saving, onSave: onSave),
           ],
         ),
-        const SizedBox(height: appSpaceSm),
-        Text(
-          '$visible of $total members',
-          style: const TextStyle(
-            color: appSubtleText,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(top: appSpaceLg, bottom: appSpace3xl),
+          child: wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: main,
+                      ),
+                    ),
+                    const SizedBox(width: appSpaceLg),
+                    SizedBox(width: 380, child: side),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ...main,
+                    const SizedBox(height: appSpaceLg),
+                    side,
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: appSurface,
+      borderRadius: BorderRadius.circular(appRadiusLg),
+      border: Border.all(color: appBorder),
+    ),
+    child: child,
+  );
+}
+
+/// Classes tab: Upcoming | History, with attendance KPIs over the last 30
+/// days above the table.
+class _ClassesTab extends StatefulWidget {
+  const _ClassesTab({required this.bookings});
+
+  final Future<List<MemberBooking>> bookings;
+
+  @override
+  State<_ClassesTab> createState() => _ClassesTabState();
+}
+
+class _ClassesTabState extends State<_ClassesTab> {
+  bool _history = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<MemberBooking>>(
+      future: widget.bookings,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const AppEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Could not load classes',
+            compact: true,
+          );
+        }
+        if (!snapshot.hasData) return const AppLoadingState();
+        final now = DateTime.now();
+        final all = snapshot.data!;
+        // Cancelled bookings go to History, even for future classes.
+        final upcoming = [
+          for (final b in all.reversed)
+            if (b.end.isAfter(now) && !b.isCancelled) b,
+        ];
+        final history = [
+          for (final b in all)
+            if (!b.end.isAfter(now) || b.isCancelled) b,
+        ];
+        final monthAgo = now.subtract(const Duration(days: 30));
+        final recent = history.where((b) => b.start.isAfter(monthAgo));
+        final attended = recent.where((b) => b.status == 'attended').length;
+        final noShows = recent.where((b) => b.status == 'no_show').length;
+        final rows = _history ? history : upcoming;
+        return Padding(
+          padding: const EdgeInsets.only(top: appSpaceLg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.check_circle_outline_rounded,
+                      label: 'Attended (30 days)',
+                      value: '$attended',
+                      helper: 'classes checked in',
+                    ),
+                  ),
+                  const SizedBox(width: appSpaceSm),
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.event_busy_outlined,
+                      label: 'No-shows (30 days)',
+                      value: '$noShows',
+                      helper: 'booked, not attended',
+                    ),
+                  ),
+                  const SizedBox(width: appSpaceSm),
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.trending_up_rounded,
+                      label: 'Avg per week',
+                      value: (attended * 7 / 30).toStringAsFixed(1),
+                      helper: 'last 30 days',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: appSpaceLg),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      label: Text('Upcoming ${upcoming.length}'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text('History ${history.length}'),
+                    ),
+                  ],
+                  selected: {_history},
+                  onSelectionChanged: (s) => setState(() => _history = s.first),
+                ),
+              ),
+              const SizedBox(height: appSpaceMd),
+              Expanded(
+                child: BookingTable(
+                  rows: rows,
+                  emptyText: _history
+                      ? 'No past or cancelled classes yet.'
+                      : 'No upcoming classes booked.',
+                ),
+              ),
+              const SizedBox(height: appSpaceLg),
+            ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -435,397 +626,8 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _SortMenu extends StatelessWidget {
-  const _SortMenu({required this.sort, required this.onChanged});
-
-  final _MemberSort sort;
-  final ValueChanged<_MemberSort> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<_MemberSort>(
-      tooltip: 'Sort',
-      onSelected: onChanged,
-      itemBuilder: (context) => [
-        for (final option in _MemberSort.values)
-          PopupMenuItem<_MemberSort>(
-            value: option,
-            child: Row(
-              children: [
-                Icon(
-                  option == sort
-                      ? Icons.check_rounded
-                      : Icons.swap_vert_rounded,
-                  size: 16,
-                  color: option == sort ? appPrimary : appSubtleText,
-                ),
-                const SizedBox(width: 8),
-                Text(option.label),
-              ],
-            ),
-          ),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: appSurfaceAlt,
-          borderRadius: BorderRadius.circular(appRadiusMd),
-          border: Border.all(color: appBorder),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.sort_rounded, size: 16, color: appMutedText),
-            const SizedBox(width: 6),
-            Text(
-              sort.label,
-              style: const TextStyle(
-                color: appText,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(
-              Icons.arrow_drop_down_rounded,
-              size: 16,
-              color: appMutedText,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MemberList extends StatelessWidget {
-  const _MemberList({
-    required this.users,
-    required this.selectedUserId,
-    required this.savingUserId,
-    required this.onSelected,
-  });
-
-  final List<RoleManagedUser> users;
-  final int? selectedUserId;
-  final int? savingUserId;
-  final ValueChanged<RoleManagedUser> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      // Room for the pull-to-refresh spinner and a bit of air at the end.
-      padding: const EdgeInsets.only(bottom: appSpaceLg),
-      itemCount: users.length,
-      separatorBuilder: (_, _) => const SizedBox(height: appSpaceSm),
-      itemBuilder: (context, index) {
-        final user = users[index];
-        return _MemberRow(
-          key: ValueKey(user.id),
-          user: user,
-          selected: user.id == selectedUserId,
-          saving: savingUserId == user.id,
-          onSelected: () => onSelected(user),
-        );
-      },
-    );
-  }
-}
-
-class _MemberRow extends StatelessWidget {
-  const _MemberRow({
-    super.key,
-    required this.user,
-    required this.selected,
-    required this.saving,
-    required this.onSelected,
-  });
-
-  final RoleManagedUser user;
-  final bool selected;
-  final bool saving;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(appRadiusLg),
-        onTap: onSelected,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: selected ? appSurfaceElevated : appSurface,
-            borderRadius: BorderRadius.circular(appRadiusLg),
-            border: Border.all(
-              color: selected ? appPrimaryHairline : appBorder,
-            ),
-          ),
-          child: _MemberHeader(
-            user: user,
-            selected: selected,
-            saving: saving,
-            onSelected: onSelected,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MemberHeader extends StatelessWidget {
-  const _MemberHeader({
-    required this.user,
-    required this.selected,
-    required this.saving,
-    required this.onSelected,
-  });
-
-  final RoleManagedUser user;
-  final bool selected;
-  final bool saving;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = displayName(user);
-    final secondary = secondaryLine(user);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        appSpaceMd,
-        appSpaceMd,
-        appSpaceMd,
-        appSpaceMd,
-      ),
-      child: Row(
-        children: [
-          AppAvatar(
-            displayName: name,
-            imageUrl: user.profileImageUrl.isEmpty
-                ? null
-                : user.profileImageUrl,
-            size: 40,
-          ),
-          const SizedBox(width: appSpaceMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: appText,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0,
-                  ),
-                ),
-                if (secondary != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    secondary,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: appSubtleText, fontSize: 12),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: appSpaceSm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              AppPill(
-                label: user.role.label,
-                intent: rolePillIntent(user.role),
-                dense: true,
-              ),
-              if (user.status != MembershipStatus.active) ...[
-                const SizedBox(height: 4),
-                AppPill(
-                  label: user.status.label,
-                  intent: user.status == MembershipStatus.paused
-                      ? AppPillIntent.warning
-                      : AppPillIntent.danger,
-                  dense: true,
-                ),
-              ],
-              if (user.hasPlanRequest) ...[
-                const SizedBox(height: 4),
-                const AppPill(
-                  label: 'Plan request',
-                  intent: AppPillIntent.warning,
-                  dense: true,
-                ),
-              ] else if (user.plan?.paymentStatus == PaymentStatus.overdue) ...[
-                const SizedBox(height: 4),
-                const AppPill(
-                  label: 'Overdue',
-                  intent: AppPillIntent.danger,
-                  dense: true,
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(width: 4),
-          if (saving)
-            const SizedBox(
-              width: 36,
-              height: 36,
-              child: Padding(
-                padding: EdgeInsets.all(9),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            IconButton(
-              tooltip: 'Select member',
-              visualDensity: VisualDensity.compact,
-              onPressed: onSelected,
-              icon: Icon(
-                selected
-                    ? Icons.check_circle_rounded
-                    : Icons.chevron_right_rounded,
-                color: selected ? appPrimary : appSubtleText,
-                size: 22,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  static String displayName(RoleManagedUser user) {
-    final name = user.displayName.trim();
-    return name.isEmpty ? user.email : name;
-  }
-
-  static String? secondaryLine(RoleManagedUser user) {
-    final parts = <String>[];
-    if (user.joinedAt != null) {
-      parts.add('Joined ${_formatDate(user.joinedAt!)}');
-    }
-    if (user.nickname.isNotEmpty) parts.add('@${user.nickname}');
-    final plan = user.plan;
-    if (plan != null) {
-      parts.add(
-        plan.isUpcoming ? '${plan.planName} (upcoming)' : plan.planName,
-      );
-    }
-    return parts.isEmpty ? null : parts.join(' · ');
-  }
-
-  static AppPillIntent rolePillIntent(UserRole role) {
-    switch (role) {
-      case UserRole.admin:
-      case UserRole.trainer:
-        return AppPillIntent.primary;
-      case UserRole.athlete:
-        return AppPillIntent.neutral;
-    }
-  }
-}
-
-class _MemberDetailPanel extends StatelessWidget {
-  const _MemberDetailPanel({
-    required this.user,
-    required this.saving,
-    required this.onSave,
-    this.detailExtra,
-  });
-
-  final RoleManagedUser user;
-  final bool saving;
-  final Future<void> Function(MemberDraft draft) onSave;
-  final Widget Function(RoleManagedUser user)? detailExtra;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: appSurface,
-        borderRadius: BorderRadius.circular(appRadiusLg),
-        border: Border.all(color: appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _MemberDetailHeader(user: user),
-          ?detailExtra?.call(user),
-          _MemberRowExpanded(user: user, saving: saving, onSave: onSave),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemberDetailHeader extends StatelessWidget {
-  const _MemberDetailHeader({required this.user});
-
-  final RoleManagedUser user;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = _MemberHeader.displayName(user);
-    final secondary = _MemberHeader.secondaryLine(user);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        appSpaceLg,
-        appSpaceLg,
-        appSpaceMd,
-        appSpaceMd,
-      ),
-      child: Row(
-        children: [
-          AppAvatar(
-            displayName: name,
-            imageUrl: user.profileImageUrl.isEmpty
-                ? null
-                : user.profileImageUrl,
-            size: 44,
-          ),
-          const SizedBox(width: appSpaceMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: appText,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-                if (secondary != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    secondary,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: appSubtleText,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemberRowExpanded extends StatefulWidget {
-  const _MemberRowExpanded({
+class _MemberEditForm extends StatefulWidget {
+  const _MemberEditForm({
     required this.user,
     required this.saving,
     required this.onSave,
@@ -836,10 +638,10 @@ class _MemberRowExpanded extends StatefulWidget {
   final Future<void> Function(MemberDraft draft) onSave;
 
   @override
-  State<_MemberRowExpanded> createState() => _MemberRowExpandedState();
+  State<_MemberEditForm> createState() => _MemberEditFormState();
 }
 
-class _MemberRowExpandedState extends State<_MemberRowExpanded> {
+class _MemberEditFormState extends State<_MemberEditForm> {
   late Set<UserRole> _roles;
   late UserRole _activeRole;
   late MembershipStatus _status;
@@ -856,7 +658,7 @@ class _MemberRowExpandedState extends State<_MemberRowExpanded> {
   }
 
   @override
-  void didUpdateWidget(covariant _MemberRowExpanded oldWidget) {
+  void didUpdateWidget(covariant _MemberEditForm oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Re-sync the draft only when the underlying user identity changes; the
     // server response updates the cached row, but the user's local edits in
@@ -921,134 +723,121 @@ class _MemberRowExpandedState extends State<_MemberRowExpanded> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.user;
     final canEdit = _canEdit;
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(appSpaceLg, 0, appSpaceLg, appSpaceLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Divider(height: 1, color: appBorder),
-          const SizedBox(height: appSpaceMd),
-          _MemberStats(user: user),
-          const SizedBox(height: appSpaceLg),
-          const _EditLabel('Member details'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _EditLabel('Assigned roles'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: const [UserRole.athlete, UserRole.trainer]
+              .map(
+                (role) => FilterChip(
+                  label: Text(role.label),
+                  selected: _roles.contains(role),
+                  onSelected: canEdit && !widget.saving
+                      ? (selected) => _toggleRole(role, selected)
+                      : null,
+                ),
+              )
+              .toList(),
+        ),
+        if (!canEdit) ...[
           const SizedBox(height: 8),
-          _MemberDetails(user: user),
-          const SizedBox(height: appSpaceLg),
-          const _EditLabel('Assigned roles'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: const [UserRole.athlete, UserRole.trainer]
-                .map(
-                  (role) => FilterChip(
-                    label: Text(role.label),
-                    selected: _roles.contains(role),
-                    onSelected: canEdit && !widget.saving
-                        ? (selected) => _toggleRole(role, selected)
-                        : null,
-                  ),
-                )
-                .toList(),
-          ),
-          if (!canEdit) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Admin memberships are managed outside this screen.',
-              style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
-            ),
-          ],
-          if (canEdit && _roles.length > 1) ...[
-            const SizedBox(height: appSpaceLg),
-            const _EditLabel('Active role'),
-            const SizedBox(height: 8),
-            SegmentedButton<UserRole>(
-              showSelectedIcon: false,
-              segments: [
-                for (final role in _roles)
-                  ButtonSegment<UserRole>(value: role, label: Text(role.label)),
-              ],
-              selected: {_activeRole},
-              onSelectionChanged: widget.saving
-                  ? null
-                  : (selection) =>
-                        setState(() => _activeRole = selection.first),
-            ),
-          ],
-          if (canEdit) ...[
-            const SizedBox(height: appSpaceLg),
-            const _EditLabel('Membership status'),
-            const SizedBox(height: 8),
-            SegmentedButton<MembershipStatus>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(
-                  value: MembershipStatus.active,
-                  label: Text('Active'),
-                  icon: Icon(Icons.check_circle_outline_rounded, size: 16),
-                ),
-                ButtonSegment(
-                  value: MembershipStatus.paused,
-                  label: Text('Paused'),
-                  icon: Icon(Icons.pause_circle_outline_rounded, size: 16),
-                ),
-                ButtonSegment(
-                  value: MembershipStatus.removed,
-                  label: Text('Remove'),
-                  icon: Icon(Icons.person_remove_outlined, size: 16),
-                ),
-              ],
-              selected: {_status},
-              onSelectionChanged: widget.saving
-                  ? null
-                  : (selection) => setState(() => _status = selection.first),
-            ),
-            if (_status == MembershipStatus.removed) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Removing keeps the audit history but hides the member from the roster and blocks bookings.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: appDanger,
-                  height: 1.4,
-                ),
-              ),
-            ],
-            const SizedBox(height: appSpaceLg),
-            const _EditLabel('Admin note'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _noteController,
-              enabled: !widget.saving,
-              minLines: 2,
-              maxLines: 4,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                hintText:
-                    'Visible to admins and trainers only. Injuries, plan '
-                    'expiry, anything worth remembering.',
-              ),
-            ),
-          ],
-          const SizedBox(height: appSpaceLg),
-          Row(
-            children: [
-              const Spacer(),
-              AppPrimaryButton(
-                label: _status == MembershipStatus.removed
-                    ? 'Remove member'
-                    : 'Save changes',
-                onPressed: canEdit && _dirty ? _save : null,
-                busy: widget.saving,
-                size: AppButtonSize.md,
-                expand: false,
-              ),
-            ],
+          Text(
+            'Admin memberships are managed outside this screen.',
+            style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
           ),
         ],
-      ),
+        if (canEdit && _roles.length > 1) ...[
+          const SizedBox(height: appSpaceLg),
+          const _EditLabel('Active role'),
+          const SizedBox(height: 8),
+          SegmentedButton<UserRole>(
+            showSelectedIcon: false,
+            segments: [
+              for (final role in _roles)
+                ButtonSegment<UserRole>(value: role, label: Text(role.label)),
+            ],
+            selected: {_activeRole},
+            onSelectionChanged: widget.saving
+                ? null
+                : (selection) => setState(() => _activeRole = selection.first),
+          ),
+        ],
+        if (canEdit) ...[
+          const SizedBox(height: appSpaceLg),
+          const _EditLabel('Membership status'),
+          const SizedBox(height: 8),
+          SegmentedButton<MembershipStatus>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: MembershipStatus.active,
+                label: Text('Active'),
+                icon: Icon(Icons.check_circle_outline_rounded, size: 16),
+              ),
+              ButtonSegment(
+                value: MembershipStatus.paused,
+                label: Text('Paused'),
+                icon: Icon(Icons.pause_circle_outline_rounded, size: 16),
+              ),
+              ButtonSegment(
+                value: MembershipStatus.removed,
+                label: Text('Remove'),
+                icon: Icon(Icons.person_remove_outlined, size: 16),
+              ),
+            ],
+            selected: {_status},
+            onSelectionChanged: widget.saving
+                ? null
+                : (selection) => setState(() => _status = selection.first),
+          ),
+          if (_status == MembershipStatus.removed) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Removing keeps the audit history but hides the member from the roster and blocks bookings.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: appDanger,
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: appSpaceLg),
+          const _EditLabel('Admin note'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _noteController,
+            enabled: !widget.saving,
+            minLines: 2,
+            maxLines: 4,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              hintText:
+                  'Visible to admins and trainers only. Injuries, plan '
+                  'expiry, anything worth remembering.',
+            ),
+          ),
+        ],
+        const SizedBox(height: appSpaceLg),
+        Row(
+          children: [
+            const Spacer(),
+            AppPrimaryButton(
+              label: _status == MembershipStatus.removed
+                  ? 'Remove member'
+                  : 'Save changes',
+              onPressed: canEdit && _dirty ? _save : null,
+              busy: widget.saving,
+              size: AppButtonSize.md,
+              expand: false,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1060,9 +849,6 @@ class _MemberStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final newestPr = user.newestPrTitle.trim().isEmpty
-        ? 'No PR yet'
-        : '${user.newestPrTitle} · ${user.newestPrScore}';
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 520;
@@ -1078,14 +864,6 @@ class _MemberStats extends StatelessWidget {
             label: 'Total bookings',
             value: '${user.totalBookings}',
             helper: '${user.noShowBookings} no-shows',
-          ),
-          _StatTile(
-            icon: Icons.emoji_events_outlined,
-            label: 'Newest PR',
-            value: newestPr,
-            helper: user.newestPrAt == null
-                ? 'No logged PR'
-                : _formatDate(user.newestPrAt!),
           ),
         ];
         if (narrow) {
@@ -1211,7 +989,7 @@ class _MemberDetails extends StatelessWidget {
           const SizedBox(height: 6),
           _MetaRow(
             label: 'Contract start',
-            value: _formatDate(user.joinedAt!),
+            value: formatShortDate(user.joinedAt!),
             icon: Icons.calendar_today_outlined,
           ),
         ],
@@ -1225,7 +1003,7 @@ class _MemberDetails extends StatelessWidget {
           const SizedBox(height: 6),
           _MetaRow(
             label: 'Last booking',
-            value: _formatDate(user.lastBookingAt!),
+            value: formatShortDate(user.lastBookingAt!),
             icon: Icons.history_rounded,
           ),
         ],
@@ -1295,7 +1073,8 @@ class _EditLabel extends StatelessWidget {
   }
 }
 
-String _formatDate(DateTime date) {
+/// Short date as in the admin reference: `Nov 25, 26`.
+String formatShortDate(DateTime date) {
   const months = [
     'Jan',
     'Feb',
@@ -1311,5 +1090,7 @@ String _formatDate(DateTime date) {
     'Dec',
   ];
   final local = date.toLocal();
-  return '${local.day} ${months[local.month - 1]} ${local.year}';
+  final day = local.day.toString().padLeft(2, '0');
+  final year = (local.year % 100).toString().padLeft(2, '0');
+  return '${months[local.month - 1]} $day, $year';
 }

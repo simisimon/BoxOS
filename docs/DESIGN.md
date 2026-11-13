@@ -19,7 +19,9 @@ Status legend: `[x]` implemented end to end (backend + UI) · `[~]` partial
 A person can hold several roles in a box and switches the active one in the
 app. Backend checks are the security boundary: owner-only endpoints use
 `require_admin_gym_session`, owner + trainer endpoints use
-`require_schedule_manager_session` (`backend/fastapi_app.py`).
+`require_schedule_manager_session` (`backend/fastapi_app.py`). Classes and
+weekly templates are owner-only; trainers keep attendance, programming and
+announcements.
 
 ## Shared (every role)
 
@@ -52,14 +54,14 @@ app. Backend checks are the security boundary: owner-only endpoints use
 
 | Task | Status | Note |
 | --- | --- | --- |
-| Create / edit / delete classes and weekly templates | [x] | Types WOD, Open Gym, Skill, PT |
-| Assign a trainer to a class | [x] | |
+| Create / edit / delete classes and weekly templates | n/a | Owner only since 2026-11-13; trainers see the timetable read-only |
+| Assign a trainer to a class | n/a | Owner only |
 | Write the daily WOD with sections, publish / unpublish | [x] | One WOD per box per day |
 | Duplicate a WOD, import WODs from CSV | [x] | See `docs/wod-import.md` |
-| See the booking roster of a class | [x] | |
+| See the booking roster of a class | [x] | Members are visible here; trainers have no Members tab |
 | Mark attendance (attended / no-show) | [x] | |
 | Post and edit announcements, moderate chat | [x] | |
-| "My classes" view (only the classes I coach) | [ ] | Trainer sees the athlete tab set |
+| "My classes" view (only the classes I coach) | [x] | "Coached by me" filter on Classes |
 
 ## Owner
 
@@ -69,7 +71,8 @@ app. Backend checks are the security boundary: owner-only endpoints use
 | Edit box identity after creation | [x] | Box configuration → Box Identity (name, logo, timezone) via `PATCH /gyms/current`; slug stays fixed, a timezone change re-plans recurring classes |
 | Review join requests (Members → Requests, nav badge) | [x] | |
 | Manage members: roles, status (active / paused / removed), notes | [x] | Paused members lose box access |
-| Everything a trainer can do | [x] | Same endpoints |
+| Everything a trainer can do | [x] | Same endpoints, plus owning the timetable |
+| Create / edit / delete classes and weekly templates, assign trainers, remove a member from a class | [x] | Owner only |
 | Dashboard: attendance, fill rate, no-shows, waitlist pressure | [x] | 7 / 14 / 30-day windows |
 | Audit log of critical changes | [~] | Recorded and served by `/audit-logs`; no screen |
 | Box settings: booking and notification rules | [~] | Screen exists, values are kept only for the session (no backend) |

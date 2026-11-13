@@ -46,20 +46,6 @@ class ProgrammingApiTests(FastApiTestCase):
         self.assertEqual(duplicate.status_code, 409)
         self.assertEqual(duplicate.json()["detail"], "A workout already exists for this date.")
 
-    def test_personal_workout_validation_rejects_invalid_type(self) -> None:
-        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
-
-        created = self.client.post(
-            "/personal-workouts",
-            headers=athlete_headers,
-            json={"title": "Odd Format", "type": "ladder", "structure": {"rounds": 3}},
-        )
-        self.assertEqual(created.status_code, 400)
-        self.assertEqual(
-            created.json()["detail"],
-            "Workout type must be amrap, for_time, emom, interval, strength, or custom.",
-        )
-
     def test_create_workout_defaults_to_draft_and_hides_from_athletes(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Draft Box")
         self.add_active_membership(settings.DEMO_EMAIL, gym_id)
@@ -163,6 +149,49 @@ class ProgrammingApiTests(FastApiTestCase):
         self.assertEqual(len(sections), 1)
         self.assertEqual(sections[0]["title"], "")
         self.assertEqual(sections[0]["score_type"], "time")
+
+    def test_exercise_blocks_keep_sets_and_hide_coach_notes_from_members(self) -> None:
+        admin_headers, gym_id = self.create_gym_as_admin("Block Box")
+        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
+        block = {
+            "title": "Strength",
+            "description": "Back Squat: 5 @ 80%",
+            "score_type": "weight",
+            "kind": "exercise",
+            "exercise_name": "Back Squat",
+            "set_unit": "percent",
+            "sets": [{"reps": 5, "value": 80}, {"reps": 3, "value": None}],
+            "coach_notes": "Watch depth",
+            "member_notes": "Belt allowed",
+        }
+        created = self.client.post(
+            "/programming/workouts",
+            headers=admin_headers,
+            json={"scheduled_date": security.now_utc().date().isoformat(), "title": "Squat day", "sections": [block]},
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        saved = created.json()["workout"]["sections"][0]
+        self.assertEqual(saved["kind"], "exercise")
+        self.assertEqual(saved["sets"], [{"reps": 5, "value": 80.0}, {"reps": 3, "value": None}])
+        self.assertEqual(saved["coach_notes"], "Watch depth")
+
+        workout_id = created.json()["workout"]["id"]
+        self.client.post("/programming/workouts/publish", headers=admin_headers, json={"id": workout_id})
+        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+        seen = self.client.get("/programming/workouts", headers=athlete_headers).json()["workouts"][0]["sections"][0]
+        self.assertEqual(seen["coach_notes"], "")
+        self.assertEqual(seen["member_notes"], "Belt allowed")
+
+        bad = self.client.post(
+            "/programming/workouts",
+            headers=admin_headers,
+            json={
+                "scheduled_date": (security.now_utc().date() + timedelta(days=1)).isoformat(),
+                "title": "Bad",
+                "sections": [{**block, "sets": [{"reps": 0, "value": 80}]}],
+            },
+        )
+        self.assertEqual(bad.status_code, 400)
 
     def test_workout_section_validation_rejects_invalid_score(self) -> None:
         admin_headers, gym_id = self.create_gym_as_admin("Score Box")
@@ -441,45 +470,3 @@ class ProgrammingApiTests(FastApiTestCase):
             },
         )
         self.assertEqual(response.status_code, 403, response.text)
-
-    def test_logbook_upsert_keeps_single_entry_per_workout(self) -> None:
-        admin_headers, gym_id = self.create_gym_as_admin("Logbook Box")
-        self.add_active_membership(settings.DEMO_EMAIL, gym_id)
-        scheduled_date = security.now_utc().date().isoformat()
-
-        created = self.client.post(
-            "/programming/workouts",
-            headers=admin_headers,
-            json={
-                "scheduled_date": scheduled_date,
-                "title": "Cindy",
-                "sections": [
-                    {
-                        "title": "MetCon",
-                        "description": "20 min AMRAP",
-                        "score_type": "rounds_reps",
-                    },
-                ],
-                "status": "published",
-            },
-        )
-        self.assertEqual(created.status_code, 200, created.text)
-        workout_id = created.json()["workout"]["id"]
-
-        athlete_headers = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
-        first = self.client.post(
-            "/logbook/entries",
-            headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "reps", "score_value": 15, "notes_text": "Solid"},
-        )
-        self.assertEqual(first.status_code, 200, first.text)
-        first_entry_id = first.json()["entry"]["id"]
-
-        updated = self.client.post(
-            "/logbook/entries",
-            headers=athlete_headers,
-            json={"workout_id": workout_id, "score_type": "reps", "score_value": 16, "notes_text": "Better"},
-        )
-        self.assertEqual(updated.status_code, 200, updated.text)
-        self.assertEqual(updated.json()["entry"]["id"], first_entry_id)
-        self.assertEqual(self.count_rows("workout_logs", "user_id = ? and daily_workout_id = ?", (self.lookup_user_id(settings.DEMO_EMAIL), workout_id)), 1)

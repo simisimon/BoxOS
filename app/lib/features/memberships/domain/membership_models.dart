@@ -5,6 +5,8 @@
 /// tokens at the time they were given.
 library;
 
+import 'package:app/features/calendar/domain/models/class_type.dart';
+
 enum PlanType {
   /// Unlimited tokens.
   unlimited,
@@ -109,7 +111,9 @@ enum PaymentStatus {
 }
 
 /// Class types a plan can be limited to (same set as the schedule).
-const planClassTypes = <String>['WOD', 'Open Gym', 'Skill', 'PT'];
+List<String> get planClassTypes => [
+  for (final type in ClassType.values) type.wireValue,
+];
 
 String formatPrice(int cents, String currency) {
   final symbol = switch (currency) {

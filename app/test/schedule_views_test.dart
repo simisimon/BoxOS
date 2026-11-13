@@ -1,4 +1,4 @@
-import 'package:app/core/presentation/app_form_dialog.dart';
+import 'package:app/core/presentation/app_side_panel.dart';
 import 'package:app/features/calendar/data/repositories/api_schedule_repository.dart';
 import 'package:app/features/calendar/domain/models/class_template.dart';
 import 'package:app/features/calendar/domain/models/class_type.dart';
@@ -16,6 +16,7 @@ import 'package:app/features/profile/domain/models/notification_preferences.dart
 import 'package:app/features/profile/domain/models/user_profile.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/app.dart';
+import 'package:app/features/calendar/domain/models/schedule_booking.dart';
 import 'package:app/features/calendar/domain/models/schedule_class.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,6 +82,33 @@ const _athlete = UserProfile(
   ],
 );
 
+const _trainer = UserProfile(
+  userId: 7,
+  email: 'coach@boxos.app',
+  accountType: AccountType.athlete,
+  role: UserRole.trainer,
+  availableRoles: [UserRole.trainer, UserRole.athlete],
+  displayName: 'Coach Alex',
+  nickname: 'alex',
+  notificationPreferences: NotificationPreferences(
+    bookingConfirmations: true,
+    waitlistPromotions: true,
+    paymentIssues: true,
+    wodPosted: true,
+    prAchievements: true,
+    announcementActivity: true,
+  ),
+  activeGym: _gym,
+  memberships: [
+    GymMembership(
+      gym: _gym,
+      role: UserRole.trainer,
+      availableRoles: [UserRole.trainer, UserRole.athlete],
+      status: 'active',
+    ),
+  ],
+);
+
 DateTime _tomorrowAt(int hour) {
   final now = DateTime.now();
   return DateTime(now.year, now.month, now.day + 1, hour);
@@ -102,6 +130,12 @@ final _seriesSession = ScheduleClass(
 class _FakeScheduleRepository implements ScheduleRepository {
   ClassTemplateDraft? lastCreatedTemplate;
   int? lastBookedClassId;
+  int? lastRemovedUserId;
+
+  @override
+  Future<void> cancelBooking({required int classId, int? userId}) async {
+    lastRemovedUserId = userId;
+  }
 
   @override
   Future<void> bookClass({required int classId}) async {
@@ -169,7 +203,6 @@ class _FakeProgrammingRepository implements ProgrammingRepository {
         status: DailyWorkoutStatus.published,
         publishedAt: now,
         canEdit: true,
-        myWorkoutLog: null,
       ),
     ];
   }
@@ -186,6 +219,7 @@ Future<_FakeScheduleRepository> _pumpSchedule(
   WidgetTester tester,
   Size size, {
   UserProfile profile = _owner,
+  ScheduleClass? session,
 }) async {
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
@@ -197,7 +231,9 @@ Future<_FakeScheduleRepository> _pumpSchedule(
       overrides: [
         currentProfileProvider.overrideWith((ref) async => profile),
         scheduleRepositoryProvider.overrideWithValue(repository),
-        scheduleListProvider.overrideWith((ref) async => [_seriesSession]),
+        scheduleListProvider.overrideWith(
+          (ref) async => [session ?? _seriesSession],
+        ),
         programmingRepositoryProvider.overrideWithValue(
           _FakeProgrammingRepository(),
         ),
@@ -229,6 +265,9 @@ Future<void> _openTomorrowClass(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Next week'));
     await tester.pumpAndSettle();
   }
+  // The managers' hour grid scrolls sideways on phones.
+  await tester.ensureVisible(find.text('CrossFit'));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('CrossFit'));
   await tester.pumpAndSettle();
   _expectNoException(tester);
@@ -236,41 +275,39 @@ Future<void> _openTomorrowClass(WidgetTester tester) async {
 
 void main() {
   for (final size in const [Size(1280, 800), Size(390, 844)]) {
-    testWidgets('Week view shows WODs per day and switches weeks at $size', (
+    testWidgets('Athletes see their bookings in the week at $size', (
       tester,
     ) async {
-      await _pumpSchedule(tester, size);
+      // One week view for every role: athletes get the hour grid too.
+      await _pumpSchedule(
+        tester,
+        size,
+        profile: _athlete,
+        session: ScheduleClass(
+          id: 10,
+          gymId: 1,
+          title: 'CrossFit',
+          classType: 'WOD',
+          startTime: _tomorrowAt(17).add(const Duration(minutes: 30)),
+          durationMinutes: 60,
+          capacity: 20,
+          remainingSpots: 19,
+          bookedCount: 1,
+          isBooked: true,
+        ),
+      );
       _expectNoException(tester);
-      // Today's WOD shows on its day slip; tapping it opens the full card.
-      expect(find.text('Fran'), findsOneWidget);
-      await tester.tap(find.text('Fran'));
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('Log Results'), findsOneWidget);
-      expect(find.text('Whiteboard'), findsNothing);
-      await tester.tapAt(const Offset(4, 4));
-      await tester.pumpAndSettle();
-      expect(find.byType(Dialog), findsNothing);
-      expect(find.text('This week'), findsNothing);
-
-      await tester.tap(find.byTooltip('Next week'));
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.text('This week'), findsOneWidget);
-
-      // Every day of next week is in the future, so each offers "Add WOD".
-      await tester.tap(find.text('Add WOD').first);
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.text('Save & Publish'), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('This week'));
-      await tester.pumpAndSettle();
-      _expectNoException(tester);
-      expect(find.text('This week'), findsNothing);
+      if (_tomorrowAt(0).weekday == DateTime.monday) {
+        await tester.tap(find.byTooltip('Next week'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('CrossFit'), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+      // No planning tools for athletes.
+      expect(find.byTooltip('Create recurring classes'), findsNothing);
+      expect(find.byTooltip('Add class'), findsNothing);
+      expect(find.text('Coached by me'), findsNothing);
+      expect(find.text('Add WOD'), findsNothing);
     });
 
     testWidgets('Week adds a weekly class right in the day at $size', (
@@ -279,11 +316,13 @@ void main() {
       final repository = await _pumpSchedule(tester, size);
 
       // Past days offer no "Add class", so the first one is today's.
-      await tester.tap(find.text('Add class').first);
+      await tester.ensureVisible(find.byTooltip('Add class').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('New class'), findsOneWidget);
+      expect(find.byType(AppSidePanel), findsOneWidget);
+      expect(find.text('Create class'), findsOneWidget);
 
       await tester.ensureVisible(find.byType(Switch));
       await tester.tap(find.byType(Switch));
@@ -301,30 +340,30 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
 
-      expect(find.byType(Dialog), findsNothing);
+      expect(find.byType(AppSidePanel), findsNothing);
       final draft = repository.lastCreatedTemplate;
       expect(draft, isNotNull);
       expect(draft!.weekdays, [DateTime.now().weekday]);
       expect(draft.classType, 'WOD');
     });
 
-    testWidgets('Editing a weekly session asks for the scope at $size', (
+    testWidgets('A weekly session edits this date or its schedule at $size', (
       tester,
     ) async {
       await _pumpSchedule(tester, size);
-      expect(find.text('Edit'), findsNothing);
       await _openTomorrowClass(tester);
+      expect(find.byType(AppSidePanel), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Edit'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Edit'));
-      await tester.pumpAndSettle();
-      expect(find.text('Only this date'), findsOneWidget);
-
-      await tester.tap(find.text('All upcoming dates'));
+      // Details edits this date; the link opens the weekly schedule.
+      await tester.tap(find.text('Details'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(find.text('Edit class'), findsOneWidget);
+      expect(find.text('Changes apply to this class only.'), findsOneWidget);
+      await tester.tap(find.text('Edit schedule'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(find.byType(AppSidePanel), findsOneWidget);
+      expect(find.text('Edit schedule'), findsOneWidget);
       expect(
         find.text(
           'Changes apply to all upcoming dates. Booked dates keep their time.',
@@ -333,25 +372,124 @@ void main() {
       );
     });
 
-    testWidgets('Add class and Add WOD open the same window at $size', (
-      tester,
-    ) async {
+    testWidgets('Add class opens the create panel at $size', (tester) async {
       await _pumpSchedule(tester, size);
       // Next week: every day is in the future, so both buttons exist.
       await tester.tap(find.byTooltip('Next week'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Add class').first);
+      await tester.ensureVisible(find.byTooltip('Add class').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add class').first);
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      final classWindow = tester.getRect(find.byType(AppFormDialog));
+      expect(find.byType(AppSidePanel), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
+      expect(find.byType(AppSidePanel), findsNothing);
 
-      await tester.tap(find.text('Add WOD').first);
+      // The header's + creates recurring classes.
+      await tester.tap(find.byTooltip('Create recurring classes'));
       await tester.pumpAndSettle();
       _expectNoException(tester);
-      expect(tester.getRect(find.byType(AppFormDialog)), classWindow);
+      expect(find.text('Create recurring classes'), findsOneWidget);
+    });
+
+    testWidgets('Owners remove a booked member at $size', (tester) async {
+      final repository = await _pumpSchedule(
+        tester,
+        size,
+        session: ScheduleClass(
+          id: 10,
+          gymId: 1,
+          title: 'CrossFit',
+          classType: 'WOD',
+          startTime: _tomorrowAt(17).add(const Duration(minutes: 30)),
+          durationMinutes: 60,
+          capacity: 20,
+          classTemplateId: 1,
+          remainingSpots: 19,
+          bookedCount: 1,
+          bookings: const [
+            ScheduleBooking(
+              userId: 42,
+              displayName: 'Clara Haas',
+              nickname: 'clara',
+              attendanceStatus: 'booked',
+              isCurrentUser: false,
+            ),
+          ],
+        ),
+      );
+      await _openTomorrowClass(tester);
+      await tester.ensureVisible(find.byTooltip('Remove from class'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Remove from class'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(repository.lastRemovedUserId, 42);
+    });
+
+    testWidgets('Trainers coach but cannot create or edit classes at $size', (
+      tester,
+    ) async {
+      await _pumpSchedule(
+        tester,
+        size,
+        profile: _trainer,
+        session: ScheduleClass(
+          id: 10,
+          gymId: 1,
+          title: 'CrossFit',
+          classType: 'WOD',
+          startTime: _tomorrowAt(17).add(const Duration(minutes: 30)),
+          durationMinutes: 60,
+          capacity: 20,
+          classTemplateId: 1,
+          remainingSpots: 19,
+          bookedCount: 1,
+          bookings: const [
+            ScheduleBooking(
+              userId: 42,
+              displayName: 'Clara Haas',
+              nickname: 'clara',
+              attendanceStatus: 'booked',
+              isCurrentUser: false,
+            ),
+          ],
+        ),
+      );
+      await tester.tap(find.byTooltip('Next week'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Create recurring classes'), findsNothing);
+      expect(find.byTooltip('Add class'), findsNothing);
+      await tester.tap(find.byTooltip('Previous week'));
+      await tester.pumpAndSettle();
+
+      // Trainers see who is booked, but the timetable stays the owner's.
+      await _openTomorrowClass(tester);
+      expect(find.text('Clara Haas'), findsOneWidget);
+      expect(find.byTooltip('Remove from class'), findsNothing);
+      expect(find.text('Details'), findsNothing);
+      expect(find.text('Delete class'), findsNothing);
+    });
+
+    testWidgets('Trainers narrow the week to their classes at $size', (
+      tester,
+    ) async {
+      await _pumpSchedule(tester, size, profile: _trainer);
+      if (_tomorrowAt(0).weekday == DateTime.monday) {
+        await tester.tap(find.byTooltip('Next week'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('CrossFit'), findsOneWidget);
+      // Nobody coaches the class, so "Coached by me" hides it.
+      await tester.tap(find.text('Coached by me'));
+      await tester.pumpAndSettle();
+      _expectNoException(tester);
+      expect(find.text('CrossFit'), findsNothing);
     });
 
     testWidgets('Athletes book a class from the week at $size', (tester) async {
@@ -366,7 +504,8 @@ void main() {
       await tester.pumpAndSettle();
       _expectNoException(tester);
       expect(repository.lastBookedClassId, _seriesSession.id);
-      expect(find.text('Edit'), findsNothing);
+      // Athletes get no Details tab.
+      expect(find.text('Details'), findsNothing);
     });
   }
 }

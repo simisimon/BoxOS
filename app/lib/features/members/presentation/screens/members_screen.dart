@@ -16,10 +16,11 @@ import 'package:app/features/profile/domain/models/role_managed_user.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-/// Owner-facing "Members" tab: the active member roster as a search-and-filter
-/// table with inline-expand editing, and a Requests segment with join requests
-/// and membership plan requests.
+/// Owner-facing "Members" page (docs/admin-ui-reference.md §4.1): a Members |
+/// Requests segment with the search on the right, the roster as a table whose
+/// rows open the member's own page, and join and plan requests.
 /// Renders as a shell branch body (the shell supplies the top header), so
 /// there is no local app bar.
 class MembersScreen extends ConsumerStatefulWidget {
@@ -43,6 +44,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 
   /// Members and join requests share the page as two tabs.
   bool _showRequests = false;
+  String _query = '';
 
   Future<void> _load() async {
     setState(() {
@@ -172,48 +174,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     }
   }
 
-  /// Persists a single-member draft. Returns when the PATCH resolves so the
-  /// roster widget can clear its in-flight spinner. Updates the local roster
-  /// in place; a removed member disappears from the list entirely.
-  Future<void> _saveDraft(MemberDraft draft) async {
-    try {
-      final updated = await ref
-          .read(profileRepositoryProvider)
-          .updateUserRole(
-            userId: draft.user.id,
-            roles: draft.roles.toList(),
-            activeRole: draft.activeRole,
-            status: draft.status,
-            adminNote: draft.adminNote,
-          );
-      ref.invalidate(currentProfileProvider);
-      if (!mounted) return;
-      setState(() {
-        final next = <RoleManagedUser>[];
-        for (final u in _users) {
-          if (u.id != updated.id) {
-            next.add(u);
-          } else if (updated.status != MembershipStatus.removed) {
-            next.add(updated);
-          }
-        }
-        _users = next;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Saved ${updated.email}.')));
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessageFrom(error, fallback: 'Failed to update member'),
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
@@ -265,28 +225,46 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  icon: const Icon(Icons.group_outlined),
-                  label: Text('Members (${_users.length})'),
-                ),
-                ButtonSegment(
-                  value: true,
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: Text(
-                    'Requests (${_requests.length + _planRequests.length})',
+          Wrap(
+            // One line on wide screens, search below the segment on phones.
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: appSpaceMd,
+            runSpacing: appSpaceSm,
+            children: [
+              SegmentedButton<bool>(
+                segments: [
+                  ButtonSegment(
+                    value: false,
+                    icon: const Icon(Icons.group_outlined),
+                    label: Text('Members ${_users.length}'),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: Text(
+                      'Requests ${_requests.length + _planRequests.length}',
+                    ),
+                  ),
+                ],
+                selected: {_showRequests},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) =>
+                    setState(() => _showRequests = selection.first),
+              ),
+              if (!_showRequests)
+                SizedBox(
+                  width: 260,
+                  child: TextField(
+                    onChanged: (value) => setState(() => _query = value),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: 'Search member',
+                      prefixIcon: Icon(Icons.search_rounded, size: 18),
+                    ),
                   ),
                 ),
-              ],
-              selected: {_showRequests},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) =>
-                  setState(() => _showRequests = selection.first),
-            ),
+            ],
           ),
           const SizedBox(height: appSpaceMd),
           Expanded(
@@ -309,30 +287,17 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _RoleMixSummary(users: _users),
-        const SizedBox(height: appSpaceMd),
-        Expanded(
-          child: MemberRoster(
-            users: _users,
-            onSave: _saveDraft,
-            onRefresh: _refresh,
-            detailExtra: (user) => MemberPlanSection(
-              key: ValueKey('plan-${user.id}'),
-              userId: user.id,
-              memberName: user.displayName.trim().isEmpty
-                  ? user.email
-                  : user.displayName.trim(),
-              onChanged: () {
-                unawaited(_reloadRoster());
-                unawaited(_reloadPlanRequests());
-              },
-            ),
-          ),
-        ),
-      ],
+    return MemberRoster(
+      users: _users,
+      query: _query,
+      onRefresh: _refresh,
+      onOpen: (user) async {
+        await context.push('/members/${user.id}');
+        // The detail page may have changed roles, status or the plan.
+        if (!mounted) return;
+        unawaited(_reloadRoster());
+        unawaited(_reloadPlanRequests());
+      },
     );
   }
 
@@ -376,87 +341,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             onApprove: () => _reviewPlanRequest(request, true),
             onReject: () => _reviewPlanRequest(request, false),
           ),
-      ],
-    );
-  }
-}
-
-/// Role-mix summary — athlete / trainer / admin headcounts drawn from the
-/// active roster, so large boxes read their composition at a glance before
-/// diving into the searchable table.
-class _RoleMixSummary extends StatelessWidget {
-  const _RoleMixSummary({required this.users});
-
-  final List<RoleManagedUser> users;
-
-  @override
-  Widget build(BuildContext context) {
-    var athletes = 0;
-    var trainers = 0;
-    var admins = 0;
-    for (final user in users) {
-      switch (user.role) {
-        case UserRole.athlete:
-          athletes++;
-        case UserRole.trainer:
-          trainers++;
-        case UserRole.admin:
-          admins++;
-      }
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: appSpaceLg,
-        vertical: appSpaceMd,
-      ),
-      decoration: appPanelDecoration(radius: appRadiusMd),
-      child: Row(
-        children: [
-          Expanded(
-            child: _RoleMixCell(count: athletes, label: 'ATHLETES'),
-          ),
-          _roleMixDivider,
-          Expanded(
-            child: _RoleMixCell(count: trainers, label: 'TRAINERS'),
-          ),
-          _roleMixDivider,
-          Expanded(
-            child: _RoleMixCell(count: admins, label: 'ADMINS'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static final Widget _roleMixDivider = Container(
-    width: 1,
-    height: 34,
-    margin: const EdgeInsets.symmetric(horizontal: appSpaceSm),
-    color: appBorder,
-  );
-}
-
-class _RoleMixCell extends StatelessWidget {
-  const _RoleMixCell({required this.count, required this.label});
-
-  final int count;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$count',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontSize: 24,
-            height: 1,
-            letterSpacing: -0.4,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(label, style: appMono(fontSize: 9, letterSpacing: 1.2)),
       ],
     );
   }

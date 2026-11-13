@@ -47,17 +47,18 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   with `git checkout -- app/test/preview/failures/`.
 - Backend: `python3 -m unittest discover -s backend -p "test_*.py"` (needs
   `backend/requirements-dev.txt`; testcontainers starts its own Postgres).
-  `test_dashboard_returns_stats_and_newest_prs_for_members` is known red.
+  `test_dashboard_returns_stats_for_members` is known red.
 
 ## Conventions
 
 - Format only the Dart files you changed (`dart format <file>`). Many files are
   unformatted at HEAD; `dart format lib` floods the diff.
-- Every dialog uses `AppFormDialog` (`app/lib/core/presentation/app_form_dialog.dart`,
-  fixed 520×640); yes/no questions use `showAppConfirmDialog`. No new
+- Layout target: `docs/admin-ui-reference.md` (left sidebar, right-side panels
+  for detail and create flows, full-width pages, BoxOS colours from
+  `app_chrome.dart`). Views are being migrated to it one by one; a view not yet
+  migrated keeps `AppFormDialog` (fixed 520×640) and the `contentMaxWidth`
+  column. Yes/no questions always use `showAppConfirmDialog`. No new
   `AlertDialog` / `SimpleDialog`.
-- All tabs share one content column (`contentMaxWidth`). Only the schedule week
-  (My Box branch) renders full-bleed.
 - The app theme makes `FilledButton`/`OutlinedButton` full-width: inside a
   `Row` give them `minimumSize: Size(0, 44)` or use `OverflowBar`. Widget tests
   pump with `theme: buildBoxOsTheme()` (see `app/test/schedule_views_test.dart`)
@@ -68,10 +69,12 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 
 ## Product decisions
 
-- Schedule: one week view for every role; classes are templates (types WOD,
-  Open Gym, Skill, PT), one WOD per gym per day.
+- Schedule: one week view for every role; classes are templates, one WOD per
+  gym per day. Types: the built-ins WOD, Open Gym, Skill, PT plus custom types
+  an owner adds in Settings › Class types (`/class-types`, `gym_class_types`).
 - The whiteboard feature was removed on purpose — do not re-add it.
-- Logbook is history only (logged WODs, score, PR, the WOD's sections). Scores
-  are stored per WOD, not per exercise.
+- Workout logging was removed on purpose (2026-11-12): no logbook, scores,
+  PRs or tracking in the app — do not re-add it. The `workout_logs` tables
+  still exist so old data is kept.
 - Join requests live in the Members tab (Requests segment); the Members nav
   item shows the open count as a badge.
