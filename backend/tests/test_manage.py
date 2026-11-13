@@ -97,6 +97,7 @@ class ProductionSettingsTests(FastApiTestCase):
             settings.SEED_DEMO_USERS,
             settings.LOG_DELIVERY_TOKENS,
             settings.CORS_ALLOW_ORIGINS,
+            settings.STRIPE_SECRET_KEY,
         )
 
     def tearDown(self) -> None:
@@ -106,6 +107,7 @@ class ProductionSettingsTests(FastApiTestCase):
             settings.SEED_DEMO_USERS,
             settings.LOG_DELIVERY_TOKENS,
             settings.CORS_ALLOW_ORIGINS,
+            settings.STRIPE_SECRET_KEY,
         ) = self._saved
         super().tearDown()
 
@@ -119,7 +121,17 @@ class ProductionSettingsTests(FastApiTestCase):
         settings.SEED_DEMO_USERS = True
         settings.LOG_DELIVERY_TOKENS = True
         settings.CORS_ALLOW_ORIGINS = ["http://localhost:3001"]
-        self.assertEqual(len(settings.production_problems()), 4)
+        settings.STRIPE_SECRET_KEY = "sk_test_x"
+        self.assertEqual(len(settings.production_problems()), 5)
+
+    def test_production_flags_placeholder_password(self) -> None:
+        settings.ENV = "production"
+        settings.DATABASE_URL = "postgresql://boxos:change-me@db:5432/boxos"
+        settings.SEED_DEMO_USERS = False
+        settings.LOG_DELIVERY_TOKENS = False
+        settings.CORS_ALLOW_ORIGINS = ["https://app.boxos-app.de"]
+        settings.STRIPE_SECRET_KEY = ""
+        self.assertEqual(len(settings.production_problems()), 1)
 
     def test_production_with_safe_settings_passes(self) -> None:
         settings.ENV = "production"
@@ -127,4 +139,5 @@ class ProductionSettingsTests(FastApiTestCase):
         settings.SEED_DEMO_USERS = False
         settings.LOG_DELIVERY_TOKENS = False
         settings.CORS_ALLOW_ORIGINS = ["https://app.boxos-app.de"]
+        settings.STRIPE_SECRET_KEY = ""
         self.assertEqual(settings.production_problems(), [])

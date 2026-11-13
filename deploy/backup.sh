@@ -13,7 +13,7 @@ set -euo pipefail
 REPO_DIR="${REPO_DIR:-/srv/boxos}"
 BACKUP_DIR="${BACKUP_DIR:-/srv/boxos-backups}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
-PROJECT="${PROJECT:-boxos}"
+PROJECT="${PROJECT:-boxos-prod}"
 COMPOSE=(docker compose -p "$PROJECT" -f "$REPO_DIR/docker-compose.prod.yml")
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"

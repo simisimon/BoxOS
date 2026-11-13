@@ -1,9 +1,13 @@
 """Account administration for invite-only deployments.
 
-Run inside the backend container, for example on the server:
+Run inside the backend container. On the server (production stack):
 
-    docker compose exec backend python -m backend.manage create-user \\
+    docker compose -f docker-compose.prod.yml exec backend python -m backend.manage create-user \\
       --email anna@example.com --name "Anna Weber" --role athlete --gym "CrossFit Example"
+
+In the local dev stack the service is called backend-dev:
+
+    docker compose exec backend-dev python -m backend.manage list-users
 
 Commands:
     create-user      create an account (verified) and print its password

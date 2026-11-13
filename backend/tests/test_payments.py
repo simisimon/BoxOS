@@ -304,6 +304,22 @@ class SubscriptionTests(FastApiTestCase):
         self.assertEqual(response.json()["plan"]["state"], "ended")
         self.assertEqual(self.fake.cancellations[-1], {"subscription": "sub_9", "at_period_end": False})
 
+    def test_without_a_key_nothing_reaches_stripe(self) -> None:
+        member_plan = self.assign()
+        self.send("evt_1", "checkout.session.completed", {
+            "mode": "subscription", "subscription": "sub_9",
+            "metadata": {"boxos_member_plan_id": str(member_plan["id"])},
+        })
+        settings.STRIPE_SECRET_KEY = ""
+        mine = self.client.get("/membership/me", headers=self.athlete_headers).json()
+        self.assertFalse(mine["online_payments"])
+        self.assertEqual(self.checkout(member_plan["id"]).status_code, 503)
+        response = self.client.post(
+            "/membership/assignments/end", headers=self.admin_headers, json={"member_plan_id": member_plan["id"]}
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(getattr(self.fake, "cancellations", []), [])
+
 
 class YearlyPlanTests(FastApiTestCase):
     def test_new_plans_cannot_be_billed_yearly(self) -> None:

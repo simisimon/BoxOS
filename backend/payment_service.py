@@ -358,7 +358,7 @@ def end_subscribed_plan(
     otherwise the plan (and subscription) ends today."""
     gym = _gym_row(connection, member_plan["gym_id"])
     subscription_id = member_plan["stripe_subscription_id"]
-    if subscription_id and gym["stripe_account_id"]:
+    if subscription_id and gym["stripe_account_id"] and is_configured():
         client.cancel_subscription(gym["stripe_account_id"], subscription_id, at_period_end=at_period_end)
     if not at_period_end:
         plan_service.end_member_plan(connection, member_plan=member_plan, gym_timezone=gym_timezone)

@@ -8,7 +8,7 @@ set -euo pipefail
 DUMP="${1:?usage: restore.sh <db dump> [uploads tar]}"
 UPLOADS="${2:-}"
 REPO_DIR="${REPO_DIR:-/srv/boxos}"
-PROJECT="${PROJECT:-boxos}"
+PROJECT="${PROJECT:-boxos-prod}"
 COMPOSE=(docker compose -p "$PROJECT" -f "$REPO_DIR/docker-compose.prod.yml")
 
 read -r -p "Replace the database of project '$PROJECT' with $DUMP? Type yes: " answer

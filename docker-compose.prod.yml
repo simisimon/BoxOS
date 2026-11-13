@@ -7,7 +7,8 @@
 # Staging runs the same file with another project name, env file and ports:
 #   docker compose -p boxos-staging -f docker-compose.prod.yml --env-file .env.staging up -d --build
 
-name: boxos
+# Not "boxos": that is the dev stack's project name in this folder.
+name: boxos-prod
 
 services:
   db:
@@ -60,8 +61,7 @@ services:
       BOXOS_SIGNUP_ENABLED: ${SIGNUP_ENABLED:-0}
       BOXOS_SEED_DEMO_USERS: ${SEED_DEMO_USERS:-0}
       BOXOS_LOG_DELIVERY_TOKENS: "0"
-      BOXOS_STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      BOXOS_STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # No BOXOS_STRIPE_* variables: payments stay off (the app hides them).
     volumes:
       - uploads:/app/uploads
     ports:

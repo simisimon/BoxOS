@@ -98,12 +98,15 @@ def production_problems() -> list[str]:
     if ENV != "production":
         return []
     problems = []
-    if "boxos:boxos@" in DATABASE_URL:
-        problems.append("BOXOS_DATABASE_URL still uses the dev password 'boxos'.")
+    if "boxos:boxos@" in DATABASE_URL or ":change-me@" in DATABASE_URL:
+        problems.append("BOXOS_DATABASE_URL still uses a placeholder or dev password.")
     if SEED_DEMO_USERS:
         problems.append("BOXOS_SEED_DEMO_USERS is on; it creates accounts with public passwords.")
     if LOG_DELIVERY_TOKENS:
         problems.append("BOXOS_LOG_DELIVERY_TOKENS is on; reset and verification tokens would be logged.")
     if any("localhost" in origin for origin in CORS_ALLOW_ORIGINS):
         problems.append("BOXOS_CORS_ALLOW_ORIGINS still allows localhost.")
+    # shortcut: payments are not launched yet; drop this check when they are.
+    if STRIPE_SECRET_KEY:
+        problems.append("BOXOS_STRIPE_SECRET_KEY is set, but payments are switched off in production.")
     return problems
