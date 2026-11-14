@@ -10,6 +10,7 @@ import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
+import 'package:app/features/results/presentation/log_result_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app/features/announcements/presentation/widgets/announcement_feed_section.dart';
@@ -577,6 +578,26 @@ class _ActivityState extends ConsumerState<_Activity> {
     }
   }
 
+  Future<void> _logResult(DailyWorkoutSection section) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await showLogResultPanel(
+      context,
+      section: section,
+      dayLabel: MaterialLocalizations.of(context).formatMediumDate(_day),
+    );
+    if (outcome == null) return;
+    ref.invalidate(programmingListProvider);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          outcome == LogResultOutcome.saved
+              ? 'Result saved.'
+              : 'Result deleted.',
+        ),
+      ),
+    );
+  }
+
   void _shift(int days) =>
       setState(() => _day = DateTime(_day.year, _day.month, _day.day + days));
 
@@ -680,7 +701,17 @@ class _ActivityState extends ConsumerState<_Activity> {
             // Athletes read the whole workout here.
             if (!widget.manager)
               for (final section in workout.sections)
-                _WodSection(section: section)
+                _WodSection(
+                  section: section,
+                  // Published WODs from today back take results.
+                  onLog:
+                      workout.isPublished &&
+                          !_day.isAfter(_dateOnly(DateTime.now())) &&
+                          section.isScored &&
+                          section.id != null
+                      ? () => _logResult(section)
+                      : null,
+                )
             else
               for (var i = 0; i < workout.sections.length; i++)
                 Padding(
@@ -907,28 +938,61 @@ String _setLabel(WorkoutSet set, SetUnit unit) {
       : '${set.reps} reps @ $number %';
 }
 
-/// One block of the WOD for athletes: its title and everything in it.
+/// One block of the WOD for athletes: its title and everything in it, and
+/// [onLog] to log or edit a result when the block takes one.
 class _WodSection extends StatelessWidget {
-  const _WodSection({required this.section});
+  const _WodSection({required this.section, this.onLog});
 
   final DailyWorkoutSection section;
+  final VoidCallback? onLog;
 
   @override
   Widget build(BuildContext context) {
+    final result = section.myResult;
     return Padding(
       padding: const EdgeInsets.only(bottom: appSpaceMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (section.title.isNotEmpty)
-            Text(
-              section.title,
-              style: const TextStyle(
-                color: appText,
-                fontWeight: FontWeight.w600,
-                fontSize: 13.5,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  section.title,
+                  style: const TextStyle(
+                    color: appText,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5,
+                  ),
+                ),
               ),
-            ),
+              if (onLog != null)
+                result == null
+                    ? TextButton.icon(
+                        key: ValueKey('log-result-${section.id}'),
+                        onPressed: onLog,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.edit_note_rounded, size: 18),
+                        label: const Text('Log result'),
+                      )
+                    : Tooltip(
+                        message: 'Edit your result',
+                        child: InkWell(
+                          key: ValueKey('my-result-${section.id}'),
+                          onTap: onLog,
+                          borderRadius: BorderRadius.circular(999),
+                          child: AppPill(
+                            label:
+                                '${result.scoreLabel} · ${result.divisionLabel}',
+                            intent: AppPillIntent.success,
+                            dense: true,
+                          ),
+                        ),
+                      ),
+            ],
+          ),
           if (section.kind == BlockKind.exercise &&
               section.exerciseName.isNotEmpty &&
               section.exerciseName != section.title)

@@ -1,3 +1,5 @@
+import 'package:app/features/results/domain/workout_result.dart';
+
 enum DailyWorkoutStatus { draft, published }
 
 DailyWorkoutStatus parseDailyWorkoutStatus(Object? value) {
@@ -110,6 +112,8 @@ class DailyWorkoutSection {
     this.memberNotes = '',
     this.movementId,
     this.workoutName = '',
+    this.myResult,
+    this.resultCount = 0,
   });
 
   factory DailyWorkoutSection.fromJson(Map<String, dynamic> json) =>
@@ -131,6 +135,10 @@ class DailyWorkoutSection {
         memberNotes: json['member_notes'] as String? ?? '',
         movementId: (json['movement_id'] as num?)?.toInt(),
         workoutName: json['workout_name'] as String? ?? '',
+        myResult: json['my_result'] is Map<String, dynamic>
+            ? WorkoutResult.fromJson(json['my_result'] as Map<String, dynamic>)
+            : null,
+        resultCount: (json['result_count'] as num? ?? 0).toInt(),
       );
 
   /// Server id; null for a block that was not saved yet. Sent back on save
@@ -160,6 +168,12 @@ class DailyWorkoutSection {
   /// Named workout (Fran, Murph, a box test) on workout blocks, so a repeat
   /// can be found again.
   final String workoutName;
+
+  /// The signed-in member's own result on this block, if logged.
+  final WorkoutResult? myResult;
+
+  /// How many members logged this block.
+  final int resultCount;
 
   bool get isScored => scoreType != WorkoutSectionScore.none;
 

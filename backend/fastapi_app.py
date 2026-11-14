@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, results_service, schedule_service, security, settings, session_auth, validation
 
 logger = logging.getLogger("boxos.backend")
 
@@ -4382,6 +4382,69 @@ def list_workout_names(
             names.append(name)
         names.sort(key=lambda n: (not n.lower().startswith(wanted), n.lower()))
         return {"workout_names": names[: max(1, min(limit, 50))]}
+    finally:
+        connection.close()
+
+
+class ResultSetPayload(BaseModel):
+    reps: int | str | None = None
+    kg: float | str | None = None
+
+
+class WorkoutResultRequest(BaseModel):
+    section_id: int
+    # The score as typed: "4:12", "7+14", "120", "62.5". Exercise blocks send
+    # sets instead; a time-capped "for time" block sends the reps reached.
+    score: str | None = None
+    division: str | None = None
+    time_capped: bool = False
+    sets: list[ResultSetPayload] | None = None
+    notes: str | None = None
+
+
+class WorkoutResultDeleteRequest(BaseModel):
+    section_id: int
+
+
+@app.put("/results")
+def save_workout_result(
+    body: WorkoutResultRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """Logs or replaces the caller's result on one scored block of a
+    published WOD dated today or earlier."""
+    payload = body.model_dump()
+    payload["sets"] = None if body.sets is None else [s.model_dump() for s in body.sets]
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = results_service.save_result(
+                connection,
+                user_id=session["user_id"],
+                gym_id=session["active_gym_id"],
+                section_id=body.section_id,
+                body=payload,
+            )
+        return {"result": result}
+    finally:
+        connection.close()
+
+
+@app.delete("/results")
+def delete_workout_result(
+    body: WorkoutResultDeleteRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            results_service.delete_result(
+                connection,
+                user_id=session["user_id"],
+                gym_id=session["active_gym_id"],
+                section_id=body.section_id,
+            )
+        return {"message": "Result deleted."}
     finally:
         connection.close()
 
