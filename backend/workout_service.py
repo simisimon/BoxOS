@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -44,6 +45,46 @@ def fetch_workout_sections(
     return [workout_section_payload(row) for row in rows]
 
 
+def _refuse_changes_to_logged_blocks(
+    connection: ManagedConnection,
+    sections: list[dict[str, Any]],
+    removed: set[int],
+    kept: set[int],
+) -> None:
+    """Athletes' results hang off a block: it cannot be removed, or switch
+    between workout and exercise or to another score type, once logged."""
+    from backend.validation import ApiError
+
+    ids = removed | kept
+    if not ids:
+        return
+    placeholders = ", ".join("?" for _ in ids)
+    rows = connection.execute(
+        f"""
+        select s.id, s.title, s.kind, s.score_type, count(r.id) as results
+        from daily_workout_sections s
+        join workout_results r on r.section_id = s.id
+        where s.id in ({placeholders})
+        group by s.id, s.title, s.kind, s.score_type
+        """,
+        tuple(ids),
+    ).fetchall()
+    incoming = {s.get("id"): s for s in sections if s.get("id") in kept}
+    for row in rows:
+        name = row["title"] or "A block"
+        if row["id"] in removed:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"{name} has {row['results']} logged results and cannot be removed.",
+            )
+        new = incoming[row["id"]]
+        if new.get("kind", "workout") != row["kind"] or new["score_type"] != row["score_type"]:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"{name} has {row['results']} logged results; its type and score cannot change.",
+            )
+
+
 def replace_workout_sections(
     connection: ManagedConnection,
     *,
@@ -72,6 +113,7 @@ def replace_workout_sections(
         section_id = section.get("id")
         if isinstance(section_id, int) and section_id in existing_ids and section_id not in kept:
             kept.add(section_id)
+    _refuse_changes_to_logged_blocks(connection, sections, existing_ids - kept, kept)
     for stale_id in existing_ids - kept:
         connection.execute("delete from daily_workout_sections where id = ?", (stale_id,))
     # Move kept rows out of the way of unique(daily_workout_id, position).
@@ -131,17 +173,33 @@ def replace_workout_sections(
             )
 
 
+def _sections_with_results(
+    connection: ManagedConnection, daily_workout_id: int, user_id: int, can_edit: bool
+) -> list[dict[str, Any]]:
+    from backend import results_service
+
+    mine = results_service.my_results_by_section(
+        connection, user_id=user_id, daily_workout_id=daily_workout_id
+    )
+    counts = results_service.result_counts_by_section(connection, daily_workout_id=daily_workout_id)
+    sections = []
+    for section in fetch_workout_sections(connection, daily_workout_id):
+        # Coach notes are for coaches; members only get the member notes.
+        if not can_edit:
+            section = {**section, "coach_notes": ""}
+        section["my_result"] = mine.get(section["id"])
+        section["result_count"] = counts.get(section["id"], 0)
+        sections.append(section)
+    return sections
+
+
 def daily_workout_payload(connection: ManagedConnection, row: Row, *, current_user_id: int, can_edit: bool) -> dict[str, Any]:
     return {
         "id": row["id"],
         "gym_id": row["gym_id"],
         "scheduled_date": row["scheduled_date"],
         "title": row["title"],
-        # Coach notes are for coaches; members only get the member notes.
-        "sections": [
-            section if can_edit else {**section, "coach_notes": ""}
-            for section in fetch_workout_sections(connection, row["id"])
-        ],
+        "sections": _sections_with_results(connection, row["id"], current_user_id, can_edit),
         "status": row["status"],
         "published_at": row["published_at"],
         "can_edit": can_edit,
