@@ -91,7 +91,8 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   block, not to a class or class type. Each block has a gym leaderboard,
   PRs are marked, results get fist bumps, comments and photos, athletes keep
   a personal logbook and follow friends across gyms, and a Whiteboard page
-  shows the WOD with its leaderboards. The plan and phases:
+  (`/whiteboard`, every role; `/whiteboard/tv` full screen for the box TV,
+  refreshed every minute) shows the WOD with its leaderboards. The plan and phases:
   https://claude.ai/artifact/KWrtxzWAaYxp2qLzwVG7rM. The old `workout_logs`,
   `tracking_sessions` and `personal_workouts` tables are not reused or
   migrated; the timer stays out. Privacy (`users.results_visibility`):

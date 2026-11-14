@@ -55,6 +55,7 @@ class AuthenticatedShellScreen extends ConsumerWidget {
       kReportsBranch,
       kMessagesBranch,
       kBoxSettingsBranch,
+      kWhiteboardBranch,
       // Every role's start page and the profile are migrated.
       kHomeBranch,
       kProfileBranch,

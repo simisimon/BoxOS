@@ -27,6 +27,16 @@ const int kReportsBranch = 8;
 /// Owner messages: announcements and box chat (docs/admin-ui-reference.md §5).
 const int kMessagesBranch = 9;
 
+/// The day's WOD with its leaderboards; every role.
+const int kWhiteboardBranch = 10;
+
+const _whiteboardDestination = ShellDestination(
+  branchIndex: kWhiteboardBranch,
+  icon: Icons.leaderboard_outlined,
+  activeIcon: Icons.leaderboard_rounded,
+  label: 'Whiteboard',
+);
+
 const _programsDestination = ShellDestination(
   branchIndex: kProgramsBranch,
   icon: Icons.view_week_outlined,
@@ -87,6 +97,7 @@ const List<ShellDestination> _athleteDestinations = [
     label: 'Home',
   ),
   _classesDestination,
+  _whiteboardDestination,
   // Chat only; announcements are on Home.
   _messagesDestination,
   _profileDestination,
@@ -103,6 +114,7 @@ const List<ShellDestination> _trainerDestinations = [
   ),
   _classesDestination,
   _programsDestination,
+  _whiteboardDestination,
   _messagesDestination,
   _profileDestination,
 ];
@@ -123,6 +135,7 @@ const List<ShellDestination> _ownerDestinations = [
     activeIcon: Icons.groups_rounded,
     label: 'Members',
   ),
+  _whiteboardDestination,
   ShellDestination(
     branchIndex: kReportsBranch,
     icon: Icons.insert_chart_outlined_rounded,

@@ -670,9 +670,29 @@ class _ActivityState extends ConsumerState<_Activity> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            widget.manager ? 'Programs' : 'WOD of the day',
-            style: const TextStyle(color: appText, fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.manager ? 'Programs' : 'WOD of the day',
+                  style: const TextStyle(
+                    color: appText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (workout != null && workout.isPublished)
+                TextButton.icon(
+                  onPressed: () => context.go(
+                    '/whiteboard?date=${workout.scheduledDate.toIso8601String().substring(0, 10)}',
+                  ),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.leaderboard_outlined, size: 16),
+                  label: const Text('Whiteboard'),
+                ),
+            ],
           ),
           const SizedBox(height: appSpaceMd),
           if (workout == null)

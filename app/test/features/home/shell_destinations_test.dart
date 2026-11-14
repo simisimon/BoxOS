@@ -19,6 +19,7 @@ void main() {
       expect(athlete().map((d) => d.label), [
         'Home',
         'Classes',
+        'Whiteboard',
         'Messages',
         'Profile',
       ]);
@@ -31,6 +32,7 @@ void main() {
         'Classes',
         'Programs',
         'Members',
+        'Whiteboard',
         'Reports',
         'Messages',
         'Memberships',
@@ -64,6 +66,7 @@ void main() {
         'Dashboard',
         'Classes',
         'Programs',
+        'Whiteboard',
         'Messages',
         'Profile',
       ]);
