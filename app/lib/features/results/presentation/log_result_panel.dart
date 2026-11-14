@@ -1,6 +1,7 @@
 import 'package:app/core/errors/error_message.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_side_panel.dart';
+import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/results/data/api_results_repository.dart';
 import 'package:app/features/results/domain/workout_result.dart';
@@ -9,7 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// What happened in the panel, so the caller can refresh and say so.
-enum LogResultOutcome { saved, deleted }
+enum LogResultOutcome { saved, savedPr, deleted }
 
 /// Log or edit the signed-in athlete's result on one scored WOD block.
 Future<LogResultOutcome?> showLogResultPanel(
@@ -172,8 +173,12 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
       _error = null;
     });
     try {
-      await ref.read(resultsRepositoryProvider).saveResult(draft);
-      if (mounted) Navigator.of(context).pop(LogResultOutcome.saved);
+      final saved = await ref.read(resultsRepositoryProvider).saveResult(draft);
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pop(saved.isPr ? LogResultOutcome.savedPr : LogResultOutcome.saved);
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -283,7 +288,22 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
     }
   }
 
-  Widget _liftInput() {
+  /// "≈ 82.5" for a set prescribed at a percentage, from the athlete's
+  /// estimated one-rep max for this movement.
+  String? _suggestedKg(int index, double? oneRepMax) {
+    final prescribed = widget.section.sets;
+    if (oneRepMax == null ||
+        widget.section.setUnit != SetUnit.percent ||
+        index >= prescribed.length) {
+      return null;
+    }
+    final percent = prescribed[index].value;
+    if (percent == null) return null;
+    final kg = (oneRepMax * percent / 100 * 2).round() / 2;
+    return _number(kg);
+  }
+
+  Widget _liftInput(double? oneRepMax) {
     final digits = [FilteringTextInputFormatter.digitsOnly];
     final decimals = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))];
     final prescribed = widget.section.sets;
@@ -329,7 +349,10 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
                       decimal: true,
                     ),
                     textAlign: TextAlign.center,
-                    decoration: const InputDecoration(isDense: true),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: _suggestedKg(i, oneRepMax),
+                    ),
                   ),
                 ),
                 const SizedBox(width: appSpaceSm),
@@ -368,6 +391,10 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
   Widget build(BuildContext context) {
     final section = widget.section;
     final text = const TextStyle(color: appMutedText, height: 1.45);
+    final history = section.id == null
+        ? null
+        : ref.watch(resultHistoryProvider(section.id!)).value;
+    final oneRepMax = estimatedOneRepMax(history?.bestSets ?? const []);
     return AppSidePanel(
       title: _existing == null ? 'Log result' : 'Edit result',
       subtitle: [
@@ -403,7 +430,15 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
             ),
           ],
           const SizedBox(height: appSpaceLg),
-          if (_isExercise) _liftInput() else _scoreInput(),
+          if (_isExercise) ...[
+            _liftInput(oneRepMax),
+            if (oneRepMax != null && section.setUnit == SetUnit.percent)
+              Text(
+                'Hints use your estimated 1RM of ${_number((oneRepMax * 2).round() / 2)} kg.',
+                style: const TextStyle(color: appSubtleText, fontSize: 12),
+              ),
+          ] else
+            _scoreInput(),
           const SizedBox(height: appSpaceLg),
           SegmentedButton<ResultDivision>(
             showSelectedIcon: false,
@@ -432,8 +467,87 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
             const SizedBox(height: appSpaceMd),
             Text(_error!, style: const TextStyle(color: appDanger)),
           ],
+          if (history != null) _LastTimes(history: history, current: _existing),
         ],
       ),
     );
   }
+}
+
+/// Up to five earlier results for the same movement or named workout.
+class _LastTimes extends StatelessWidget {
+  const _LastTimes({required this.history, required this.current});
+
+  final ResultHistory history;
+  final WorkoutResult? current;
+
+  @override
+  Widget build(BuildContext context) {
+    final earlier = [
+      for (final result in history.results)
+        if (result.id != current?.id) result,
+    ].take(5).toList();
+    if (earlier.isEmpty) return const SizedBox.shrink();
+    final localizations = MaterialLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: appSpaceXl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('LAST TIMES', style: appMono(fontSize: 10)),
+          const SizedBox(height: appSpaceSm),
+          for (final result in earlier)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: appSpaceXs),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      localizations.formatMediumDate(result.performedOn),
+                      style: const TextStyle(
+                        color: appSubtleText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      result.scoreLabel,
+                      style: const TextStyle(
+                        color: appText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    result.divisionLabel,
+                    style: const TextStyle(color: appMutedText, fontSize: 12),
+                  ),
+                  if (result.isPr) ...[
+                    const SizedBox(width: appSpaceSm),
+                    const _PrPill(),
+                  ],
+                  if (history.bestIds.contains(result.id) && !result.isPr) ...[
+                    const SizedBox(width: appSpaceSm),
+                    const Text(
+                      'Best',
+                      style: TextStyle(color: appSubtleText, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrPill extends StatelessWidget {
+  const _PrPill();
+
+  @override
+  Widget build(BuildContext context) =>
+      const AppPill(label: 'PR', intent: AppPillIntent.warning, dense: true);
 }
