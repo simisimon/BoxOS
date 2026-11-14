@@ -16,7 +16,15 @@ const _requiredHeaders = [
   'section_1_score',
 ];
 const _allowedStatuses = {'draft', 'published'};
-const _allowedSectionScores = {'time', 'rounds_reps', 'weight'};
+const _allowedSectionScores = {
+  'time',
+  'rounds_reps',
+  'reps',
+  'weight',
+  'calories',
+  'distance',
+  'none',
+};
 const _maxSectionsPerRow = 20;
 
 final _sectionDescriptionColumnPattern = RegExp(r'^section_(\d+)_description$');
@@ -169,7 +177,8 @@ CsvParseOutcome parseWorkoutsCsv(String content) {
         }
         if (!_allowedSectionScores.contains(scoreRaw)) {
           throw FormatException(
-            'section_${sectionIndex}_score must be time, rounds_reps, or weight',
+            'section_${sectionIndex}_score must be time, rounds_reps, reps, '
+            'weight, calories, distance or none',
           );
         }
         sections.add({
@@ -356,7 +365,7 @@ class _ImportWorkoutsDialogState extends ConsumerState<ImportWorkoutsDialog> {
             'accepted. Required columns: date, title, section_1_description, '
             'section_1_score. Optional: status (draft/published), additional '
             'section_N_title / section_N_description / section_N_score '
-            '(N = 1..20, score = time, rounds_reps, or weight). The file is '
+            '(N = 1..20, score = time, rounds_reps, reps, weight, calories, distance or none). The file is '
             'checked before anything is imported.',
             style: theme.textTheme.bodySmall?.copyWith(color: appSubtleText),
           ),

@@ -699,7 +699,8 @@ def require_programming_title(value: Any) -> str:
     return title
 
 
-WORKOUT_SECTION_SCORE_TYPES = {"time", "rounds_reps", "weight"}
+# ``none`` marks blocks without a result (warm-up, mobility, accessory).
+WORKOUT_SECTION_SCORE_TYPES = {"time", "rounds_reps", "reps", "weight", "calories", "distance", "none"}
 MAX_WORKOUT_SECTIONS = 20
 
 
@@ -708,7 +709,7 @@ def require_workout_section_score_type(value: Any) -> str:
     if text not in WORKOUT_SECTION_SCORE_TYPES:
         raise ApiError(
             HTTPStatus.BAD_REQUEST,
-            "Section score must be 'time', 'rounds_reps', or 'weight'.",
+            "Section score must be one of: " + ", ".join(sorted(WORKOUT_SECTION_SCORE_TYPES)) + ".",
         )
     return text
 
@@ -755,8 +756,10 @@ def require_workout_sections(value: Any) -> list[dict[str, Any]]:
                 f"Section {index + 1} description must be 4000 characters or fewer.",
             )
         score_type = require_workout_section_score_type(raw.get("score_type"))
+        section_id = raw.get("id")
         sections.append(
             {
+                "id": section_id if isinstance(section_id, int) and not isinstance(section_id, bool) else None,
                 "title": title,
                 "description": description,
                 "score_type": score_type,
@@ -800,7 +803,11 @@ def _require_block_fields(raw: dict[str, Any], index: int) -> dict[str, Any]:
         "sets": sets,
         "coach_notes": str(raw.get("coach_notes") or "").strip(),
         "member_notes": str(raw.get("member_notes") or "").strip(),
+        # Named workout (Fran, Murph, a box test) so repeats can be found.
+        "workout_name": " ".join(str(raw.get("workout_name") or "").split()),
     }
+    if len(fields["workout_name"]) > 80:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} workout name must be 80 characters or fewer.")
     for key in ("exercise_name", "coach_notes", "member_notes"):
         if len(fields[key]) > 2000:
             raise ApiError(HTTPStatus.BAD_REQUEST, f"{label} {key.replace('_', ' ')} is too long.")

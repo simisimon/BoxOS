@@ -40,7 +40,7 @@ name, case-insensitive). Empty cells are allowed for optional columns.
 | `title` | ✅ | WOD title, max 80 characters. |
 | `status` | optional | `draft` (default) or `published`. Drafts are hidden from athletes until published. |
 | `section_1_description` | ✅ | The first section needs at least a description. |
-| `section_1_score` | ✅ | Score unit for the first section: `time`, `rounds_reps`, or `weight`. |
+| `section_1_score` | ✅ | Score unit for the first section: `time`, `rounds_reps`, `reps`, `weight`, `calories`, `distance`, or `none` (no result, e.g. a warm-up). |
 | `section_1_title` | optional | Section label, max 80 characters (e.g. *Warm Up*, *Strength*, *MetCon*). Falls back to "Section 1" in the UI when empty. |
 | `section_N_title` / `section_N_description` / `section_N_score` | optional (per section) | Additional sections. `N` runs from 2 upwards, up to 20. A section is created whenever both `section_N_description` and `section_N_score` are set; both are required together. |
 
@@ -50,7 +50,8 @@ name, case-insensitive). Empty cells are allowed for optional columns.
   rejected (consistent with the "no WODs in the past" rule in the UI).
 - **One WOD per date** — within the same import payload and against existing
   WODs in the gym. A date conflict fails that row (and the whole import).
-- **Section score values** — must be one of `time`, `rounds_reps`, or `weight`.
+- **Section score values** — must be one of `time`, `rounds_reps`, `reps`,
+  `weight`, `calories`, `distance`, or `none`.
 - **At least one section** — every WOD needs at least the first section filled
   in (`section_1_description` and `section_1_score`).
 - **Quoting** — standard CSV quoting applies; put double quotes around any

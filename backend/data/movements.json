@@ -1,0 +1,437 @@
+[
+ {
+  "name": "Back Squat",
+  "category": "squat",
+  "aliases": [
+   "BS"
+  ]
+ },
+ {
+  "name": "Front Squat",
+  "category": "squat",
+  "aliases": [
+   "FS"
+  ]
+ },
+ {
+  "name": "Overhead Squat",
+  "category": "squat",
+  "aliases": [
+   "OHS"
+  ]
+ },
+ {
+  "name": "Air Squat",
+  "category": "squat",
+  "aliases": []
+ },
+ {
+  "name": "Pistol",
+  "category": "squat",
+  "aliases": [
+   "Single-Leg Squat"
+  ]
+ },
+ {
+  "name": "Goblet Squat",
+  "category": "squat",
+  "aliases": []
+ },
+ {
+  "name": "Box Squat",
+  "category": "squat",
+  "aliases": []
+ },
+ {
+  "name": "Pause Back Squat",
+  "category": "squat",
+  "aliases": []
+ },
+ {
+  "name": "Pause Front Squat",
+  "category": "squat",
+  "aliases": []
+ },
+ {
+  "name": "Strict Press",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Push Press",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Push Jerk",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Split Jerk",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Bench Press",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Thruster",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Dumbbell Press",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Strict Handstand Push-Up",
+  "category": "press",
+  "aliases": []
+ },
+ {
+  "name": "Kipping Handstand Push-Up",
+  "category": "press",
+  "aliases": [
+   "HSPU"
+  ]
+ },
+ {
+  "name": "Snatch",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Power Snatch",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Hang Snatch",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Hang Power Snatch",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Squat Snatch",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Clean",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Power Clean",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Hang Clean",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Hang Power Clean",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Squat Clean",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Clean & Jerk",
+  "category": "olympic",
+  "aliases": [
+   "C&J",
+   "Clean and Jerk"
+  ]
+ },
+ {
+  "name": "Snatch Balance",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Snatch Pull",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Clean Pull",
+  "category": "olympic",
+  "aliases": []
+ },
+ {
+  "name": "Deadlift",
+  "category": "deadlift",
+  "aliases": []
+ },
+ {
+  "name": "Sumo Deadlift",
+  "category": "deadlift",
+  "aliases": []
+ },
+ {
+  "name": "Romanian Deadlift",
+  "category": "deadlift",
+  "aliases": [
+   "RDL"
+  ]
+ },
+ {
+  "name": "Sumo Deadlift High Pull",
+  "category": "deadlift",
+  "aliases": [
+   "SDHP"
+  ]
+ },
+ {
+  "name": "Good Morning",
+  "category": "deadlift",
+  "aliases": []
+ },
+ {
+  "name": "Hip Thrust",
+  "category": "deadlift",
+  "aliases": []
+ },
+ {
+  "name": "Pull-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "Pullup",
+   "Kipping Pull-Up"
+  ]
+ },
+ {
+  "name": "Strict Pull-Up",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Chest-to-Bar Pull-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "C2B",
+   "CTB"
+  ]
+ },
+ {
+  "name": "Bar Muscle-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "BMU"
+  ]
+ },
+ {
+  "name": "Ring Muscle-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "RMU",
+   "Muscle-Up"
+  ]
+ },
+ {
+  "name": "Toes-to-Bar",
+  "category": "gymnastics",
+  "aliases": [
+   "T2B",
+   "TTB"
+  ]
+ },
+ {
+  "name": "Knees-to-Elbow",
+  "category": "gymnastics",
+  "aliases": [
+   "K2E"
+  ]
+ },
+ {
+  "name": "Push-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "Pushup"
+  ]
+ },
+ {
+  "name": "Ring Dip",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Handstand Walk",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Rope Climb",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Burpee",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Bar-Facing Burpee",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Burpee Box Jump-Over",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Box Jump",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Box Jump-Over",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Sit-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "Situp",
+   "AbMat Sit-Up"
+  ]
+ },
+ {
+  "name": "GHD Sit-Up",
+  "category": "gymnastics",
+  "aliases": [
+   "GHD"
+  ]
+ },
+ {
+  "name": "Double-Under",
+  "category": "gymnastics",
+  "aliases": [
+   "DU",
+   "Double Unders"
+  ]
+ },
+ {
+  "name": "Single-Under",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Lunge",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Walking Lunge",
+  "category": "gymnastics",
+  "aliases": []
+ },
+ {
+  "name": "Kettlebell Swing",
+  "category": "kettlebell",
+  "aliases": [
+   "KBS",
+   "Russian Kettlebell Swing"
+  ]
+ },
+ {
+  "name": "American Kettlebell Swing",
+  "category": "kettlebell",
+  "aliases": []
+ },
+ {
+  "name": "Turkish Get-Up",
+  "category": "kettlebell",
+  "aliases": [
+   "TGU"
+  ]
+ },
+ {
+  "name": "Dumbbell Snatch",
+  "category": "kettlebell",
+  "aliases": []
+ },
+ {
+  "name": "Devil Press",
+  "category": "kettlebell",
+  "aliases": []
+ },
+ {
+  "name": "Wall Ball",
+  "category": "kettlebell",
+  "aliases": [
+   "Wall Ball Shot",
+   "Wallball"
+  ]
+ },
+ {
+  "name": "Weighted Pull-Up",
+  "category": "kettlebell",
+  "aliases": []
+ },
+ {
+  "name": "Farmer Carry",
+  "category": "kettlebell",
+  "aliases": []
+ },
+ {
+  "name": "Row",
+  "category": "monostructural",
+  "aliases": [
+   "Rowing",
+   "Rower"
+  ]
+ },
+ {
+  "name": "Run",
+  "category": "monostructural",
+  "aliases": []
+ },
+ {
+  "name": "Assault Bike",
+  "category": "monostructural",
+  "aliases": [
+   "Air Bike"
+  ]
+ },
+ {
+  "name": "Echo Bike",
+  "category": "monostructural",
+  "aliases": []
+ },
+ {
+  "name": "Ski Erg",
+  "category": "monostructural",
+  "aliases": [
+   "SkiErg"
+  ]
+ },
+ {
+  "name": "Bike Erg",
+  "category": "monostructural",
+  "aliases": [
+   "BikeErg"
+  ]
+ },
+ {
+  "name": "Swim",
+  "category": "monostructural",
+  "aliases": []
+ }
+]

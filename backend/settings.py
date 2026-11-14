@@ -31,6 +31,7 @@ AVATARS_DIR = Path(
 )
 EXERCISES_SEED_PATH = BACKEND_ROOT / "data" / "exercises.json"
 BENCHMARKS_SEED_PATH = BACKEND_ROOT / "data" / "benchmark_workouts.json"
+MOVEMENTS_SEED_PATH = BACKEND_ROOT / "data" / "movements.json"
 HOST = os.getenv("BOXOS_HOST", "127.0.0.1")
 PORT = int(os.getenv("BOXOS_PORT", "8080"))
 CORS_ALLOW_ORIGINS = [

@@ -84,9 +84,22 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 - Schedule: one week view for every role; classes are templates, one WOD per
   gym per day. Types: the built-ins WOD, Open Gym, Skill, PT plus custom types
   an owner adds in Settings › Class types (`/class-types`, `gym_class_types`).
-- The whiteboard feature was removed on purpose — do not re-add it.
-- Workout logging was removed on purpose (2026-11-12): no logbook, scores,
-  PRs or tracking in the app — do not re-add it. The `workout_logs` tables
-  still exist so old data is kept.
+- Results (decided 2026-11-14, reverses the 2026-11-12 removal): athletes
+  log a result per scored WOD block (`score_type` time, rounds_reps, reps,
+  weight, calories, distance; `none` = no result, e.g. warm-ups), Rx or
+  Scaled, on any published WOD, past ones included. Results belong to the
+  block, not to a class or class type. Each block has a gym leaderboard,
+  PRs are marked, results get fist bumps, comments and photos, athletes keep
+  a personal logbook and follow friends across gyms, and a Whiteboard page
+  shows the WOD with its leaderboards. The plan and phases:
+  https://claude.ai/artifact/KWrtxzWAaYxp2qLzwVG7rM. The old `workout_logs`,
+  `tracking_sessions` and `personal_workouts` tables are not reused or
+  migrated; the timer stays out.
+- WOD blocks are saved by id (`workout_service.replace_workout_sections`):
+  clients send back each block's `id` so it is updated in place and keeps
+  its results. "The same exercise" is a movement (`movements`, the bundled
+  list in `backend/data/movements.json` plus a gym's own, resolved from an
+  exercise block's name); a workout block can carry a `workout_name`
+  (Fran, a box test) so repeats are found.
 - Join requests live in the Members tab (Requests segment); the Members nav
   item shows the open count as a badge.

@@ -11,32 +11,37 @@ String dailyWorkoutStatusToWire(DailyWorkoutStatus status) {
 }
 
 /// Score unit a coach assigns to a WOD section. Matches the backend's
-/// `time` / `rounds_reps` / `weight` vocabulary.
-enum WorkoutSectionScore { time, roundsReps, weight }
+/// `time` / `rounds_reps` / `reps` / `weight` / `calories` / `distance` /
+/// `none` vocabulary; `none` blocks (warm-up, accessory) take no result.
+enum WorkoutSectionScore {
+  time,
+  roundsReps,
+  reps,
+  weight,
+  calories,
+  distance,
+  none,
+}
+
+const _scoreWire = {
+  WorkoutSectionScore.time: 'time',
+  WorkoutSectionScore.roundsReps: 'rounds_reps',
+  WorkoutSectionScore.reps: 'reps',
+  WorkoutSectionScore.weight: 'weight',
+  WorkoutSectionScore.calories: 'calories',
+  WorkoutSectionScore.distance: 'distance',
+  WorkoutSectionScore.none: 'none',
+};
 
 WorkoutSectionScore parseWorkoutSectionScore(Object? value) {
-  switch (value) {
-    case 'time':
-      return WorkoutSectionScore.time;
-    case 'rounds_reps':
-      return WorkoutSectionScore.roundsReps;
-    case 'weight':
-      return WorkoutSectionScore.weight;
-    default:
-      return WorkoutSectionScore.time;
+  for (final entry in _scoreWire.entries) {
+    if (entry.value == value) return entry.key;
   }
+  return WorkoutSectionScore.time;
 }
 
-String workoutSectionScoreToWire(WorkoutSectionScore score) {
-  switch (score) {
-    case WorkoutSectionScore.time:
-      return 'time';
-    case WorkoutSectionScore.roundsReps:
-      return 'rounds_reps';
-    case WorkoutSectionScore.weight:
-      return 'weight';
-  }
-}
+String workoutSectionScoreToWire(WorkoutSectionScore score) =>
+    _scoreWire[score]!;
 
 String workoutSectionScoreLabel(WorkoutSectionScore score) {
   switch (score) {
@@ -44,10 +49,22 @@ String workoutSectionScoreLabel(WorkoutSectionScore score) {
       return 'Time';
     case WorkoutSectionScore.roundsReps:
       return 'Rounds + Reps';
+    case WorkoutSectionScore.reps:
+      return 'Reps';
     case WorkoutSectionScore.weight:
       return 'Weight (kg)';
+    case WorkoutSectionScore.calories:
+      return 'Calories';
+    case WorkoutSectionScore.distance:
+      return 'Distance (m)';
+    case WorkoutSectionScore.none:
+      return 'No score';
   }
 }
+
+/// A block whose title says it is a warm-up gets no score by default.
+bool looksLikeWarmUp(String title) =>
+    RegExp(r'warm[\s-]?up', caseSensitive: false).hasMatch(title);
 
 /// A program block (docs/admin-ui-reference.md §3.1): free-text workout or a
 /// structured exercise.
@@ -81,6 +98,7 @@ class WorkoutSet {
 
 class DailyWorkoutSection {
   const DailyWorkoutSection({
+    this.id,
     required this.title,
     required this.description,
     required this.scoreType,
@@ -90,10 +108,13 @@ class DailyWorkoutSection {
     this.sets = const [],
     this.coachNotes = '',
     this.memberNotes = '',
+    this.movementId,
+    this.workoutName = '',
   });
 
   factory DailyWorkoutSection.fromJson(Map<String, dynamic> json) =>
       DailyWorkoutSection(
+        id: (json['id'] as num?)?.toInt(),
         title: json['title'] as String? ?? '',
         description: json['description'] as String? ?? '',
         scoreType: parseWorkoutSectionScore(json['score_type']),
@@ -108,7 +129,13 @@ class DailyWorkoutSection {
         ],
         coachNotes: json['coach_notes'] as String? ?? '',
         memberNotes: json['member_notes'] as String? ?? '',
+        movementId: (json['movement_id'] as num?)?.toInt(),
+        workoutName: json['workout_name'] as String? ?? '',
       );
+
+  /// Server id; null for a block that was not saved yet. Sent back on save
+  /// so the block is updated in place and keeps what hangs off it.
+  final int? id;
 
   final String title;
 
@@ -127,7 +154,17 @@ class DailyWorkoutSection {
   /// Shown to members in the app.
   final String memberNotes;
 
+  /// Set by the server from [exerciseName] on exercise blocks.
+  final int? movementId;
+
+  /// Named workout (Fran, Murph, a box test) on workout blocks, so a repeat
+  /// can be found again.
+  final String workoutName;
+
+  bool get isScored => scoreType != WorkoutSectionScore.none;
+
   Map<String, dynamic> toJson() => {
+    if (id != null) 'id': id,
     'title': title,
     'description': description,
     'score_type': workoutSectionScoreToWire(scoreType),
@@ -137,6 +174,7 @@ class DailyWorkoutSection {
     'sets': [for (final set in sets) set.toJson()],
     'coach_notes': coachNotes,
     'member_notes': memberNotes,
+    'workout_name': workoutName,
   };
 }
 
