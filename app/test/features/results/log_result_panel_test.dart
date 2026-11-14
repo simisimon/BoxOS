@@ -41,9 +41,10 @@ class _FakeResults implements ResultsRepository {
     int workoutId,
   ) async => const {};
 
+  MyResults myResults = const MyResults(results: [], filters: []);
+
   @override
-  Future<MyResults> fetchMyResults(ResultFilter? filter) async =>
-      const MyResults(results: [], filters: []);
+  Future<MyResults> fetchMyResults(ResultFilter? filter) async => myResults;
 
   @override
   Future<MyResults> fetchMemberResults(int userId, ResultFilter? filter) =>
@@ -119,6 +120,67 @@ class _FakeResults implements ResultsRepository {
 
   @override
   Future<ResultDetail> removePhoto(int resultId) async => detail(resultId);
+
+  @override
+  Future<List<Benchmark>> fetchBenchmarks() async => const [
+    Benchmark(
+      id: 'fran',
+      name: 'Fran',
+      category: 'girl',
+      scoreType: 'time',
+      description: 'For time:\n21-15-9 Thruster (43/30 kg)\n21-15-9 Pull-Up',
+    ),
+    Benchmark(
+      id: 'cindy',
+      name: 'Cindy',
+      category: 'girl',
+      scoreType: 'rounds_reps',
+      description: 'AMRAP 20 min:',
+    ),
+  ];
+
+  final personal = <(PersonalResultDraft, int?)>[];
+  final deletedPersonal = <int>[];
+
+  @override
+  Future<WorkoutResult> savePersonalResult(
+    PersonalResultDraft draft, {
+    int? resultId,
+  }) async {
+    personal.add((draft, resultId));
+    return WorkoutResult(
+      id: resultId ?? 50,
+      sectionId: null,
+      performedOn: draft.performedOn,
+      scoreLabel: draft.score ?? '',
+      scoreValue: 0,
+      division: draft.division,
+      isPersonal: true,
+      isPr: true,
+    );
+  }
+
+  @override
+  Future<void> deletePersonalResult(int resultId) async =>
+      deletedPersonal.add(resultId);
+}
+
+Future<void> _pumpMyResults(WidgetTester tester, _FakeResults fake) async {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(1280, 1000);
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [resultsRepositoryProvider.overrideWithValue(fake)],
+      child: MaterialApp(
+        theme: buildBoxOsTheme(),
+        home: const Scaffold(
+          body: SingleChildScrollView(child: MyResultsSection()),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<LogResultOutcome?> Function() _open(
@@ -457,5 +519,145 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('bump-8')));
     await tester.pumpAndSettle();
     expect(fake.bumps[8], isTrue);
+  });
+
+  testWidgets('logs a benchmark in the personal logbook', (tester) async {
+    final fake = _FakeResults();
+    await _pumpMyResults(tester, fake);
+    await tester.tap(find.text('Log workout'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your logbook · not on gym leaderboards'), findsOneWidget);
+    await tester.tap(
+      find.widgetWithText(DropdownButtonFormField<String>, 'Benchmark'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fran · Girl').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('21-15-9 Thruster'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('result-score')), '3:58');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final (draft, resultId) = fake.personal.single;
+    expect(resultId, isNull);
+    final json = draft.toJson();
+    expect(json['kind'], 'benchmark');
+    expect(json['benchmark_id'], 'fran');
+    expect(json['score'], '3:58');
+    expect(json.containsKey('score_type'), isFalse);
+    expect(find.text('Saved. New PR!'), findsOneWidget);
+  });
+
+  testWidgets('logs a lift and an own workout', (tester) async {
+    final fake = _FakeResults();
+    await _pumpMyResults(tester, fake);
+    await tester.tap(find.text('Log workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lift'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Movement'),
+      'Back Squat',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('personal-set-reps-0')),
+      '5',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('personal-set-kg-0')),
+      '102,5',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final lift = fake.personal.single.$1.toJson();
+    expect(lift['kind'], 'movement');
+    expect(lift['movement_name'], 'Back Squat');
+    expect(lift['sets'], [
+      {'reps': 5, 'kg': 102.5},
+    ]);
+
+    await tester.tap(find.text('Log workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Own workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(find.text('Give your workout a name.'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('personal-title')),
+      'Hotel Chain',
+    );
+    await tester.tap(
+      find.widgetWithText(
+        DropdownButtonFormField<WorkoutSectionScore>,
+        'Score',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rounds + Reps').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('result-score')), '4');
+    await tester.enterText(find.byKey(const ValueKey('result-reps')), '12');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final custom = fake.personal.last.$1.toJson();
+    expect(custom['kind'], 'custom');
+    expect(custom['title'], 'Hotel Chain');
+    expect(custom['score_type'], 'rounds_reps');
+    expect(custom['score'], '4+12');
+  });
+
+  testWidgets('a personal result opens for editing, gym results do not', (
+    tester,
+  ) async {
+    final fake = _FakeResults()
+      ..myResults = MyResults(
+        results: [
+          WorkoutResult(
+            id: 9,
+            sectionId: null,
+            performedOn: DateTime(2026, 11, 2),
+            scoreLabel: '4:05',
+            scoreValue: 245,
+            division: ResultDivision.rx,
+            sectionTitle: 'Fran',
+            workoutName: 'Fran',
+            scoreType: 'time',
+            description: 'For time:',
+            isPersonal: true,
+          ),
+          WorkoutResult(
+            id: 10,
+            sectionId: 3,
+            performedOn: DateTime(2026, 11, 1),
+            scoreLabel: '100 kg',
+            scoreValue: 100,
+            division: ResultDivision.rx,
+            sectionTitle: 'Strength',
+          ),
+        ],
+        filters: const [],
+      );
+    await _pumpMyResults(tester, fake);
+    expect(find.text('PERSONAL'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('my-result-10')));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit workout'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('my-result-9')));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit workout'), findsOneWidget);
+    expect(find.text('Fran · Girl'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('result-score')))
+          .controller!
+          .text,
+      '4:05',
+    );
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete').last);
+    await tester.pumpAndSettle();
+    expect(fake.deletedPersonal, [9]);
+    expect(find.text('Result deleted.'), findsOneWidget);
   });
 }

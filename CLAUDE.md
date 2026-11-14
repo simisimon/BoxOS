@@ -104,6 +104,12 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   athlete adds one photo (`workout_results.photo_url`, `/uploads/results/`).
   Authors and coaches delete comments, the athlete and coaches remove the
   photo. The athlete is notified (`notify_result_activity`, mutable).
+  Athletes also keep a personal logbook (Profile › Results › Log workout,
+  `/results/personal`): a benchmark from `backend/data/benchmark_workouts.json`
+  (re-synced on start), a lift (a movement, logged as sets) or a workout of
+  their own. Those rows have `source='personal'` and no gym, block or WOD,
+  count for history, PRs and the CSV, and never reach a leaderboard or the
+  coach's member view.
 - WOD blocks are saved by id (`workout_service.replace_workout_sections`):
   clients send back each block's `id` so it is updated in place and keeps
   its results. "The same exercise" is a movement (`movements`, the bundled

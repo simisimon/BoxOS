@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, TYPE_CHECKING
 
@@ -27,7 +27,7 @@ MAX_RESULT_SETS = 30
 RESULT_COLUMNS = (
     "id, user_id, gym_id, section_id, daily_workout_id, performed_on, class_schedule_id, "
     "movement_id, workout_name, section_title, score_type, score_value, score_label, "
-    "division, time_capped, sets_json, notes, photo_url, created_at, updated_at"
+    "division, time_capped, sets_json, notes, photo_url, source, description, created_at, updated_at"
 )
 
 
@@ -183,6 +183,8 @@ def result_payload(row: Row) -> dict[str, Any]:
         "sets": sets,
         "notes": row["notes"],
         "photo_url": row["photo_url"] or "",
+        "source": row["source"],
+        "description": row["description"],
         "updated_at": row["updated_at"],
     }
 
@@ -322,6 +324,237 @@ def my_results_by_section(
         (user_id, daily_workout_id),
     ).fetchall()
     return {int(row["section_id"]): result_payload(row) for row in rows if row["section_id"] is not None}
+
+
+# --- Personal logbook -----------------------------------------------------------
+#
+# Results an athlete logs outside the gym's WOD: a benchmark, a lift or a
+# workout of their own. No gym, block or WOD, so they never reach a
+# leaderboard, but history, PRs, charts and the CSV treat them like the rest.
+
+PERSONAL_KINDS = {"benchmark", "movement", "custom"}
+PERSONAL_SCORE_TYPES = {"time", "rounds_reps", "reps", "weight", "calories", "distance"}
+MAX_PERSONAL_TITLE = 120
+MAX_PERSONAL_DESCRIPTION = 2000
+# Benchmark catalog score types mapped to ours.
+_BENCHMARK_SCORE_TYPES = {"time": "time", "rounds": "rounds_reps", "reps": "reps"}
+_BENCHMARK_FORMATS = {
+    "for_time": "For time",
+    "amrap": "AMRAP",
+    "emom": "EMOM",
+    "max_reps": "Max reps",
+}
+
+
+def _benchmark_description(structure: dict[str, Any]) -> str:
+    fmt = str(structure.get("format") or "")
+    heading = _BENCHMARK_FORMATS.get(fmt, "")
+    minutes = structure.get("time_cap_minutes")
+    rounds = structure.get("rounds")
+    if fmt in ("amrap", "emom") and minutes:
+        heading = f"{heading} {minutes} min"
+    elif rounds:
+        heading = f"{rounds} rounds" + (f", {heading.lower()}" if heading else "")
+    lines = [heading + ":"] if heading else []
+    for movement in structure.get("movements") or []:
+        reps = str(movement.get("reps") or "").strip()
+        name = str(movement.get("name") or "").strip()
+        weight = str(movement.get("weight") or "").strip()
+        lines.append(" ".join(p for p in (reps, name) if p) + (f" ({weight})" if weight else ""))
+    return "\n".join(lines)
+
+
+def benchmark_payload(row: Row) -> dict[str, Any]:
+    try:
+        structure = json.loads(row["structure_json"] or "{}")
+    except (TypeError, ValueError):
+        structure = {}
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "category": row["category"],
+        "score_type": _BENCHMARK_SCORE_TYPES.get(str(structure.get("score_type") or ""), "time"),
+        "description": _benchmark_description(structure),
+    }
+
+
+def list_benchmarks(connection: ManagedConnection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "select id, name, category, structure_json from benchmark_workouts order by sort_order, name"
+    ).fetchall()
+    return [benchmark_payload(row) for row in rows]
+
+
+def _performed_on(raw: Any, today: str) -> str:
+    text = str(raw or "").strip()
+    try:
+        day = datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Pick the day you did the workout.") from None
+    if day.isoformat() > today or day.year < 2000:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "The day can't be in the future.")
+    return day.isoformat()
+
+
+def _personal_today(connection: ManagedConnection, gym_id: int | None) -> str:
+    """Today where the athlete trains, a day ahead without a gym so no time
+    zone turns today into tomorrow."""
+    if gym_id is not None:
+        return gym_today(connection, gym_id)
+    return (security.now_utc() + timedelta(days=1)).date().isoformat()
+
+
+def _personal_identity(
+    connection: ManagedConnection, *, gym_id: int | None, body: dict[str, Any]
+) -> dict[str, Any]:
+    """What was done: movement, name, title, description, score type, kind."""
+    kind = str(body.get("kind") or "").strip().lower()
+    if kind not in PERSONAL_KINDS:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Choose a benchmark, a movement or your own workout.")
+    if kind == "benchmark":
+        row = connection.execute(
+            "select id, name, category, structure_json from benchmark_workouts where id = ?",
+            (str(body.get("benchmark_id") or "").strip().lower(),),
+        ).fetchone()
+        if row is None:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Benchmark not found.")
+        benchmark = benchmark_payload(row)
+        return {
+            "kind": "workout",
+            "movement_id": None,
+            "workout_name": benchmark["name"],
+            "title": benchmark["name"],
+            "description": benchmark["description"],
+            "score_type": benchmark["score_type"],
+        }
+    if kind == "movement":
+        from backend import movement_service
+
+        movement = None
+        raw_id = body.get("movement_id")
+        if raw_id not in (None, ""):
+            try:
+                movement_id = int(raw_id)
+            except (TypeError, ValueError):
+                raise ApiError(HTTPStatus.BAD_REQUEST, "Movement not found.") from None
+            movement = connection.execute(
+                "select id, gym_id, name, merged_into_id from movements where id = ? and (gym_id is null or gym_id = ?)",
+                (movement_id, gym_id or 0),
+            ).fetchone()
+            if movement is not None and movement["merged_into_id"] is not None:
+                movement = movement_service.find_movement(connection, gym_id=gym_id or 0, name=movement["name"])
+        elif str(body.get("movement_name") or "").strip():
+            movement = movement_service.find_movement(
+                connection, gym_id=gym_id or 0, name=str(body.get("movement_name"))
+            )
+        if movement is None:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Pick a movement from the list.")
+        return {
+            "kind": "exercise",
+            "movement_id": int(movement["id"]),
+            "workout_name": "",
+            "title": movement["name"],
+            "description": "",
+            "score_type": "weight",
+        }
+    title = " ".join(str(body.get("title") or "").split())
+    if not title:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Give your workout a name.")
+    if len(title) > MAX_PERSONAL_TITLE:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"The name must be {MAX_PERSONAL_TITLE} characters or fewer.")
+    description = str(body.get("description") or "").strip()
+    if len(description) > MAX_PERSONAL_DESCRIPTION:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST, f"The description must be {MAX_PERSONAL_DESCRIPTION} characters or fewer."
+        )
+    score_type = str(body.get("score_type") or "").strip().lower()
+    if score_type not in PERSONAL_SCORE_TYPES:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Choose how the workout is scored.")
+    return {
+        "kind": "workout",
+        "movement_id": None,
+        "workout_name": title,
+        "title": title,
+        "description": description,
+        "score_type": score_type,
+    }
+
+
+def save_personal_result(
+    connection: ManagedConnection,
+    *,
+    user_id: int,
+    gym_id: int | None,
+    body: dict[str, Any],
+    result_id: int | None = None,
+) -> dict[str, Any]:
+    """Logs (or, with ``result_id``, replaces) a result in the athlete's own
+    logbook."""
+    what = _personal_identity(connection, gym_id=gym_id, body=body)
+    performed_on = _performed_on(body.get("performed_on"), _personal_today(connection, gym_id))
+    time_capped = bool(body.get("time_capped")) and what["score_type"] == "time" and what["kind"] != "exercise"
+    value, label, sets = parse_score(
+        score_type=what["score_type"],
+        kind=what["kind"],
+        score=body.get("score"),
+        time_capped=time_capped,
+        sets=body.get("sets"),
+    )
+    division = require_division(body.get("division"))
+    notes = require_notes(body.get("notes"))
+    timestamp = security.isoformat(security.now_utc())
+    values = (
+        performed_on,
+        what["movement_id"],
+        what["workout_name"],
+        what["title"],
+        what["description"],
+        what["score_type"],
+        value,
+        label,
+        division,
+        1 if time_capped else 0,
+        json.dumps(sets),
+        notes,
+    )
+    if result_id is None:
+        row = connection.execute(
+            f"""
+            insert into workout_results (
+              user_id, gym_id, section_id, daily_workout_id, class_schedule_id, source,
+              performed_on, movement_id, workout_name, section_title, description, score_type,
+              score_value, score_label, division, time_capped, sets_json, notes,
+              created_at, updated_at
+            )
+            values (?, null, null, null, null, 'personal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            returning {RESULT_COLUMNS}
+            """,
+            (user_id, *values, timestamp, timestamp),
+        ).fetchone()
+    else:
+        row = connection.execute(
+            f"""
+            update workout_results set
+              performed_on = ?, movement_id = ?, workout_name = ?, section_title = ?,
+              description = ?, score_type = ?, score_value = ?, score_label = ?,
+              division = ?, time_capped = ?, sets_json = ?, notes = ?, updated_at = ?
+            where id = ? and user_id = ? and source = 'personal'
+            returning {RESULT_COLUMNS}
+            """,
+            (*values, timestamp, result_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Result not found.")
+    return result_payload(row)
+
+
+def delete_personal_result(connection: ManagedConnection, *, user_id: int, result_id: int) -> None:
+    deleted = connection.execute(
+        "delete from workout_results where id = ? and user_id = ? and source = 'personal' returning id",
+        (result_id, user_id),
+    ).fetchone()
+    if deleted is None:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Result not found.")
 
 
 RESULTS_VISIBILITY = ("gym", "private")
@@ -648,7 +881,7 @@ def my_results(
 
 CSV_COLUMNS = [
     "date", "gym", "block", "movement", "workout", "score_type",
-    "result", "division", "time_capped", "sets", "pr", "notes",
+    "result", "division", "time_capped", "sets", "pr", "notes", "description",
 ]
 
 
@@ -663,7 +896,8 @@ def my_results_csv(connection: ManagedConnection, *, user_id: int) -> str:
     rows = connection.execute(
         f"""
         select {", ".join("r." + c.strip() for c in RESULT_COLUMNS.split(","))},
-               coalesce(g.name, '') as gym_name, coalesce(m.name, '') as movement_name
+               case when r.source = 'personal' then 'Personal' else coalesce(g.name, '') end as gym_name,
+               coalesce(m.name, '') as movement_name
         from workout_results r
         left join gyms g on g.id = r.gym_id
         left join movements m on m.id = r.movement_id
@@ -701,6 +935,7 @@ def my_results_csv(connection: ManagedConnection, *, user_id: int) -> str:
                     sets,
                     "yes" if int(row["id"]) in prs else "",
                     row["notes"],
+                    row["description"],
                 )
             ]
         )

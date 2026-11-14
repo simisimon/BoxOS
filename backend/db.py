@@ -551,6 +551,10 @@ create index if not exists workout_results_name_idx
 -- Fist bumps, comments and one photo per result (phase 5).
 alter table workout_results add column if not exists photo_url text not null default '';
 alter table users add column if not exists notify_result_activity integer not null default 1;
+-- Personal logbook (phase 6): results logged outside a gym WOD, with no gym,
+-- block or WOD. They feed history, PRs and the CSV but no leaderboard.
+alter table workout_results add column if not exists source text not null default 'gym';
+alter table workout_results add column if not exists description text not null default '';
 create table if not exists result_bumps (
   result_id integer not null references workout_results(id) on delete cascade,
   user_id integer not null references users(id) on delete cascade,
@@ -792,13 +796,8 @@ def backfill_section_movements(connection: ManagedConnection) -> None:
 
 
 def seed_benchmark_workouts(connection: ManagedConnection) -> None:
-    """Load the bundled CrossFit benchmark catalog once. No-op if already
-    populated or the seed file is missing."""
-    existing = connection.execute(
-        "select count(*) as count from benchmark_workouts"
-    ).fetchone()
-    if existing["count"] > 0:
-        return
+    """Load the bundled CrossFit benchmark catalog, adding new entries and
+    refreshing changed ones. No-op if the seed file is missing."""
     if not settings.BENCHMARKS_SEED_PATH.exists():
         return
     with open(settings.BENCHMARKS_SEED_PATH, encoding="utf-8") as handle:
@@ -822,7 +821,11 @@ def seed_benchmark_workouts(connection: ManagedConnection) -> None:
         insert into benchmark_workouts (
           id, name, category, structure_json, sort_order
         ) values (?, ?, ?, ?, ?)
-        on conflict (id) do nothing
+        on conflict (id) do update set
+          name = excluded.name,
+          category = excluded.category,
+          structure_json = excluded.structure_json,
+          sort_order = excluded.sort_order
         """,
         rows,
     )

@@ -53,6 +53,11 @@ final resultDetailProvider = FutureProvider.autoDispose
           ref.watch(resultsRepositoryProvider).fetchResult(resultId),
     );
 
+/// The benchmark catalog for the personal logbook.
+final benchmarksProvider = FutureProvider.autoDispose<List<Benchmark>>(
+  (ref) => ref.watch(resultsRepositoryProvider).fetchBenchmarks(),
+);
+
 final resultsRepositoryProvider = Provider<ResultsRepository>((ref) {
   return ApiResultsRepository(
     dio: ref.read(dioProvider),
@@ -132,6 +137,16 @@ abstract class ResultsRepository {
   });
 
   Future<ResultDetail> removePhoto(int resultId);
+
+  Future<List<Benchmark>> fetchBenchmarks();
+
+  /// Logs a result in the athlete's own logbook, or replaces [resultId].
+  Future<WorkoutResult> savePersonalResult(
+    PersonalResultDraft draft, {
+    int? resultId,
+  });
+
+  Future<void> deletePersonalResult(int resultId);
 }
 
 class ApiResultsRepository implements ResultsRepository {
@@ -323,6 +338,48 @@ class ApiResultsRepository implements ResultsRepository {
       options: Options(headers: await _authHeaders()),
     );
     return _detail(response.data);
+  }
+
+  @override
+  Future<List<Benchmark>> fetchBenchmarks() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/benchmarks',
+      options: Options(headers: await _authHeaders()),
+    );
+    return [
+      for (final raw in response.data?['benchmarks'] as List? ?? const [])
+        Benchmark.fromJson(raw as Map<String, dynamic>),
+    ];
+  }
+
+  @override
+  Future<WorkoutResult> savePersonalResult(
+    PersonalResultDraft draft, {
+    int? resultId,
+  }) async {
+    final options = Options(headers: await _authHeaders());
+    final response = resultId == null
+        ? await _dio.post<Map<String, dynamic>>(
+            '/results/personal',
+            data: draft.toJson(),
+            options: options,
+          )
+        : await _dio.put<Map<String, dynamic>>(
+            '/results/personal/$resultId',
+            data: draft.toJson(),
+            options: options,
+          );
+    return WorkoutResult.fromJson(
+      response.data!['result'] as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<void> deletePersonalResult(int resultId) async {
+    await _dio.delete<Map<String, dynamic>>(
+      '/results/personal/$resultId',
+      options: Options(headers: await _authHeaders()),
+    );
   }
 
   ResultDetail _detail(Map<String, dynamic>? data) =>

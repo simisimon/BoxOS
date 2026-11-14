@@ -4,6 +4,8 @@ import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/results/data/api_results_repository.dart';
 import 'package:app/features/results/domain/workout_result.dart';
+import 'package:app/features/results/presentation/log_personal_result_panel.dart';
+import 'package:app/features/results/presentation/log_result_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,6 +63,25 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
     }
   }
 
+  Future<void> _logWorkout([WorkoutResult? existing]) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await showLogPersonalResultPanel(
+      context,
+      existing: existing,
+    );
+    if (outcome == null || !mounted) return;
+    ref.invalidate(myResultsProvider);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(switch (outcome) {
+          LogResultOutcome.savedPr => 'Saved. New PR!',
+          LogResultOutcome.saved => 'Saved to your logbook.',
+          LogResultOutcome.deleted => 'Result deleted.',
+        }),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final memberId = widget.memberId;
@@ -103,6 +124,13 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
               ),
             ),
             if (memberId == null)
+              FilledButton.icon(
+                onPressed: () => _logWorkout(),
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Log workout'),
+              ),
+            if (memberId == null)
               OutlinedButton.icon(
                 onPressed: _exporting || filters.isEmpty ? null : _export,
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
@@ -128,8 +156,10 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
               _ResultsCard(
                 results: data.results,
                 emptyText: memberId == null
-                    ? 'No results yet. Log one from the WOD of the day on Home.'
+                    ? 'No results yet. Log one from the WOD of the day on '
+                          'Home, or log a workout of your own.'
                     : 'No results logged at your gym yet.',
+                onEditPersonal: memberId == null ? _logWorkout : null,
               ),
             ],
           ),
@@ -226,10 +256,17 @@ BoxDecoration _card() => BoxDecoration(
 );
 
 class _ResultsCard extends StatelessWidget {
-  const _ResultsCard({required this.results, required this.emptyText});
+  const _ResultsCard({
+    required this.results,
+    required this.emptyText,
+    this.onEditPersonal,
+  });
 
   final List<WorkoutResult> results;
   final String emptyText;
+
+  /// Opens a personal result for editing; gym results are edited on the WOD.
+  final ValueChanged<WorkoutResult>? onEditPersonal;
 
   @override
   Widget build(BuildContext context) {
@@ -242,69 +279,82 @@ class _ResultsCard extends StatelessWidget {
           : Column(
               children: [
                 for (final result in results)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: appSpaceSm),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 110,
-                          child: Text(
-                            localizations.formatMediumDate(result.performedOn),
-                            style: const TextStyle(
-                              color: appSubtleText,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                result.sectionTitle.isEmpty
-                                    ? 'Workout'
-                                    : result.sectionTitle,
-                                style: const TextStyle(color: appText),
+                  InkWell(
+                    key: ValueKey('my-result-${result.id}'),
+                    onTap: result.isPersonal && onEditPersonal != null
+                        ? () => onEditPersonal!(result)
+                        : null,
+                    borderRadius: BorderRadius.circular(appRadiusMd),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: appSpaceSm),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 110,
+                            child: Text(
+                              localizations.formatMediumDate(
+                                result.performedOn,
                               ),
-                              if (result.notes.isNotEmpty)
-                                Text(
-                                  result.notes,
-                                  style: const TextStyle(
-                                    color: appSubtleText,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        if (result.isPr) ...[
-                          const AppPill(
-                            label: 'PR',
-                            intent: AppPillIntent.warning,
-                            dense: true,
-                          ),
-                          const SizedBox(width: appSpaceSm),
-                        ],
-                        Text(
-                          result.scoreLabel,
-                          style: const TextStyle(
-                            color: appText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 56,
-                          child: Text(
-                            result.divisionLabel,
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                              color: appMutedText,
-                              fontSize: 12,
+                              style: const TextStyle(
+                                color: appSubtleText,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  result.sectionTitle.isEmpty
+                                      ? 'Workout'
+                                      : result.sectionTitle,
+                                  style: const TextStyle(color: appText),
+                                ),
+                                if (result.notes.isNotEmpty)
+                                  Text(
+                                    result.notes,
+                                    style: const TextStyle(
+                                      color: appSubtleText,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (result.isPersonal) ...[
+                            const AppPill(label: 'Personal', dense: true),
+                            const SizedBox(width: appSpaceSm),
+                          ],
+                          if (result.isPr) ...[
+                            const AppPill(
+                              label: 'PR',
+                              intent: AppPillIntent.warning,
+                              dense: true,
+                            ),
+                            const SizedBox(width: appSpaceSm),
+                          ],
+                          Text(
+                            result.scoreLabel,
+                            style: const TextStyle(
+                              color: appText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(
+                            width: 56,
+                            child: Text(
+                              result.divisionLabel,
+                              textAlign: TextAlign.end,
+                              style: const TextStyle(
+                                color: appMutedText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],

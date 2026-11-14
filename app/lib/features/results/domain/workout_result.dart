@@ -30,6 +30,11 @@ class WorkoutResult {
     this.notes = '',
     this.sectionTitle = '',
     this.isPr = false,
+    this.isPersonal = false,
+    this.scoreType = '',
+    this.workoutName = '',
+    this.movementId,
+    this.description = '',
   });
 
   factory WorkoutResult.fromJson(Map<String, dynamic> json) => WorkoutResult(
@@ -49,6 +54,11 @@ class WorkoutResult {
     notes: json['notes'] as String? ?? '',
     sectionTitle: json['section_title'] as String? ?? '',
     isPr: json['is_pr'] as bool? ?? false,
+    isPersonal: json['source'] == 'personal',
+    scoreType: json['score_type'] as String? ?? '',
+    workoutName: json['workout_name'] as String? ?? '',
+    movementId: (json['movement_id'] as num?)?.toInt(),
+    description: json['description'] as String? ?? '',
   );
 
   final int id;
@@ -67,6 +77,18 @@ class WorkoutResult {
   /// Beats every earlier result of the same movement or named workout in
   /// the same division (server-side, recomputed on every read).
   final bool isPr;
+
+  /// Logged in the athlete's own logbook, not on a gym WOD block: no
+  /// leaderboard, and the athlete edits it from Profile › Results.
+  final bool isPersonal;
+
+  /// The wire name: time, rounds_reps, reps, weight, calories, distance.
+  final String scoreType;
+  final String workoutName;
+  final int? movementId;
+
+  /// What a personal workout was (benchmark text or the athlete's own).
+  final String description;
 
   String get divisionLabel => division == ResultDivision.rx ? 'Rx' : 'Scaled';
 }
@@ -398,4 +420,94 @@ class MovementInfo {
   final String equipment;
 
   bool get hasHowTo => instructions.isNotEmpty;
+}
+
+/// A benchmark from the catalog (the Girls, the Heroes) for the logbook.
+class Benchmark {
+  const Benchmark({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.scoreType,
+    required this.description,
+  });
+
+  factory Benchmark.fromJson(Map<String, dynamic> json) => Benchmark(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? '',
+    category: json['category'] as String? ?? '',
+    scoreType: json['score_type'] as String? ?? 'time',
+    description: json['description'] as String? ?? '',
+  );
+
+  final String id;
+  final String name;
+
+  /// girl or hero.
+  final String category;
+  final String scoreType;
+  final String description;
+
+  String get categoryLabel => switch (category) {
+    'girl' => 'Girl',
+    'hero' => 'Hero',
+    _ => 'Benchmark',
+  };
+}
+
+/// What the athlete logged in the personal logbook.
+enum PersonalKind { benchmark, movement, custom }
+
+/// A personal result as entered; the server scores it.
+class PersonalResultDraft {
+  const PersonalResultDraft({
+    required this.kind,
+    required this.performedOn,
+    this.benchmarkId,
+    this.movementName,
+    this.title,
+    this.description,
+    this.scoreType,
+    this.score,
+    this.division = ResultDivision.rx,
+    this.timeCapped = false,
+    this.sets,
+    this.notes = '',
+  });
+
+  final PersonalKind kind;
+  final DateTime performedOn;
+  final String? benchmarkId;
+  final String? movementName;
+  final String? title;
+  final String? description;
+
+  /// Custom workouts only; benchmarks and movements bring their own.
+  final String? scoreType;
+  final String? score;
+  final ResultDivision division;
+  final bool timeCapped;
+
+  /// Movements only.
+  final List<ResultSet>? sets;
+  final String notes;
+
+  Map<String, dynamic> toJson() {
+    final day = performedOn;
+    String two(int n) => n.toString().padLeft(2, '0');
+    return {
+      'kind': kind.name,
+      'performed_on': '${day.year}-${two(day.month)}-${two(day.day)}',
+      'benchmark_id': ?benchmarkId,
+      'movement_name': ?movementName,
+      'title': ?title,
+      'description': ?description,
+      'score_type': ?scoreType,
+      'score': ?score,
+      'division': division.name,
+      'time_capped': timeCapped,
+      if (sets != null) 'sets': [for (final set in sets!) set.toJson()],
+      'notes': notes,
+    };
+  }
 }

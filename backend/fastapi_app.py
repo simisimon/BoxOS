@@ -4621,6 +4621,87 @@ def export_my_workout_results(session: dict[str, Any] = Depends(require_session)
     )
 
 
+@app.get("/benchmarks")
+def list_benchmarks(session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    """The benchmark catalog (Girls and Heroes) for the personal logbook."""
+    connection = db.get_connection()
+    try:
+        return {"benchmarks": results_service.list_benchmarks(connection)}
+    finally:
+        connection.close()
+
+
+class PersonalResultRequest(BaseModel):
+    # benchmark (benchmark_id), movement (movement_id or movement_name, logged
+    # as sets) or custom (title, description, score_type).
+    kind: str
+    benchmark_id: str | None = None
+    movement_id: int | None = None
+    movement_name: str | None = None
+    title: str | None = None
+    description: str | None = None
+    score_type: str | None = None
+    performed_on: str
+    score: str | None = None
+    division: str | None = None
+    time_capped: bool = False
+    sets: list[ResultSetPayload] | None = None
+    notes: str | None = None
+
+
+def _save_personal(body: PersonalResultRequest, session: dict[str, Any], result_id: int | None) -> dict[str, Any]:
+    payload = body.model_dump()
+    payload["sets"] = None if body.sets is None else [s.model_dump() for s in body.sets]
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = results_service.save_personal_result(
+                connection,
+                user_id=session["user_id"],
+                gym_id=session.get("active_gym_id"),
+                body=payload,
+                result_id=result_id,
+            )
+            result["is_pr"] = results_service.is_pr(connection, result, session["user_id"])
+        return {"result": result}
+    finally:
+        connection.close()
+
+
+@app.post("/results/personal")
+def log_personal_result(
+    body: PersonalResultRequest,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    """Logs a result in the caller's own logbook (no gym WOD, no leaderboard)."""
+    return _save_personal(body, session, None)
+
+
+@app.put("/results/personal/{result_id}")
+def update_personal_result(
+    result_id: int,
+    body: PersonalResultRequest,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    return _save_personal(body, session, result_id)
+
+
+@app.delete("/results/personal/{result_id}")
+def delete_personal_result(
+    result_id: int,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            results_service.delete_personal_result(
+                connection, user_id=session["user_id"], result_id=result_id
+            )
+        return {"message": "Result deleted."}
+    finally:
+        connection.close()
+
+
 class ResultsPrivacyRequest(BaseModel):
     visibility: str
 
