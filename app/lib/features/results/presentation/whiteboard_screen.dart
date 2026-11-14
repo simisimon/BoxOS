@@ -6,6 +6,7 @@ import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/results/data/api_results_repository.dart';
 import 'package:app/features/results/domain/workout_result.dart';
 import 'package:app/features/results/presentation/block_leaderboard.dart';
+import 'package:app/features/results/presentation/friends_feed.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,11 +28,23 @@ DateTime whiteboardDay(String? value) {
 /// The Whiteboard: the day's WOD with every scored block's leaderboard, for
 /// every role. [tv] is the full-screen version for the box's TV: bigger type,
 /// no navigation, refreshed every minute.
+///
+/// Outside TV mode a Friends tab ([friends], `?tab=friends`) shows the
+/// results of the people the athlete follows; [followCode] (`&follow=`)
+/// comes from an invite link.
 class WhiteboardScreen extends ConsumerStatefulWidget {
-  const WhiteboardScreen({super.key, required this.day, this.tv = false});
+  const WhiteboardScreen({
+    super.key,
+    required this.day,
+    this.tv = false,
+    this.friends = false,
+    this.followCode,
+  });
 
   final DateTime day;
   final bool tv;
+  final bool friends;
+  final String? followCode;
 
   @override
   ConsumerState<WhiteboardScreen> createState() => _WhiteboardScreenState();
@@ -39,6 +52,7 @@ class WhiteboardScreen extends ConsumerStatefulWidget {
 
 class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
   late DateTime _day = _dateOnly(widget.day);
+  late bool _friends = widget.friends && !widget.tv;
   Timer? _refresh;
 
   @override
@@ -56,6 +70,16 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
   void didUpdateWidget(WhiteboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.day != widget.day) _day = _dateOnly(widget.day);
+    if (oldWidget.friends != widget.friends) {
+      _friends = widget.friends && !widget.tv;
+    }
+  }
+
+  void _showTab(bool friends) {
+    setState(() => _friends = friends);
+    GoRouter.maybeOf(context)?.go(
+      friends ? '/whiteboard?tab=friends' : '/whiteboard?date=${_wire(_day)}',
+    );
   }
 
   @override
@@ -95,7 +119,7 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
               Text('WHITEBOARD', style: appMono(fontSize: 11)),
               const SizedBox(height: appSpaceXs),
               Text(
-                localizations.formatFullDate(_day),
+                _friends ? 'Friends' : localizations.formatFullDate(_day),
                 style: const TextStyle(
                   color: appText,
                   fontSize: 20,
@@ -105,21 +129,25 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
             ],
           ),
         ),
-        TextButton(
-          onPressed: _day == today ? null : () => _show(today),
-          child: const Text('Today'),
-        ),
-        IconButton(
-          tooltip: 'Previous day',
-          onPressed: () => _shift(-1),
-          icon: const Icon(Icons.chevron_left_rounded),
-        ),
-        IconButton(
-          tooltip: 'Next day',
-          onPressed: () => _shift(1),
-          icon: const Icon(Icons.chevron_right_rounded),
-        ),
-        if (widget.tv)
+        if (!_friends) ...[
+          TextButton(
+            onPressed: _day == today ? null : () => _show(today),
+            child: const Text('Today'),
+          ),
+          IconButton(
+            tooltip: 'Previous day',
+            onPressed: () => _shift(-1),
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+          IconButton(
+            tooltip: 'Next day',
+            onPressed: () => _shift(1),
+            icon: const Icon(Icons.chevron_right_rounded),
+          ),
+        ],
+        if (_friends)
+          const SizedBox.shrink()
+        else if (widget.tv)
           IconButton(
             tooltip: 'Leave TV mode',
             onPressed: () => GoRouter.maybeOf(
@@ -139,7 +167,9 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
     );
 
     final Widget body;
-    if (workouts.isLoading && !workouts.hasValue) {
+    if (_friends) {
+      body = FriendsFeed(followCode: widget.followCode);
+    } else if (workouts.isLoading && !workouts.hasValue) {
       body = const LinearProgressIndicator();
     } else if (workouts.hasError && !workouts.hasValue) {
       body = const Text(
@@ -162,6 +192,21 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
       padding: EdgeInsets.all(widget.tv ? appSpace2xl : appSpaceLg),
       children: [
         header,
+        if (!widget.tv) ...[
+          const SizedBox(height: appSpaceMd),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: false, label: Text('Box')),
+                ButtonSegment(value: true, label: Text('Friends')),
+              ],
+              selected: {_friends},
+              onSelectionChanged: (s) => _showTab(s.first),
+            ),
+          ),
+        ],
         const SizedBox(height: appSpaceLg),
         body,
       ],

@@ -557,7 +557,7 @@ def delete_personal_result(connection: ManagedConnection, *, user_id: int, resul
         raise ApiError(HTTPStatus.NOT_FOUND, "Result not found.")
 
 
-RESULTS_VISIBILITY = ("gym", "private")
+RESULTS_VISIBILITY = ("followers", "gym", "private")
 
 # Leaderboard rows a viewer may see: coaches see everyone, athletes see
 # results of people who share them with the gym, plus their own.

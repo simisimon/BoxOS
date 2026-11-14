@@ -226,6 +226,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'whiteboard',
                 builder: (context, state) => WhiteboardScreen(
                   day: whiteboardDay(state.uri.queryParameters['date']),
+                  friends: state.uri.queryParameters['tab'] == 'friends',
+                  followCode: state.uri.queryParameters['follow'],
                 ),
               ),
             ],

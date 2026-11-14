@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, result_social_service, results_service, schedule_service, security, settings, session_auth, validation
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, follow_service, result_social_service, results_service, schedule_service, security, settings, session_auth, validation
 
 logger = logging.getLogger("boxos.backend")
 
@@ -4708,7 +4708,8 @@ class ResultsPrivacyRequest(BaseModel):
 
 @app.get("/profile/results-privacy")
 def get_results_privacy(session: dict[str, Any] = Depends(require_session)) -> dict[str, str]:
-    """Who sees the caller's results on gym leaderboards."""
+    """Who sees the caller's results: followers (and the gym), the gym, or
+    only the caller and their coaches."""
     connection = db.get_connection()
     try:
         row = connection.execute(
@@ -4729,7 +4730,9 @@ def update_results_privacy(
 ) -> dict[str, str]:
     visibility = body.visibility.strip().lower()
     if visibility not in results_service.RESULTS_VISIBILITY:
-        raise validation.ApiError(HTTPStatus.BAD_REQUEST, "Choose who sees your results: gym or private.")
+        raise validation.ApiError(
+            HTTPStatus.BAD_REQUEST, "Choose who sees your results: followers, gym or private."
+        )
     connection = db.get_connection()
     try:
         with connection:
@@ -4738,6 +4741,102 @@ def update_results_privacy(
                 (visibility, security.isoformat(security.now_utc()), session["user_id"]),
             )
         return {"visibility": visibility}
+    finally:
+        connection.close()
+
+
+class FollowRequest(BaseModel):
+    # A member of a gym the caller belongs to, or anyone by invite code.
+    user_id: int | None = None
+    invite_code: str | None = None
+
+
+@app.get("/follows")
+def list_follows(session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    """Who the caller follows, their followers, open requests and the
+    caller's invite code."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            return follow_service.overview(connection, user_id=session["user_id"])
+    finally:
+        connection.close()
+
+
+@app.get("/follows/search")
+def search_follows(
+    query: str = "",
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    """Members of the caller's gyms by name, to follow."""
+    connection = db.get_connection()
+    try:
+        return {"people": follow_service.search(connection, user_id=session["user_id"], query=query)}
+    finally:
+        connection.close()
+
+
+@app.post("/follows")
+def create_follow(body: FollowRequest, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    """Asks to follow someone; they accept or decline."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            return follow_service.request_follow(
+                connection,
+                user_id=session["user_id"],
+                target_id=body.user_id,
+                code=(body.invite_code or "").strip() or None,
+            )
+    finally:
+        connection.close()
+
+
+@app.post("/follows/requests/{follower_id}/accept")
+def accept_follow(follower_id: int, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            follow_service.accept(connection, user_id=session["user_id"], follower_id=follower_id)
+        return {"message": "Request accepted."}
+    finally:
+        connection.close()
+
+
+@app.delete("/follows/followers/{follower_id}")
+def remove_follower(follower_id: int, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    """Declines a follow request or removes a follower."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            follow_service.remove_follower(connection, user_id=session["user_id"], follower_id=follower_id)
+        return {"message": "Follower removed."}
+    finally:
+        connection.close()
+
+
+@app.delete("/follows/following/{followee_id}")
+def unfollow(followee_id: int, session: dict[str, Any] = Depends(require_session)) -> dict[str, Any]:
+    """Stops following someone, or withdraws a request."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            follow_service.unfollow(connection, user_id=session["user_id"], followee_id=followee_id)
+        return {"message": "Unfollowed."}
+    finally:
+        connection.close()
+
+
+@app.get("/feed")
+def results_feed(
+    offset: int = 0,
+    limit: int = 30,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    """Results of the people the caller follows, newest first."""
+    connection = db.get_connection()
+    try:
+        return follow_service.feed(connection, user_id=session["user_id"], offset=offset, limit=limit)
     finally:
         connection.close()
 
@@ -4751,7 +4850,18 @@ def _viewable(connection: Any, result_id: int, session: dict[str, Any]) -> Any:
         connection,
         result_id=result_id,
         viewer_id=session["user_id"],
-        gym_id=session["active_gym_id"],
+        gym_id=session.get("active_gym_id"),
+        staff=_staff(session),
+    )
+
+
+def _coach(connection: Any, result: Any, session: dict[str, Any]) -> bool:
+    """Coaches moderate results logged at their own gym only."""
+    return result_social_service.coaches_result(
+        connection,
+        result,
+        viewer_id=session["user_id"],
+        gym_id=session.get("active_gym_id"),
         staff=_staff(session),
     )
 
@@ -4760,7 +4870,7 @@ def _result_detail(connection: Any, result: Any, session: dict[str, Any]) -> dic
     fresh = _viewable(connection, int(result["id"]), session)
     return {
         "result": result_social_service.result_detail(
-            connection, result=fresh, viewer_id=session["user_id"], staff=_staff(session)
+            connection, result=fresh, viewer_id=session["user_id"], staff=_coach(connection, fresh, session)
         )
     }
 
@@ -4768,7 +4878,7 @@ def _result_detail(connection: Any, result: Any, session: dict[str, Any]) -> dic
 @app.get("/results/{result_id}")
 def get_workout_result(
     result_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     """One result with its photo, fist bumps and comments."""
     connection = db.get_connection()
@@ -4781,7 +4891,7 @@ def get_workout_result(
 @app.put("/results/{result_id}/bump")
 def bump_workout_result(
     result_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     connection = db.get_connection()
     try:
@@ -4796,7 +4906,7 @@ def bump_workout_result(
 @app.delete("/results/{result_id}/bump")
 def unbump_workout_result(
     result_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     connection = db.get_connection()
     try:
@@ -4816,7 +4926,7 @@ class ResultCommentRequest(BaseModel):
 def comment_on_workout_result(
     result_id: int,
     body: ResultCommentRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     connection = db.get_connection()
     try:
@@ -4831,7 +4941,7 @@ def comment_on_workout_result(
 @app.delete("/results/comments/{comment_id}")
 def delete_result_comment(
     comment_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     """Authors delete their comments; owners and trainers any in their gym."""
     connection = db.get_connection()
@@ -4841,7 +4951,7 @@ def delete_result_comment(
                 connection,
                 comment_id=comment_id,
                 user_id=session["user_id"],
-                gym_id=session["active_gym_id"],
+                gym_id=session.get("active_gym_id"),
                 staff=_staff(session),
             )
         return {"message": "Comment deleted."}
@@ -4859,7 +4969,7 @@ class ResultPhotoRequest(BaseModel):
 def upload_result_photo(
     result_id: int,
     body: ResultPhotoRequest,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     """The athlete's one photo on their result (replaces an earlier one)."""
     validation.require_upload_filename(body.filename)
@@ -4887,7 +4997,7 @@ def upload_result_photo(
 @app.delete("/results/{result_id}/photo")
 def remove_result_photo(
     result_id: int,
-    session: dict[str, Any] = Depends(require_active_gym_member_session),
+    session: dict[str, Any] = Depends(require_session),
 ) -> dict[str, Any]:
     """The athlete removes their photo; owners and trainers moderate."""
     connection = db.get_connection()
@@ -4895,7 +5005,7 @@ def remove_result_photo(
         with connection:
             result = _viewable(connection, result_id, session)
             result_social_service.remove_photo(
-                connection, result=result, user_id=session["user_id"], staff=_staff(session)
+                connection, result=result, user_id=session["user_id"], staff=_coach(connection, result, session)
             )
         return _result_detail(connection, result, session)
     finally:

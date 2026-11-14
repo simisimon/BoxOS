@@ -1,8 +1,9 @@
 """Fist bumps, comments and a photo on WOD results.
 
-Whoever sees a result on the gym leaderboard can bump it and comment on it:
-members of the result's gym, minus results their owners keep private (the
-owner and the gym's coaches still see those). Comment authors and coaches
+Whoever sees a result can bump it and comment on it: members of the
+result's gym, minus results their owners keep private (the owner and the
+gym's coaches still see those), and followers of athletes who share with
+followers. Comment authors and coaches
 delete comments; the owner and coaches remove the photo.
 """
 
@@ -35,9 +36,11 @@ def _name(row: Row, prefix: str = "") -> str:
 
 
 def viewable_result(
-    connection: ManagedConnection, *, result_id: int, viewer_id: int, gym_id: int, staff: bool
+    connection: ManagedConnection, *, result_id: int, viewer_id: int, gym_id: int | None, staff: bool
 ) -> Row:
-    """The result, if the viewer may see it on the gym's leaderboard."""
+    """The result, if the viewer may see it: their own; one at a gym they
+    belong to, unless kept private (the gym's coaches still see those); or,
+    for followers, any result of someone who shares with followers."""
     row = connection.execute(
         """
         select r.id, r.user_id, r.gym_id, r.section_id, r.daily_workout_id, r.performed_on,
@@ -46,15 +49,42 @@ def viewable_result(
                u.display_name, u.nickname, u.email, u.profile_image_url, u.results_visibility
         from workout_results r
         join users u on u.id = r.user_id
-        where r.id = ? and r.gym_id = ? and u.deleted_at is null
+        where r.id = ? and u.deleted_at is null
         """,
-        (result_id, gym_id),
+        (result_id,),
     ).fetchone()
-    if row is None or (
-        row["results_visibility"] == "private" and not staff and row["user_id"] != viewer_id
-    ):
+    if row is None or not _can_view(connection, row, viewer_id=viewer_id, gym_id=gym_id, staff=staff):
         raise ApiError(HTTPStatus.NOT_FOUND, "Result not found.")
     return row
+
+
+def coaches_result(connection: ManagedConnection, result: Row, *, viewer_id: int, gym_id: int | None, staff: bool) -> bool:
+    """Whether the viewer coaches the gym the result was logged at."""
+    from backend import follow_service
+
+    return (
+        staff
+        and gym_id is not None
+        and result["gym_id"] == gym_id
+        and gym_id in follow_service.member_gym_ids(connection, viewer_id)
+    )
+
+
+def _can_view(connection: ManagedConnection, row: Row, *, viewer_id: int, gym_id: int | None, staff: bool) -> bool:
+    from backend import follow_service
+
+    if row["user_id"] == viewer_id:
+        return True
+    if coaches_result(connection, row, viewer_id=viewer_id, gym_id=gym_id, staff=staff):
+        return True
+    visibility = row["results_visibility"]
+    if visibility == "private":
+        return False
+    if row["gym_id"] is not None and row["gym_id"] in follow_service.member_gym_ids(connection, viewer_id):
+        return True
+    return visibility == "followers" and follow_service.follows(
+        connection, follower_id=viewer_id, followee_id=row["user_id"]
+    )
 
 
 def social_counts(
@@ -164,19 +194,22 @@ def add_comment(connection: ManagedConnection, *, result: Row, user_id: int, bod
 
 
 def delete_comment(
-    connection: ManagedConnection, *, comment_id: int, user_id: int, gym_id: int, staff: bool
+    connection: ManagedConnection, *, comment_id: int, user_id: int, gym_id: int | None, staff: bool
 ) -> None:
     row = connection.execute(
-        """
-        select c.id, c.user_id, r.gym_id
-        from result_comments c join workout_results r on r.id = c.result_id
-        where c.id = ?
-        """,
+        "select id, user_id, result_id from result_comments where id = ?",
         (comment_id,),
     ).fetchone()
-    if row is None or row["gym_id"] != gym_id:
+    if row is None:
         raise ApiError(HTTPStatus.NOT_FOUND, "Comment not found.")
-    if row["user_id"] != user_id and not staff:
+    try:
+        result = viewable_result(
+            connection, result_id=row["result_id"], viewer_id=user_id, gym_id=gym_id, staff=staff
+        )
+    except ApiError:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Comment not found.") from None
+    coach = coaches_result(connection, result, viewer_id=user_id, gym_id=gym_id, staff=staff)
+    if row["user_id"] != user_id and not coach:
         raise ApiError(HTTPStatus.FORBIDDEN, "Only the author or a coach can delete this comment.")
     connection.execute("delete from result_comments where id = ?", (comment_id,))
 

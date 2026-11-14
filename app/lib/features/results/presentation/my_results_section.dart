@@ -236,13 +236,18 @@ class _ResultsPrivacyCardState extends ConsumerState<ResultsPrivacyCard> {
             ),
           ),
           const SizedBox(height: appSpaceSm),
-          Text(
-            current == ResultsVisibility.private
-                ? 'Other athletes don\'t see your results on the leaderboards. '
-                      'Your coaches still do.'
-                : 'Everyone in your gym sees your results on the leaderboards.',
-            style: const TextStyle(color: appSubtleText, fontSize: 12),
-          ),
+          Text(switch (current) {
+            ResultsVisibility.private =>
+              'Other athletes don\'t see your results on the leaderboards '
+                  'or in their feed. Your coaches still do.',
+            ResultsVisibility.followers =>
+              'Everyone in your gym sees your results on the leaderboards. '
+                  'People you accept as followers see all of them in their '
+                  'feed, your logbook too.',
+            _ =>
+              'Everyone in your gym sees your results on the leaderboards. '
+                  'Followers only see results from gyms you share.',
+          }, style: const TextStyle(color: appSubtleText, fontSize: 12)),
         ],
       ),
     );
