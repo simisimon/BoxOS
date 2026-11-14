@@ -28,6 +28,7 @@ import 'package:app/features/profile/presentation/screens/notification_settings_
 import 'package:app/features/profile/presentation/screens/notifications_screen.dart';
 import 'package:app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:app/core/routing/env.dart';
+import 'package:app/features/results/presentation/whiteboard_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -218,7 +219,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/whiteboard',
+                name: 'whiteboard',
+                builder: (context, state) => WhiteboardScreen(
+                  day: whiteboardDay(state.uri.queryParameters['date']),
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+      // The box TV: the whiteboard full screen, outside the app shell.
+      GoRoute(
+        path: '/whiteboard/tv',
+        name: 'whiteboard-tv',
+        builder: (context, state) => WhiteboardScreen(
+          day: whiteboardDay(state.uri.queryParameters['date']),
+          tv: true,
+        ),
       ),
       GoRoute(
         path: '/notifications',
