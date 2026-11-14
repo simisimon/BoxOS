@@ -182,6 +182,17 @@ class SeedTestDataTests(FastApiTestCase):
         self.assertGreater(classes, 0)
         self.assertGreater(self.count_rows("daily_workouts", "gym_id = ? and title = 'Test WOD'", (self.gym_id,)), 0)
         self.assertEqual(self.count_rows("gyms"), 1)
+        results = self.count_rows("workout_results", "source = 'gym' and gym_id = ?", (self.gym_id,))
+        self.assertGreater(results, 0)
+        # Only test accounts log, and only on the test WODs.
+        self.assertEqual(
+            self.count_rows(
+                "workout_results r",
+                "r.source = 'gym' and (r.user_id not in (select id from users where email like '%@test.boxos.invalid')"
+                " or r.daily_workout_id not in (select id from daily_workouts where title = 'Test WOD'))",
+            ),
+            0,
+        )
 
         self.seed()
         self.assertEqual(self.count_rows("users", test_users), 9)
@@ -206,6 +217,8 @@ class SeedTestDataTests(FastApiTestCase):
         self.assertEqual(self.count_rows("class_schedules", "gym_id = ?", (self.gym_id,)), 0)
         self.assertEqual(self.count_rows("membership_plans", "gym_id = ?", (self.gym_id,)), 0)
         self.assertEqual(self.count_rows("chat_messages", "gym_id = ?", (self.gym_id,)), 0)
+        self.assertEqual(self.count_rows("workout_results"), 0)
+        self.assertEqual(self.count_rows("athlete_follows"), 0)
         self.assertEqual(self.count_rows("gym_memberships", "gym_id = ?", (self.gym_id,)), 2)
         self.assertEqual(self.count_rows("daily_workouts", "gym_id = ?", (self.gym_id,)), 1)
         self.auth_headers(settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD)

@@ -18,7 +18,7 @@ import json
 import random
 from datetime import datetime, timedelta, timezone
 
-from backend import db, settings
+from backend import db, seed_results, settings
 from backend.membership_service import slugify
 from backend.schedule_service import utc_for_local
 from backend.security import hash_password, isoformat, now_utc
@@ -191,11 +191,20 @@ def seed(rng: random.Random | None = None) -> None:
             _seed_programming(conn, gym_id, owner_id, today)
             _seed_demo_athlete(conn, rng, gym_id)
             _seed_community(conn, rng, gym_id, owner_id, member_ids)
+            demo = conn.execute(
+                "select id from users where email = ?", (settings.DEMO_EMAIL.lower(),)
+            ).fetchone()
+            results = seed_results.seed_results(
+                conn, rng, gym_id=gym_id, athlete_ids=member_ids,
+                star_id=int(demo["id"]) if demo else None,
+            )
 
         print("Seeded demo box:")
         print(f"  gym         : {GYM_NAME} (id {gym_id}, {GYM_TIMEZONE})")
         print(f"  members     : {len(member_ids)} active (+ owner), {N_PENDING_REQUESTS} pending requests")
         print(f"  plans       : {n_plans} assigned, {n_plan_requests} open plan requests")
+        print(f"  results     : {results['results']} on WODs, {results['personal']} in logbooks, "
+              f"{results['follows']} follows")
         print(f"  owner login : {OWNER_EMAIL} / {OWNER_PASSWORD}")
     finally:
         conn.close()
@@ -371,27 +380,21 @@ def _seed_classes(conn, rng, gym_id, owner_id, trainer_ids, member_ids, today, *
 
 
 def _seed_programming(conn, gym_id, owner_id, today):
-    sections = [
-        ("Strength · Back Squat", "5·5·3·3·1 building to a heavy single.", "weight"),
-        ("Metcon · Fran", "21-15-9 Thrusters (43/30kg) + Pull-ups. For time.", "time"),
-        ("Accessory", "3 rounds: 12 GHD sit-ups, 40s hollow hold.", "rounds_reps"),
-    ]
-    for offset in range(-6, 1):
+    """Four weeks of WODs and the next two days, with real blocks (a lift,
+    a named metcon, a warm-up) so results, history and PRs have something
+    to work with."""
+    for offset in range(-27, 3):
         day = today + timedelta(days=offset)
         wod_id = int(conn.execute(
             """
             insert into daily_workouts (gym_id, scheduled_date, title, status, published_at,
               published_by_user_id, created_by_user_id, updated_by_user_id, created_at, updated_at)
-            values (?, ?, ?, 'published', ?, ?, ?, ?, ?, ?) returning id
+            values (?, ?, '', 'published', ?, ?, ?, ?, ?, ?) returning id
             """,
-            (gym_id, day.isoformat(), "Fran", _ts(), owner_id, owner_id, owner_id, _ts(), _ts()),
+            (gym_id, day.isoformat(), _ts(), owner_id, owner_id, owner_id, _ts(), _ts()),
         ).fetchone()["id"])
-        for pos, (title, desc, score) in enumerate(sections):
-            conn.execute(
-                """insert into daily_workout_sections (daily_workout_id, position, title, description, score_type)
-                   values (?, ?, ?, ?, ?)""",
-                (wod_id, pos, title, desc, score),
-            )
+        title = seed_results.program_day(conn, wod_id, offset % 5)
+        conn.execute("update daily_workouts set title = ? where id = ?", (title, wod_id))
 
 
 def _seed_demo_athlete(conn, rng, gym_id):
