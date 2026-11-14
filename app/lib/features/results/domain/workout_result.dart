@@ -219,3 +219,56 @@ class LeaderboardEntry {
   /// Only the athlete's own notes, or everyone's for owners and trainers.
   final String notes;
 }
+
+/// Who sees an athlete's results on gym leaderboards.
+enum ResultsVisibility {
+  /// Everyone in the athlete's gym (the default).
+  gym,
+
+  /// Only the athlete and the gym's coaches.
+  private;
+
+  static ResultsVisibility fromWire(Object? value) =>
+      value == 'private' ? ResultsVisibility.private : ResultsVisibility.gym;
+
+  String get label => switch (this) {
+    ResultsVisibility.gym => 'My gym',
+    ResultsVisibility.private => 'Only me and my coaches',
+  };
+}
+
+/// A movement's how-to from the exercise library; empty lists when the
+/// movement has no library entry (e.g. one a gym typed in).
+class MovementInfo {
+  const MovementInfo({
+    required this.id,
+    required this.name,
+    this.instructions = const [],
+    this.primaryMuscles = const [],
+    this.secondaryMuscles = const [],
+    this.equipment = '',
+  });
+
+  factory MovementInfo.fromJson(Map<String, dynamic> json) {
+    List<String> strings(Object? value) => [
+      for (final item in value as List? ?? const []) '$item',
+    ];
+    return MovementInfo(
+      id: (json['id'] as num).toInt(),
+      name: json['name'] as String? ?? '',
+      instructions: strings(json['instructions']),
+      primaryMuscles: strings(json['primary_muscles']),
+      secondaryMuscles: strings(json['secondary_muscles']),
+      equipment: json['equipment'] as String? ?? '',
+    );
+  }
+
+  final int id;
+  final String name;
+  final List<String> instructions;
+  final List<String> primaryMuscles;
+  final List<String> secondaryMuscles;
+  final String equipment;
+
+  bool get hasHowTo => instructions.isNotEmpty;
+}

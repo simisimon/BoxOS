@@ -181,7 +181,9 @@ def _sections_with_results(
     mine = results_service.my_results_by_section(
         connection, user_id=user_id, daily_workout_id=daily_workout_id
     )
-    counts = results_service.result_counts_by_section(connection, daily_workout_id=daily_workout_id)
+    counts = results_service.result_counts_by_section(
+        connection, daily_workout_id=daily_workout_id, viewer_id=user_id, staff=can_edit
+    )
     sections = []
     for section in fetch_workout_sections(connection, daily_workout_id):
         # Coach notes are for coaches; members only get the member notes.

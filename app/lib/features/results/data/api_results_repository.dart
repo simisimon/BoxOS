@@ -26,6 +26,18 @@ final myResultsProvider = FutureProvider.autoDispose
           ref.watch(resultsRepositoryProvider).fetchMyResults(filter),
     );
 
+/// Who sees the athlete's results (Profile › Results).
+final resultsPrivacyProvider = FutureProvider.autoDispose<ResultsVisibility>(
+  (ref) => ref.watch(resultsRepositoryProvider).fetchResultsPrivacy(),
+);
+
+/// A movement's how-to, for exercise blocks in the Log panel.
+final movementInfoProvider = FutureProvider.autoDispose
+    .family<MovementInfo, int>(
+      (ref, movementId) =>
+          ref.watch(resultsRepositoryProvider).fetchMovement(movementId),
+    );
+
 final resultsRepositoryProvider = Provider<ResultsRepository>((ref) {
   return ApiResultsRepository(
     dio: ref.read(dioProvider),
@@ -76,6 +88,15 @@ abstract class ResultsRepository {
   Future<ResultHistory> fetchHistory(int sectionId);
 
   Future<MyResults> fetchMyResults(ResultFilter? filter);
+
+  Future<ResultsVisibility> fetchResultsPrivacy();
+
+  Future<ResultsVisibility> saveResultsPrivacy(ResultsVisibility visibility);
+
+  /// Every result of the athlete as CSV text.
+  Future<String> exportResultsCsv();
+
+  Future<MovementInfo> fetchMovement(int movementId);
 }
 
 class ApiResultsRepository implements ResultsRepository {
@@ -146,6 +167,50 @@ class ApiResultsRepository implements ResultsRepository {
       options: Options(headers: await _authHeaders()),
     );
     return MyResults.fromJson(response.data ?? const {});
+  }
+
+  @override
+  Future<ResultsVisibility> fetchResultsPrivacy() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/profile/results-privacy',
+      options: Options(headers: await _authHeaders()),
+    );
+    return ResultsVisibility.fromWire(response.data?['visibility']);
+  }
+
+  @override
+  Future<ResultsVisibility> saveResultsPrivacy(
+    ResultsVisibility visibility,
+  ) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/profile/results-privacy',
+      data: {'visibility': visibility.name},
+      options: Options(headers: await _authHeaders()),
+    );
+    return ResultsVisibility.fromWire(response.data?['visibility']);
+  }
+
+  @override
+  Future<String> exportResultsCsv() async {
+    final response = await _dio.get<String>(
+      '/results/me.csv',
+      options: Options(
+        headers: await _authHeaders(),
+        responseType: ResponseType.plain,
+      ),
+    );
+    return response.data ?? '';
+  }
+
+  @override
+  Future<MovementInfo> fetchMovement(int movementId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/movements/$movementId',
+      options: Options(headers: await _authHeaders()),
+    );
+    return MovementInfo.fromJson(
+      response.data!['movement'] as Map<String, dynamic>,
+    );
   }
 
   Future<Map<String, String>> _authHeaders() async {

@@ -160,3 +160,18 @@ class MovementTests(FastApiTestCase):
         self.assertIn("Fran", names)
         used = self.client.get("/workout-names", headers=headers, params={"query": "box"}).json()["workout_names"]
         self.assertEqual(used, ["Box Test 1"])
+
+    def test_linked_movement_has_instructions(self) -> None:
+        headers, _ = self.create_gym_as_admin("How-to Box")
+        squat = self.client.get("/movements", headers=headers, params={"query": "back squat"}).json()["movements"][0]
+        detail = self.client.get(f"/movements/{squat['id']}", headers=headers)
+        self.assertEqual(detail.status_code, 200, detail.text)
+        movement = detail.json()["movement"]
+        self.assertEqual(movement["name"], "Back Squat")
+        self.assertTrue(movement["instructions"])
+        self.assertIn("quadriceps", movement["primary_muscles"])
+
+        workout = StableBlockTests._create(self, headers, [{**_blocks()[1], "exercise_name": "Banded Zercher Thing"}])
+        own = self.client.get(f"/movements/{workout['sections'][0]['movement_id']}", headers=headers).json()["movement"]
+        self.assertEqual(own["instructions"], [])
+        self.assertEqual(self.client.get("/movements/999999", headers=headers).status_code, 404)

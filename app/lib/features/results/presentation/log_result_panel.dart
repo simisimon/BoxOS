@@ -429,6 +429,8 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
               style: text.copyWith(fontStyle: FontStyle.italic),
             ),
           ],
+          if (_isExercise && section.movementId != null)
+            _HowTo(movementId: section.movementId!),
           const SizedBox(height: appSpaceLg),
           if (_isExercise) ...[
             _liftInput(oneRepMax),
@@ -469,6 +471,51 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
           ],
           if (history != null) _LastTimes(history: history, current: _existing),
         ],
+      ),
+    );
+  }
+}
+
+/// The movement's instructions from the exercise library, folded away.
+class _HowTo extends ConsumerWidget {
+  const _HowTo({required this.movementId});
+
+  final int movementId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final info = ref.watch(movementInfoProvider(movementId)).value;
+    if (info == null || !info.hasHowTo) return const SizedBox.shrink();
+    const muted = TextStyle(color: appMutedText, height: 1.45);
+    final muscles = [...info.primaryMuscles, ...info.secondaryMuscles];
+    return Padding(
+      padding: const EdgeInsets.only(top: appSpaceSm),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: appSpaceSm),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          title: Text(
+            'How to: ${info.name}',
+            style: const TextStyle(color: appText, fontSize: 14),
+          ),
+          children: [
+            for (final (index, step) in info.instructions.indexed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: appSpaceXs),
+                child: Text('${index + 1}. $step', style: muted),
+              ),
+            if (muscles.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: appSpaceXs),
+                child: Text(
+                  'Muscles: ${muscles.join(', ')}',
+                  style: const TextStyle(color: appSubtleText, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

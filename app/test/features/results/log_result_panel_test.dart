@@ -3,6 +3,7 @@ import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/results/data/api_results_repository.dart';
 import 'package:app/features/results/domain/workout_result.dart';
 import 'package:app/features/results/presentation/log_result_panel.dart';
+import 'package:app/features/results/presentation/my_results_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,24 @@ class _FakeResults implements ResultsRepository {
   @override
   Future<MyResults> fetchMyResults(ResultFilter? filter) async =>
       const MyResults(results: [], filters: []);
+
+  ResultsVisibility visibility = ResultsVisibility.gym;
+
+  @override
+  Future<ResultsVisibility> fetchResultsPrivacy() async => visibility;
+
+  @override
+  Future<ResultsVisibility> saveResultsPrivacy(ResultsVisibility value) async =>
+      visibility = value;
+
+  @override
+  Future<String> exportResultsCsv() async => 'date\n';
+
+  MovementInfo? movement;
+
+  @override
+  Future<MovementInfo> fetchMovement(int movementId) async =>
+      movement ?? MovementInfo(id: movementId, name: '');
 }
 
 Future<LogResultOutcome?> Function() _open(
@@ -241,5 +260,62 @@ void main() {
     expect(find.text('PR'), findsOneWidget);
     expect(find.text('75'), findsOneWidget); // 75 % of 100 kg as the hint
     await tester.pump();
+  });
+
+  testWidgets('exercise blocks fold in the movement how-to', (tester) async {
+    final fake = _FakeResults()
+      ..movement = const MovementInfo(
+        id: 3,
+        name: 'Back Squat',
+        instructions: ['Bar on your back.', 'Sit down, stand up.'],
+        primaryMuscles: ['quadriceps'],
+      );
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.reset);
+    await _open(
+      tester,
+      fake,
+      const DailyWorkoutSection(
+        id: 9,
+        title: 'Strength',
+        description: 'Back Squat 5x5',
+        scoreType: WorkoutSectionScore.weight,
+        kind: BlockKind.exercise,
+        exerciseName: 'Back Squat',
+        movementId: 3,
+      ),
+    )();
+    expect(find.text('How to: Back Squat'), findsOneWidget);
+    expect(find.text('1. Bar on your back.'), findsNothing);
+    await tester.tap(find.text('How to: Back Squat'));
+    await tester.pumpAndSettle();
+    expect(find.text('1. Bar on your back.'), findsOneWidget);
+    expect(find.text('Muscles: quadriceps'), findsOneWidget);
+    await tester.pump();
+  });
+
+  testWidgets('results privacy can be set to only me', (tester) async {
+    final fake = _FakeResults();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [resultsRepositoryProvider.overrideWithValue(fake)],
+        child: MaterialApp(
+          theme: buildBoxOsTheme(),
+          home: const Scaffold(body: ResultsPrivacyCard()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('My gym'), findsOneWidget);
+    await tester.tap(find.text('My gym'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Only me and my coaches').last);
+    await tester.pumpAndSettle();
+    expect(fake.visibility, ResultsVisibility.private);
+    expect(find.textContaining('Your coaches still do.'), findsOneWidget);
   });
 }

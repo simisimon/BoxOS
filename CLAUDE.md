@@ -94,7 +94,10 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   shows the WOD with its leaderboards. The plan and phases:
   https://claude.ai/artifact/KWrtxzWAaYxp2qLzwVG7rM. The old `workout_logs`,
   `tracking_sessions` and `personal_workouts` tables are not reused or
-  migrated; the timer stays out.
+  migrated; the timer stays out. Privacy (`users.results_visibility`):
+  'gym' (default, "My gym") or 'private' (other athletes don't see them on
+  leaderboards; coaches still do). A followers level comes with the friends
+  feed. Athletes can download all their results as CSV (`/results/me.csv`).
 - WOD blocks are saved by id (`workout_service.replace_workout_sections`):
   clients send back each block's `id` so it is updated in place and keeps
   its results. "The same exercise" is a movement (`movements`, the bundled

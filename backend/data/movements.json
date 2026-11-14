@@ -4,38 +4,44 @@
   "category": "squat",
   "aliases": [
    "BS"
-  ]
+  ],
+  "exercise_id": "Barbell_Squat"
  },
  {
   "name": "Front Squat",
   "category": "squat",
   "aliases": [
    "FS"
-  ]
+  ],
+  "exercise_id": "Front_Barbell_Squat"
  },
  {
   "name": "Overhead Squat",
   "category": "squat",
   "aliases": [
    "OHS"
-  ]
+  ],
+  "exercise_id": "Overhead_Squat"
  },
  {
   "name": "Air Squat",
   "category": "squat",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Bodyweight_Squat"
  },
  {
   "name": "Pistol",
   "category": "squat",
   "aliases": [
    "Single-Leg Squat"
-  ]
+  ],
+  "exercise_id": "Kettlebell_Pistol_Squat"
  },
  {
   "name": "Goblet Squat",
   "category": "squat",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Goblet_Squat"
  },
  {
   "name": "Box Squat",
@@ -55,37 +61,44 @@
  {
   "name": "Strict Press",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Standing_Military_Press"
  },
  {
   "name": "Push Press",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Push_Press"
  },
  {
   "name": "Push Jerk",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Jerk_Dip_Squat"
  },
  {
   "name": "Split Jerk",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Split_Jerk"
  },
  {
   "name": "Bench Press",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Barbell_Bench_Press_-_Medium_Grip"
  },
  {
   "name": "Thruster",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Kettlebell_Thruster"
  },
  {
   "name": "Dumbbell Press",
   "category": "press",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Standing_Dumbbell_Press"
  },
  {
   "name": "Strict Handstand Push-Up",
@@ -102,52 +115,62 @@
  {
   "name": "Snatch",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Snatch"
  },
  {
   "name": "Power Snatch",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Power_Snatch"
  },
  {
   "name": "Hang Snatch",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Hang_Snatch"
  },
  {
   "name": "Hang Power Snatch",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Hang_Snatch"
  },
  {
   "name": "Squat Snatch",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Snatch"
  },
  {
   "name": "Clean",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Clean"
  },
  {
   "name": "Power Clean",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Power_Clean"
  },
  {
   "name": "Hang Clean",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Hang_Clean"
  },
  {
   "name": "Hang Power Clean",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Hang_Clean"
  },
  {
   "name": "Squat Clean",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Clean"
  },
  {
   "name": "Clean & Jerk",
@@ -155,39 +178,46 @@
   "aliases": [
    "C&J",
    "Clean and Jerk"
-  ]
+  ],
+  "exercise_id": "Clean_and_Jerk"
  },
  {
   "name": "Snatch Balance",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Snatch_Balance"
  },
  {
   "name": "Snatch Pull",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Snatch_Pull"
  },
  {
   "name": "Clean Pull",
   "category": "olympic",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Clean_Pull"
  },
  {
   "name": "Deadlift",
   "category": "deadlift",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Barbell_Deadlift"
  },
  {
   "name": "Sumo Deadlift",
   "category": "deadlift",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Sumo_Deadlift"
  },
  {
   "name": "Romanian Deadlift",
   "category": "deadlift",
   "aliases": [
    "RDL"
-  ]
+  ],
+  "exercise_id": "Romanian_Deadlift"
  },
  {
   "name": "Sumo Deadlift High Pull",
@@ -199,12 +229,14 @@
  {
   "name": "Good Morning",
   "category": "deadlift",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Good_Morning"
  },
  {
   "name": "Hip Thrust",
   "category": "deadlift",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Barbell_Hip_Thrust"
  },
  {
   "name": "Pull-Up",
@@ -212,12 +244,14 @@
   "aliases": [
    "Pullup",
    "Kipping Pull-Up"
-  ]
+  ],
+  "exercise_id": "Pullups"
  },
  {
   "name": "Strict Pull-Up",
   "category": "gymnastics",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Pullups"
  },
  {
   "name": "Chest-to-Bar Pull-Up",
@@ -225,14 +259,16 @@
   "aliases": [
    "C2B",
    "CTB"
-  ]
+  ],
+  "exercise_id": "Pullups"
  },
  {
   "name": "Bar Muscle-Up",
   "category": "gymnastics",
   "aliases": [
    "BMU"
-  ]
+  ],
+  "exercise_id": "Muscle_Up"
  },
  {
   "name": "Ring Muscle-Up",
@@ -240,7 +276,8 @@
   "aliases": [
    "RMU",
    "Muscle-Up"
-  ]
+  ],
+  "exercise_id": "Muscle_Up"
  },
  {
   "name": "Toes-to-Bar",
@@ -248,26 +285,30 @@
   "aliases": [
    "T2B",
    "TTB"
-  ]
+  ],
+  "exercise_id": "Hanging_Leg_Raise"
  },
  {
   "name": "Knees-to-Elbow",
   "category": "gymnastics",
   "aliases": [
    "K2E"
-  ]
+  ],
+  "exercise_id": "Hanging_Leg_Raise"
  },
  {
   "name": "Push-Up",
   "category": "gymnastics",
   "aliases": [
    "Pushup"
-  ]
+  ],
+  "exercise_id": "Pushups"
  },
  {
   "name": "Ring Dip",
   "category": "gymnastics",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Ring_Dips"
  },
  {
   "name": "Handstand Walk",
@@ -277,7 +318,8 @@
  {
   "name": "Rope Climb",
   "category": "gymnastics",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Rope_Climb"
  },
  {
   "name": "Burpee",
@@ -297,7 +339,8 @@
  {
   "name": "Box Jump",
   "category": "gymnastics",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Front_Box_Jump"
  },
  {
   "name": "Box Jump-Over",
@@ -310,7 +353,8 @@
   "aliases": [
    "Situp",
    "AbMat Sit-Up"
-  ]
+  ],
+  "exercise_id": "Sit-Up"
  },
  {
   "name": "GHD Sit-Up",
@@ -335,12 +379,14 @@
  {
   "name": "Lunge",
   "category": "gymnastics",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Barbell_Lunge"
  },
  {
   "name": "Walking Lunge",
   "category": "gymnastics",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Bodyweight_Walking_Lunge"
  },
  {
   "name": "Kettlebell Swing",
@@ -348,7 +394,8 @@
   "aliases": [
    "KBS",
    "Russian Kettlebell Swing"
-  ]
+  ],
+  "exercise_id": "One-Arm_Kettlebell_Swings"
  },
  {
   "name": "American Kettlebell Swing",
@@ -360,7 +407,8 @@
   "category": "kettlebell",
   "aliases": [
    "TGU"
-  ]
+  ],
+  "exercise_id": "Kettlebell_Turkish_Get-Up_Squat_style"
  },
  {
   "name": "Dumbbell Snatch",
@@ -383,12 +431,14 @@
  {
   "name": "Weighted Pull-Up",
   "category": "kettlebell",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Weighted_Pull_Ups"
  },
  {
   "name": "Farmer Carry",
   "category": "kettlebell",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Farmers_Walk"
  },
  {
   "name": "Row",
@@ -396,12 +446,14 @@
   "aliases": [
    "Rowing",
    "Rower"
-  ]
+  ],
+  "exercise_id": "Rowing_Stationary"
  },
  {
   "name": "Run",
   "category": "monostructural",
-  "aliases": []
+  "aliases": [],
+  "exercise_id": "Running_Treadmill"
  },
  {
   "name": "Assault Bike",

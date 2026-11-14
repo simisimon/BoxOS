@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, results_service, schedule_service, security, settings, session_auth, validation
@@ -4342,6 +4342,25 @@ def list_movements(
         connection.close()
 
 
+@app.get("/movements/{movement_id}")
+def get_movement(
+    movement_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """One movement with instructions and muscles from the exercise library
+    (empty when the movement has no library entry)."""
+    connection = db.get_connection()
+    try:
+        movement = movement_service.movement_detail(
+            connection, gym_id=session["active_gym_id"], movement_id=movement_id
+        )
+        if movement is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Movement not found.")
+        return {"movement": movement}
+    finally:
+        connection.close()
+
+
 @app.get("/workout-names")
 def list_workout_names(
     query: str = "",
@@ -4493,6 +4512,61 @@ def my_workout_results(
         connection.close()
 
 
+@app.get("/results/me.csv")
+def export_my_workout_results(session: dict[str, Any] = Depends(require_session)) -> Response:
+    """All the caller's results as a CSV download."""
+    connection = db.get_connection()
+    try:
+        text = results_service.my_results_csv(connection, user_id=session["user_id"])
+    finally:
+        connection.close()
+    return Response(
+        content=text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="boxos-results.csv"'},
+    )
+
+
+class ResultsPrivacyRequest(BaseModel):
+    visibility: str
+
+
+@app.get("/profile/results-privacy")
+def get_results_privacy(session: dict[str, Any] = Depends(require_session)) -> dict[str, str]:
+    """Who sees the caller's results on gym leaderboards."""
+    connection = db.get_connection()
+    try:
+        row = connection.execute(
+            "select results_visibility from users where id = ? and deleted_at is null",
+            (session["user_id"],),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Account not found.")
+        return {"visibility": row["results_visibility"]}
+    finally:
+        connection.close()
+
+
+@app.patch("/profile/results-privacy")
+def update_results_privacy(
+    body: ResultsPrivacyRequest,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, str]:
+    visibility = body.visibility.strip().lower()
+    if visibility not in results_service.RESULTS_VISIBILITY:
+        raise validation.ApiError(HTTPStatus.BAD_REQUEST, "Choose who sees your results: gym or private.")
+    connection = db.get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "update users set results_visibility = ?, updated_at = ? where id = ? and deleted_at is null",
+                (visibility, security.isoformat(security.now_utc()), session["user_id"]),
+            )
+        return {"visibility": visibility}
+    finally:
+        connection.close()
+
+
 @app.get("/programming/workouts/{workout_id}/leaderboard")
 def workout_leaderboard(
     workout_id: int,
@@ -4514,7 +4588,7 @@ def workout_leaderboard(
                 connection,
                 daily_workout_id=workout_id,
                 viewer_id=session["user_id"],
-                include_notes=staff,
+                staff=staff,
             )
         }
     finally:
