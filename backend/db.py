@@ -555,6 +555,19 @@ alter table users add column if not exists notify_result_activity integer not nu
 -- block or WOD. They feed history, PRs and the CSV but no leaderboard.
 alter table workout_results add column if not exists source text not null default 'gym';
 alter table workout_results add column if not exists description text not null default '';
+-- Friends across gyms (phase 7): a follow is pending until the person
+-- followed accepts it. follow_code is the athlete's invite code.
+create table if not exists athlete_follows (
+  follower_id integer not null references users(id) on delete cascade,
+  followee_id integer not null references users(id) on delete cascade,
+  status text not null default 'pending',
+  created_at text not null,
+  accepted_at text,
+  primary key (follower_id, followee_id)
+);
+create index if not exists athlete_follows_followee_idx on athlete_follows (followee_id, status);
+alter table users add column if not exists follow_code text;
+create unique index if not exists users_follow_code_idx on users (follow_code);
 create table if not exists result_bumps (
   result_id integer not null references workout_results(id) on delete cascade,
   user_id integer not null references users(id) on delete cascade,

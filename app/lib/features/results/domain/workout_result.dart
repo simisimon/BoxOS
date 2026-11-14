@@ -371,16 +371,24 @@ class ResultDetail {
 
 /// Who sees an athlete's results on gym leaderboards.
 enum ResultsVisibility {
+  /// People who follow the athlete (all their results, personal ones too)
+  /// and the athlete's gym.
+  followers,
+
   /// Everyone in the athlete's gym (the default).
   gym,
 
   /// Only the athlete and the gym's coaches.
   private;
 
-  static ResultsVisibility fromWire(Object? value) =>
-      value == 'private' ? ResultsVisibility.private : ResultsVisibility.gym;
+  static ResultsVisibility fromWire(Object? value) => switch (value) {
+    'private' => ResultsVisibility.private,
+    'followers' => ResultsVisibility.followers,
+    _ => ResultsVisibility.gym,
+  };
 
   String get label => switch (this) {
+    ResultsVisibility.followers => 'Followers and my gym',
     ResultsVisibility.gym => 'My gym',
     ResultsVisibility.private => 'Only me and my coaches',
   };
@@ -510,4 +518,134 @@ class PersonalResultDraft {
       'notes': notes,
     };
   }
+}
+
+/// Someone the athlete follows, a follower, or a match in the search.
+class FollowPerson {
+  const FollowPerson({
+    required this.userId,
+    required this.name,
+    this.avatarUrl = '',
+    this.gymName = '',
+    this.status = FollowStatus.none,
+  });
+
+  factory FollowPerson.fromJson(Map<String, dynamic> json) => FollowPerson(
+    userId: (json['user_id'] as num).toInt(),
+    name: json['name'] as String? ?? '',
+    avatarUrl: json['avatar_url'] as String? ?? '',
+    gymName: json['gym_name'] as String? ?? '',
+    status: FollowStatus.fromWire(json['status']),
+  );
+
+  final int userId;
+  final String name;
+  final String avatarUrl;
+  final String gymName;
+
+  /// Search results only: whether the athlete already follows them.
+  final FollowStatus status;
+}
+
+enum FollowStatus {
+  none,
+  pending,
+  accepted;
+
+  static FollowStatus fromWire(Object? value) => switch (value) {
+    'pending' => FollowStatus.pending,
+    'accepted' => FollowStatus.accepted,
+    _ => FollowStatus.none,
+  };
+}
+
+/// The athlete's follows: who they follow, who follows them, open requests
+/// both ways, and their invite code.
+class FollowOverview {
+  const FollowOverview({
+    required this.inviteCode,
+    this.following = const [],
+    this.sent = const [],
+    this.followers = const [],
+    this.requests = const [],
+  });
+
+  factory FollowOverview.fromJson(Map<String, dynamic> json) {
+    List<FollowPerson> people(String key) => [
+      for (final raw in json[key] as List? ?? const [])
+        FollowPerson.fromJson(raw as Map<String, dynamic>),
+    ];
+    return FollowOverview(
+      inviteCode: json['invite_code'] as String? ?? '',
+      following: people('following'),
+      sent: people('sent'),
+      followers: people('followers'),
+      requests: people('requests'),
+    );
+  }
+
+  final String inviteCode;
+  final List<FollowPerson> following;
+
+  /// Requests the athlete sent that wait for an answer.
+  final List<FollowPerson> sent;
+  final List<FollowPerson> followers;
+
+  /// People who asked to follow the athlete.
+  final List<FollowPerson> requests;
+}
+
+/// A result in the friends feed.
+class FeedEntry {
+  const FeedEntry({
+    required this.result,
+    required this.userId,
+    required this.name,
+    this.avatarUrl = '',
+    this.gymName = '',
+    this.photoUrl = '',
+    this.bumpCount = 0,
+    this.commentCount = 0,
+    this.bumpedByMe = false,
+  });
+
+  factory FeedEntry.fromJson(Map<String, dynamic> json) => FeedEntry(
+    result: WorkoutResult.fromJson(json),
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    name: json['name'] as String? ?? '',
+    avatarUrl: json['avatar_url'] as String? ?? '',
+    gymName: json['gym_name'] as String? ?? '',
+    photoUrl: json['photo_url'] as String? ?? '',
+    bumpCount: (json['bump_count'] as num?)?.toInt() ?? 0,
+    commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+    bumpedByMe: json['bumped_by_me'] as bool? ?? false,
+  );
+
+  final WorkoutResult result;
+  final int userId;
+  final String name;
+  final String avatarUrl;
+
+  /// Where it was logged; empty for a personal result.
+  final String gymName;
+  final String photoUrl;
+  final int bumpCount;
+  final int commentCount;
+  final bool bumpedByMe;
+}
+
+/// A page of the friends feed.
+class FeedPage {
+  const FeedPage({required this.entries, this.hasMore = false});
+
+  factory FeedPage.fromJson(Map<String, dynamic> json) => FeedPage(
+    entries: [
+      for (final raw in json['entries'] as List? ?? const [])
+        FeedEntry.fromJson(raw as Map<String, dynamic>),
+    ],
+    hasMore: json['has_more'] as bool? ?? false,
+  );
+
+  final List<FeedEntry> entries;
+  final bool hasMore;
 }

@@ -96,9 +96,16 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   https://claude.ai/artifact/KWrtxzWAaYxp2qLzwVG7rM. The old `workout_logs`,
   `tracking_sessions` and `personal_workouts` tables are not reused or
   migrated; the timer stays out. Privacy (`users.results_visibility`):
-  'gym' (default, "My gym") or 'private' (other athletes don't see them on
-  leaderboards; coaches still do). A followers level comes with the friends
-  feed. Athletes can download all their results as CSV (`/results/me.csv`).
+  'followers' ("Followers and my gym": followers see all results, personal
+  ones too), 'gym' (default, "My gym": followers only see results at gyms
+  they share) or 'private' (other athletes don't see them on leaderboards or
+  in feeds; coaches still do). Friends across gyms (`follow_service`,
+  `athlete_follows`): a follow is a request the other person accepts; people
+  are found by name among gym-mates or anywhere by invite code
+  (`users.follow_code`, link `#/whiteboard?tab=friends&follow=CODE`). The
+  feed (`/feed`) is the Friends tab of the Whiteboard page (decided
+  2026-11-14, keeps the athlete nav at 5 items); followers bump and comment
+  across gyms, coaches moderate only results logged at their own gym. Athletes can download all their results as CSV (`/results/me.csv`).
   Whoever sees a result on the leaderboard can fist-bump it (once) and
   comment (`result_social_service`, `result_bumps`, `result_comments`); the
   athlete adds one photo (`workout_results.photo_url`, `/uploads/results/`).
