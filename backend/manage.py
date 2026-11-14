@@ -231,7 +231,7 @@ def seed_test_data(*, gym: str, members: int, trainers: int, weeks: int, remove:
         connection.close()
     if remove:
         count = test_data.remove(gym_row["id"])
-        print(f"Removed {count} test account(s) and their classes, bookings, WODs, plans and messages "
+        print(f"Removed {count} test account(s) and their classes, bookings, WODs, results, plans and messages "
               f"from {gym_row['name']}.")
         return
     try:
@@ -242,6 +242,8 @@ def seed_test_data(*, gym: str, members: int, trainers: int, weeks: int, remove:
     print(f"  {counts['members']} members, {counts['trainers']} trainers, {counts['requests']} join requests")
     print(f"  classes {weeks} week(s) back and ahead with bookings and attendance")
     print(f"  {counts['wods']} WODs, {counts['plans']} member plans, an announcement and chat messages")
+    print(f"  {counts['results']} WOD results with fist bumps and comments, {counts['logbook']} logbook "
+          f"entries, {counts['follows']} follows")
     print(f"Test accounts use @{test_data.TEST_DOMAIN} and cannot log in.")
     print(f"Remove it all with: python -m backend.manage seed-test-data --gym {gym_row['slug']} --remove")
 

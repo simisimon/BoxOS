@@ -17,7 +17,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from backend import db, seed_demo
+from backend import db, seed_demo, seed_results
 from backend.security import hash_password, isoformat, now_utc
 
 TEST_DOMAIN = "test.boxos.invalid"
@@ -132,23 +132,23 @@ def seed(*, gym_id: int, members: int = 20, trainers: int = 2, weeks: int = 2,
             plans, plan_requests = seed_demo._seed_plans(conn, rng, gym_id, creator, member_ids, today)
             wods = _seed_wods(conn, gym_id, creator, today, weeks)
             seed_demo._seed_community(conn, rng, gym_id, creator, member_ids)
+            results = seed_results.seed_results(
+                conn, rng, gym_id=gym_id, athlete_ids=member_ids + trainer_ids, created_by=creator,
+            )
         return {
             "members": members, "trainers": trainers, "requests": requests,
             "plans": plans, "plan_requests": plan_requests, "wods": wods,
+            "results": results["results"], "logbook": results["personal"], "follows": results["follows"],
         }
     finally:
         conn.close()
 
 
 def _seed_wods(conn: Any, gym_id: int, creator: int, today: Any, weeks: int) -> int:
-    """One published WOD per day for the past week and the next days, skipping
-    days that already have the box's own WOD (one WOD per gym per day)."""
+    """One published WOD per day for the past week and the next days, with
+    real blocks, skipping days that already have the box's own WOD (one WOD
+    per gym per day)."""
     count = 0
-    sections = [
-        ("Strength · Back Squat", "5·5·3·3·1 building to a heavy single.", "weight"),
-        ("Metcon", "21-15-9 Thrusters (43/30kg) + Pull-ups. For time.", "time"),
-        ("Accessory", "3 rounds: 12 GHD sit-ups, 40s hollow hold.", "rounds_reps"),
-    ]
     for offset in range(-7, weeks * 7 // 2 + 1):
         day = (today + timedelta(days=offset)).isoformat()
         row = conn.execute(
@@ -163,11 +163,6 @@ def _seed_wods(conn: Any, gym_id: int, creator: int, today: Any, weeks: int) -> 
         ).fetchone()
         if row is None:
             continue
-        for pos, (title, desc, score) in enumerate(sections):
-            conn.execute(
-                """insert into daily_workout_sections (daily_workout_id, position, title, description, score_type)
-                   values (?, ?, ?, ?, ?)""",
-                (row["id"], pos, title, desc, score),
-            )
+        seed_results.program_day(conn, row["id"], offset % 5)
         count += 1
     return count

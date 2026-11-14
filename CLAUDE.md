@@ -42,7 +42,9 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   and builds the web app with `INVITE_ONLY=true` (hides sign-up and password
   reset). Quick-login buttons only show in `ENV=dev` builds.
 - Demo data: `docker compose exec backend-dev python -m backend.seed_demo`.
-  Dev only (public passwords). For a real box, also production:
+  Dev only (public passwords). Four weeks of WODs with results, fist bumps,
+  comments, logbook entries and follows (`backend/seed_results.py`); the
+  demo athlete (`demo@boxos.app`) has PRs, a squat chart and a Friends feed. For a real box, also production:
   `manage seed-test-data --gym <slug>` (accounts on `@test.boxos.invalid`,
   no login; `--remove` deletes them).
   The login screen has a "Demo Owner" quick login for local testing.
