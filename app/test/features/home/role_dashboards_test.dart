@@ -177,6 +177,13 @@ void main() {
       expect(find.text('Manage programs'), findsNothing);
       expect(find.text('Open Gym on Sunday'), findsOneWidget);
 
+      // Phones stack the row: the class name sits above its Book button.
+      final title = tester.getRect(find.text('Evening WOD'));
+      final book = tester.getRect(
+        find.widgetWithText(OutlinedButton, 'Book').first,
+      );
+      expect(title.bottom <= book.top, size.width < 600);
+
       await tester.tap(find.widgetWithText(OutlinedButton, 'Book').first);
       await tester.pumpAndSettle();
       expect(schedule.booked, 1);

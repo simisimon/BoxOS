@@ -843,108 +843,126 @@ class _ClassRow extends StatelessWidget {
         : item.startTime.isBefore(now)
         ? 'In progress'
         : 'Starts ${time(item.startTime)}';
+    final range = '${time(item.startTime)} – ${time(end)}';
+    final title = Text(
+      item.title,
+      style: const TextStyle(
+        color: appText,
+        fontWeight: FontWeight.w700,
+        fontSize: 13.5,
+      ),
+    );
+    Widget meta(String text) => Row(
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: classTypeColor(item.type),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: appSpaceXs),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: appSubtleText, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+    final pill = item.isBooked
+        ? const AppPill(
+            label: 'Booked',
+            intent: AppPillIntent.primary,
+            dense: true,
+          )
+        : item.isWaitlisted
+        ? const AppPill(
+            label: 'Waiting list',
+            intent: AppPillIntent.warning,
+            dense: true,
+          )
+        : AppPill(
+            label: '${item.bookedCount} of ${item.capacity}',
+            intent: item.isFull ? AppPillIntent.warning : AppPillIntent.neutral,
+            dense: true,
+          );
+    final button = onToggle == null
+        ? null
+        : SizedBox(
+            width: 118,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: appSpaceSm),
+              ),
+              // Only classes that have not started can be booked.
+              onPressed: busy || !item.startTime.isAfter(now) ? null : onToggle,
+              child: Text(
+                item.isBooked
+                    ? 'Cancel'
+                    : item.isWaitlisted
+                    ? 'Leave list'
+                    : item.isFull
+                    ? 'Join waitlist'
+                    : 'Book',
+                maxLines: 1,
+              ),
+            ),
+          );
     return Container(
       padding: const EdgeInsets.symmetric(vertical: appSpaceSm + 2),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: appBorder)),
       ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 104,
-            child: Text(
-              '${time(item.startTime)} – ${time(end)}',
-              style: const TextStyle(color: appMutedText, fontSize: 12.5),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: appText,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
+      child: LayoutBuilder(
+        // Phones: the name gets the full width, pill and button go below.
+        builder: (context, constraints) => constraints.maxWidth < 480
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  title,
+                  const SizedBox(height: 2),
+                  meta('$range · ${item.type.label} · $status'),
+                  const SizedBox(height: appSpaceSm),
+                  Row(children: [pill, const Spacer(), ?button]),
+                ],
+              )
+            : Row(
+                children: [
+                  SizedBox(
+                    width: 104,
+                    child: Text(
+                      range,
+                      style: const TextStyle(
+                        color: appMutedText,
+                        fontSize: 12.5,
+                      ),
+                    ),
                   ),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: classTypeColor(item.type),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: appSpaceXs),
-                    Expanded(
-                      child: Text(
-                        '${item.type.label} · $status',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: appSubtleText,
-                          fontSize: 12,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DefaultTextStyle.merge(
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          child: title,
                         ),
-                      ),
+                        meta('${item.type.label} · $status'),
+                      ],
                     ),
+                  ),
+                  pill,
+                  if (button != null) ...[
+                    const SizedBox(width: appSpaceSm),
+                    button,
                   ],
-                ),
-              ],
-            ),
-          ),
-          if (item.isBooked)
-            const AppPill(
-              label: 'Booked',
-              intent: AppPillIntent.primary,
-              dense: true,
-            )
-          else if (item.isWaitlisted)
-            const AppPill(
-              label: 'Waiting list',
-              intent: AppPillIntent.warning,
-              dense: true,
-            )
-          else
-            AppPill(
-              label: '${item.bookedCount} of ${item.capacity}',
-              intent: item.isFull
-                  ? AppPillIntent.warning
-                  : AppPillIntent.neutral,
-              dense: true,
-            ),
-          if (onToggle != null) ...[
-            const SizedBox(width: appSpaceSm),
-            SizedBox(
-              width: 118,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 36),
-                  padding: const EdgeInsets.symmetric(horizontal: appSpaceSm),
-                ),
-                // Only classes that have not started can be booked.
-                onPressed: busy || !item.startTime.isAfter(now)
-                    ? null
-                    : onToggle,
-                child: Text(
-                  item.isBooked
-                      ? 'Cancel'
-                      : item.isWaitlisted
-                      ? 'Leave list'
-                      : item.isFull
-                      ? 'Join waitlist'
-                      : 'Book',
-                  maxLines: 1,
-                ),
+                ],
               ),
-            ),
-          ],
-        ],
       ),
     );
   }
