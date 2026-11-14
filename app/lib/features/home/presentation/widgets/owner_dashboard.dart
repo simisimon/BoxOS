@@ -10,6 +10,8 @@ import 'package:app/features/gyms/data/repositories/api_gym_repository.dart';
 import 'package:app/features/memberships/data/membership_repository.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
+import 'package:app/features/results/data/api_results_repository.dart';
+import 'package:app/features/results/presentation/block_leaderboard.dart';
 import 'package:app/features/results/presentation/log_result_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -587,13 +589,16 @@ class _ActivityState extends ConsumerState<_Activity> {
     );
     if (outcome == null) return;
     ref.invalidate(programmingListProvider);
+    ref.invalidate(leaderboardProvider);
+    ref.invalidate(resultHistoryProvider);
+    ref.invalidate(myResultsProvider);
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          outcome == LogResultOutcome.saved
-              ? 'Result saved.'
-              : 'Result deleted.',
-        ),
+        content: Text(switch (outcome) {
+          LogResultOutcome.savedPr => 'New PR! Result saved.',
+          LogResultOutcome.saved => 'Result saved.',
+          LogResultOutcome.deleted => 'Result deleted.',
+        }),
       ),
     );
   }
@@ -703,6 +708,7 @@ class _ActivityState extends ConsumerState<_Activity> {
               for (final section in workout.sections)
                 _WodSection(
                   section: section,
+                  workoutId: workout.isPublished ? workout.id : null,
                   // Published WODs from today back take results.
                   onLog:
                       workout.isPublished &&
@@ -941,10 +947,13 @@ String _setLabel(WorkoutSet set, SetUnit unit) {
 /// One block of the WOD for athletes: its title and everything in it, and
 /// [onLog] to log or edit a result when the block takes one.
 class _WodSection extends StatelessWidget {
-  const _WodSection({required this.section, this.onLog});
+  const _WodSection({required this.section, this.onLog, this.workoutId});
 
   final DailyWorkoutSection section;
   final VoidCallback? onLog;
+
+  /// Set for published WODs: scored blocks with results get a leaderboard.
+  final int? workoutId;
 
   @override
   Widget build(BuildContext context) {
@@ -1009,6 +1018,15 @@ class _WodSection extends StatelessWidget {
             Text(
               section.memberNotes.trim(),
               style: _wodText.copyWith(fontStyle: FontStyle.italic),
+            ),
+          if (workoutId != null &&
+              section.id != null &&
+              section.isScored &&
+              section.resultCount > 0)
+            BlockLeaderboard(
+              workoutId: workoutId!,
+              sectionId: section.id!,
+              count: section.resultCount,
             ),
         ],
       ),

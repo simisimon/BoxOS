@@ -5,6 +5,27 @@ import 'package:app/features/results/domain/workout_result.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// A WOD's leaderboards, by block id.
+final leaderboardProvider = FutureProvider.autoDispose
+    .family<Map<int, List<LeaderboardEntry>>, int>(
+      (ref, workoutId) =>
+          ref.watch(resultsRepositoryProvider).fetchLeaderboard(workoutId),
+    );
+
+/// "Last times" for a block.
+final resultHistoryProvider = FutureProvider.autoDispose
+    .family<ResultHistory, int>(
+      (ref, sectionId) =>
+          ref.watch(resultsRepositoryProvider).fetchHistory(sectionId),
+    );
+
+/// Profile › Results, for all results or one movement / named workout.
+final myResultsProvider = FutureProvider.autoDispose
+    .family<MyResults, ResultFilter?>(
+      (ref, filter) =>
+          ref.watch(resultsRepositoryProvider).fetchMyResults(filter),
+    );
+
 final resultsRepositoryProvider = Provider<ResultsRepository>((ref) {
   return ApiResultsRepository(
     dio: ref.read(dioProvider),
@@ -49,6 +70,12 @@ abstract class ResultsRepository {
   Future<WorkoutResult> saveResult(ResultDraft draft);
 
   Future<void> deleteResult({required int sectionId});
+
+  Future<Map<int, List<LeaderboardEntry>>> fetchLeaderboard(int workoutId);
+
+  Future<ResultHistory> fetchHistory(int sectionId);
+
+  Future<MyResults> fetchMyResults(ResultFilter? filter);
 }
 
 class ApiResultsRepository implements ResultsRepository {
@@ -78,6 +105,47 @@ class ApiResultsRepository implements ResultsRepository {
       data: {'section_id': sectionId},
       options: Options(headers: await _authHeaders()),
     );
+  }
+
+  @override
+  Future<Map<int, List<LeaderboardEntry>>> fetchLeaderboard(
+    int workoutId,
+  ) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/programming/workouts/$workoutId/leaderboard',
+      options: Options(headers: await _authHeaders()),
+    );
+    return {
+      for (final raw in response.data?['sections'] as List? ?? const [])
+        ((raw as Map<String, dynamic>)['section_id'] as num).toInt(): [
+          for (final entry in raw['entries'] as List? ?? const [])
+            LeaderboardEntry.fromJson(entry as Map<String, dynamic>),
+        ],
+    };
+  }
+
+  @override
+  Future<ResultHistory> fetchHistory(int sectionId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/results/history',
+      queryParameters: {'section_id': sectionId},
+      options: Options(headers: await _authHeaders()),
+    );
+    return ResultHistory.fromJson(response.data ?? const {});
+  }
+
+  @override
+  Future<MyResults> fetchMyResults(ResultFilter? filter) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/results/me',
+      queryParameters: {
+        if (filter?.movementId != null) 'movement_id': filter!.movementId,
+        if (filter != null && filter.movementId == null)
+          'workout_name': filter.workoutName,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return MyResults.fromJson(response.data ?? const {});
   }
 
   Future<Map<String, String>> _authHeaders() async {

@@ -327,3 +327,282 @@ def result_counts_by_section(connection: ManagedConnection, *, daily_workout_id:
         (daily_workout_id,),
     ).fetchall()
     return {int(row["section_id"]): int(row["count"]) for row in rows}
+
+
+# --- PRs ------------------------------------------------------------------
+#
+# A result is a PR when it beats every earlier result (by WOD date) of the
+# same athlete with the same movement or named workout, the same score type
+# and the same division. Exercise blocks compare per rep count: a set of N
+# reps is a PR against earlier sets of N or more reps. The first result is
+# the baseline, never a PR. Worked out on read, because athletes can log past
+# WODs and that changes which result came first.
+
+
+def identity(row: Row | dict[str, Any]) -> tuple[str, Any] | None:
+    """What makes two results "the same exercise or workout"."""
+    if row["movement_id"] is not None:
+        return ("movement", int(row["movement_id"]))
+    name = " ".join(str(row["workout_name"] or "").lower().split())
+    if name:
+        return ("workout", name)
+    return None
+
+
+def sort_key(row: Row | dict[str, Any]) -> tuple[int, float]:
+    """Lower is better: finished times by seconds, then capped times by more
+    reps; every other score type by the higher value."""
+    if row["score_type"] == "time":
+        if row["time_capped"]:
+            return (1, -float(row["score_value"]))
+        return (0, float(row["score_value"]))
+    return (0, -float(row["score_value"]))
+
+
+def _sets(row: Row | dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        return [s for s in json.loads(row["sets_json"] or "[]") if s.get("kg") is not None]
+    except (TypeError, ValueError):
+        return []
+
+
+def compute_prs(rows: list[Row]) -> set[int]:
+    """Ids of the PR results among one athlete's results."""
+    ordered = sorted(rows, key=lambda r: (r["performed_on"], r["id"]))
+    best: dict[tuple, tuple[int, float]] = {}
+    lifted: dict[tuple, list[tuple[int, float]]] = {}
+    prs: set[int] = set()
+    for row in ordered:
+        key = identity(row)
+        if key is None:
+            continue
+        sets = _sets(row)
+        if sets:
+            group = (key, row["division"])
+            earlier = lifted.setdefault(group, [])
+            if earlier and any(
+                s["kg"] > max((kg for reps, kg in earlier if reps >= s["reps"]), default=0)
+                and any(reps >= s["reps"] for reps, _ in earlier)
+                for s in sets
+            ):
+                prs.add(int(row["id"]))
+            earlier.extend((int(s["reps"]), float(s["kg"])) for s in sets)
+            continue
+        group = (key, row["score_type"], row["division"])
+        score = sort_key(row)
+        if group in best and score < best[group]:
+            prs.add(int(row["id"]))
+        if group not in best or score < best[group]:
+            best[group] = score
+    return prs
+
+
+def _identity_filter(key: tuple[str, Any]) -> tuple[str, tuple[Any, ...]]:
+    if key[0] == "movement":
+        return "movement_id = ?", (key[1],)
+    return "movement_id is null and lower(workout_name) = ?", (key[1],)
+
+
+def results_with_identity(
+    connection: ManagedConnection, *, user_id: int, key: tuple[str, Any]
+) -> list[Row]:
+    clause, params = _identity_filter(key)
+    return connection.execute(
+        f"select {RESULT_COLUMNS} from workout_results where user_id = ? and {clause}",
+        (user_id, *params),
+    ).fetchall()
+
+
+def pr_flags(connection: ManagedConnection, rows: list[Row]) -> set[int]:
+    """PR result ids among ``rows``, judged against each athlete's history."""
+    prs: set[int] = set()
+    seen: set[tuple[int, tuple]] = set()
+    for row in rows:
+        key = identity(row)
+        if key is None or (row["user_id"], key) in seen:
+            continue
+        seen.add((row["user_id"], key))
+        prs |= compute_prs(results_with_identity(connection, user_id=row["user_id"], key=key))
+    return prs
+
+
+def is_pr(connection: ManagedConnection, result: dict[str, Any], user_id: int) -> bool:
+    row = {**result, "user_id": user_id}
+    key = identity(row)
+    if key is None:
+        return False
+    history = results_with_identity(connection, user_id=user_id, key=key)
+    return int(result["id"]) in compute_prs(history)
+
+
+# --- Leaderboard ------------------------------------------------------------
+
+
+def _display_name(row: Row) -> str:
+    name = (row["display_name"] or "").strip() or (row["nickname"] or "").strip()
+    return name or str(row["email"]).split("@")[0]
+
+
+def leaderboard(
+    connection: ManagedConnection,
+    *,
+    daily_workout_id: int,
+    viewer_id: int,
+    include_notes: bool,
+) -> list[dict[str, Any]]:
+    """Ranked results per scored block: Rx before Scaled, then by score.
+    Equal scores share a rank."""
+    rows = connection.execute(
+        f"""
+        select {", ".join("r." + c.strip() for c in RESULT_COLUMNS.split(","))},
+               u.display_name, u.nickname, u.email, u.profile_image_url
+        from workout_results r
+        join users u on u.id = r.user_id
+        where r.daily_workout_id = ? and r.section_id is not null and u.deleted_at is null
+        """,
+        (daily_workout_id,),
+    ).fetchall()
+    prs = pr_flags(connection, rows)
+    by_section: dict[int, list[Row]] = {}
+    for row in rows:
+        by_section.setdefault(int(row["section_id"]), []).append(row)
+    sections = []
+    for section_id, entries in by_section.items():
+        entries.sort(key=lambda r: (r["division"] != "rx", sort_key(r), _display_name(r).lower()))
+        ranked = []
+        previous = None
+        for index, row in enumerate(entries):
+            score = (row["division"], sort_key(row))
+            rank = ranked[-1]["rank"] if score == previous else index + 1
+            previous = score
+            ranked.append(
+                {
+                    "rank": rank,
+                    "user_id": row["user_id"],
+                    "name": _display_name(row),
+                    "avatar_url": row["profile_image_url"] or "",
+                    "score_label": row["score_label"],
+                    "division": row["division"],
+                    "time_capped": bool(row["time_capped"]),
+                    "is_pr": int(row["id"]) in prs,
+                    "is_me": row["user_id"] == viewer_id,
+                    "notes": row["notes"] if include_notes or row["user_id"] == viewer_id else "",
+                }
+            )
+        sections.append({"section_id": section_id, "entries": ranked})
+    return sections
+
+
+# --- History ------------------------------------------------------------------
+
+
+def history_for_section(
+    connection: ManagedConnection, *, user_id: int, gym_id: int, section_id: int, limit: int = 20
+) -> dict[str, Any]:
+    """The athlete's results for the same movement or named workout as this
+    block, newest first, with PRs marked and the best result per division."""
+    section = connection.execute(
+        """
+        select s.id, s.movement_id, s.workout_name, s.score_type
+        from daily_workout_sections s
+        join daily_workouts w on w.id = s.daily_workout_id
+        where s.id = ? and w.gym_id = ?
+        """,
+        (section_id, gym_id),
+    ).fetchone()
+    if section is None:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Workout block not found.")
+    key = identity(section)
+    if key is None:
+        rows = connection.execute(
+            f"select {RESULT_COLUMNS} from workout_results where user_id = ? and section_id = ?",
+            (user_id, section_id),
+        ).fetchall()
+    else:
+        rows = results_with_identity(connection, user_id=user_id, key=key)
+    return _history_payload(rows, limit=limit)
+
+
+def _history_payload(rows: list[Row], *, limit: int) -> dict[str, Any]:
+    prs = compute_prs(rows)
+    ordered = sorted(rows, key=lambda r: (r["performed_on"], r["id"]), reverse=True)
+    best: dict[str, Row] = {}
+    for row in ordered:
+        if _sets(row):
+            continue
+        current = best.get(row["division"])
+        if current is None or (current["score_type"] == row["score_type"] and sort_key(row) < sort_key(current)):
+            best[row["division"]] = row
+    return {
+        "results": [{**result_payload(r), "is_pr": int(r["id"]) in prs} for r in ordered[:limit]],
+        "best": {division: result_payload(row)["id"] for division, row in best.items()},
+        "best_sets": best_sets(rows),
+    }
+
+
+def best_sets(rows: list[Row]) -> list[dict[str, Any]]:
+    """Heaviest kg per rep count across exercise results (Rx and Scaled),
+    for the percentage chart."""
+    best: dict[int, float] = {}
+    for row in rows:
+        for s in _sets(row):
+            reps = int(s["reps"])
+            best[reps] = max(best.get(reps, 0.0), float(s["kg"]))
+    return [{"reps": reps, "kg": kg} for reps, kg in sorted(best.items())]
+
+
+def my_results(
+    connection: ManagedConnection,
+    *,
+    user_id: int,
+    movement_id: int | None,
+    workout_name: str,
+    limit: int,
+) -> dict[str, Any]:
+    """All the athlete's results (any gym), newest first, with PR marks,
+    optionally narrowed to one movement or named workout; plus the filters
+    the athlete has results for."""
+    rows = connection.execute(
+        f"select {RESULT_COLUMNS} from workout_results where user_id = ?",
+        (user_id,),
+    ).fetchall()
+    prs: set[int] = set()
+    groups: dict[tuple, list[Row]] = {}
+    for row in rows:
+        key = identity(row)
+        if key is not None:
+            groups.setdefault(key, []).append(row)
+    for group in groups.values():
+        prs |= compute_prs(group)
+    wanted: tuple[str, Any] | None = None
+    if movement_id is not None:
+        wanted = ("movement", movement_id)
+    elif workout_name.strip():
+        wanted = ("workout", " ".join(workout_name.lower().split()))
+    shown = groups.get(wanted, []) if wanted else rows
+    shown = sorted(shown, key=lambda r: (r["performed_on"], r["id"]), reverse=True)
+    movement_names = {
+        int(row["id"]): row["name"]
+        for row in connection.execute(
+            "select id, name from movements where id in (select distinct movement_id from workout_results where user_id = ?)",
+            (user_id,),
+        ).fetchall()
+    }
+    filters = []
+    for key, group in groups.items():
+        if key[0] == "movement":
+            label = movement_names.get(key[1], "Movement")
+            filters.append({"movement_id": key[1], "workout_name": "", "label": label, "count": len(group)})
+        else:
+            label = next((r["workout_name"] for r in group if r["workout_name"]), key[1])
+            filters.append({"movement_id": None, "workout_name": label, "label": label, "count": len(group)})
+    filters.sort(key=lambda f: f["label"].lower())
+    payload = {
+        "results": [
+            {**result_payload(r), "is_pr": int(r["id"]) in prs} for r in shown[: max(1, min(limit, 500))]
+        ],
+        "filters": filters,
+    }
+    if wanted:
+        payload["best_sets"] = best_sets(shown)
+    return payload

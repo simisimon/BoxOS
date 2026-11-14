@@ -14,17 +14,19 @@ import 'package:app/features/profile/data/repositories/api_profile_repository.da
 import 'package:app/features/profile/domain/models/account_type.dart';
 import 'package:app/features/profile/domain/models/gym_membership.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
+import 'package:app/features/results/presentation/my_results_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Profile sub views, picked with `/profile?section=`. Athletes get all three;
+/// Profile sub views, picked with `/profile?section=`. Athletes get all four;
 /// owners and trainers only [account] (trainers are never limited by a plan,
 /// owners manage plans in Settings).
 enum ProfileSection {
   account('account', 'Account'),
   membership('membership', 'Membership'),
-  bookings('bookings', 'Bookings');
+  bookings('bookings', 'Bookings'),
+  results('results', 'Results');
 
   const ProfileSection(this.slug, this.label);
 
@@ -94,6 +96,7 @@ class ProfileScreen extends ConsumerWidget {
           ProfileSection.account => const _AccountSection(),
           ProfileSection.membership => const MyMembershipCard(),
           ProfileSection.bookings => const MyBookingsSection(),
+          ProfileSection.results => const MyResultsSection(),
         },
       ],
     );

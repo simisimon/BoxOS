@@ -4425,6 +4425,7 @@ def save_workout_result(
                 section_id=body.section_id,
                 body=payload,
             )
+            result["is_pr"] = results_service.is_pr(connection, result, session["user_id"])
         return {"result": result}
     finally:
         connection.close()
@@ -4445,6 +4446,77 @@ def delete_workout_result(
                 section_id=body.section_id,
             )
         return {"message": "Result deleted."}
+    finally:
+        connection.close()
+
+
+@app.get("/results/history")
+def workout_result_history(
+    section_id: int,
+    limit: int = 20,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """The caller's earlier results for the same movement or named workout
+    as this block ("Last times"), with PRs and the best per division."""
+    connection = db.get_connection()
+    try:
+        return results_service.history_for_section(
+            connection,
+            user_id=session["user_id"],
+            gym_id=session["active_gym_id"],
+            section_id=section_id,
+            limit=max(1, min(limit, 100)),
+        )
+    finally:
+        connection.close()
+
+
+@app.get("/results/me")
+def my_workout_results(
+    movement_id: int | None = None,
+    workout_name: str = "",
+    limit: int = 200,
+    session: dict[str, Any] = Depends(require_session),
+) -> dict[str, Any]:
+    """All the caller's results for Profile › Results, optionally for one
+    movement or named workout."""
+    connection = db.get_connection()
+    try:
+        return results_service.my_results(
+            connection,
+            user_id=session["user_id"],
+            movement_id=movement_id,
+            workout_name=workout_name,
+            limit=limit,
+        )
+    finally:
+        connection.close()
+
+
+@app.get("/programming/workouts/{workout_id}/leaderboard")
+def workout_leaderboard(
+    workout_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """Everyone's results on a WOD, ranked per block. Members see it for
+    published WODs; owners and trainers also see notes."""
+    staff = programming_service.can_view_drafts(session["role"])
+    connection = db.get_connection()
+    try:
+        workout = connection.execute(
+            "select id, status from daily_workouts where id = ? and gym_id = ?",
+            (workout_id, session["active_gym_id"]),
+        ).fetchone()
+        if workout is None or (workout["status"] != "published" and not staff):
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
+        return {
+            "sections": results_service.leaderboard(
+                connection,
+                daily_workout_id=workout_id,
+                viewer_id=session["user_id"],
+                include_notes=staff,
+            )
+        }
     finally:
         connection.close()
 

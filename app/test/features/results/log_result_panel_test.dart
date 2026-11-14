@@ -27,6 +27,20 @@ class _FakeResults implements ResultsRepository {
   @override
   Future<void> deleteResult({required int sectionId}) async =>
       deleted.add(sectionId);
+
+  ResultHistory history = const ResultHistory(results: []);
+
+  @override
+  Future<ResultHistory> fetchHistory(int sectionId) async => history;
+
+  @override
+  Future<Map<int, List<LeaderboardEntry>>> fetchLeaderboard(
+    int workoutId,
+  ) async => const {};
+
+  @override
+  Future<MyResults> fetchMyResults(ResultFilter? filter) async =>
+      const MyResults(results: [], filters: []);
 }
 
 Future<LogResultOutcome?> Function() _open(
@@ -187,5 +201,45 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump();
     expect(fake.deleted, [10]);
+  });
+
+  testWidgets('shows last times and suggests kg from the estimated 1RM', (
+    tester,
+  ) async {
+    final fake = _FakeResults()
+      ..history = ResultHistory(
+        results: [
+          WorkoutResult(
+            id: 4,
+            sectionId: 2,
+            performedOn: DateTime(2026, 10, 1),
+            scoreLabel: '100 kg',
+            scoreValue: 100,
+            division: ResultDivision.rx,
+            isPr: true,
+          ),
+        ],
+        bestSets: const [BestSet(reps: 1, kg: 100)],
+      );
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.reset);
+    await _open(
+      tester,
+      fake,
+      const DailyWorkoutSection(
+        id: 11,
+        title: 'Back Squat',
+        description: 'Back Squat',
+        scoreType: WorkoutSectionScore.weight,
+        kind: BlockKind.exercise,
+        exerciseName: 'Back Squat',
+        sets: [WorkoutSet(reps: 5, value: 75)],
+      ),
+    )();
+    expect(find.text('LAST TIMES'), findsOneWidget);
+    expect(find.text('PR'), findsOneWidget);
+    expect(find.text('75'), findsOneWidget); // 75 % of 100 kg as the hint
+    await tester.pump();
   });
 }
