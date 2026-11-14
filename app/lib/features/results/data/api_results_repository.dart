@@ -26,6 +26,14 @@ final myResultsProvider = FutureProvider.autoDispose
           ref.watch(resultsRepositoryProvider).fetchMyResults(filter),
     );
 
+/// Member details › Results: a member's results at the owner's gym.
+final memberResultsProvider = FutureProvider.autoDispose
+    .family<MyResults, (int, ResultFilter?)>(
+      (ref, key) => ref
+          .watch(resultsRepositoryProvider)
+          .fetchMemberResults(key.$1, key.$2),
+    );
+
 /// Who sees the athlete's results (Profile › Results).
 final resultsPrivacyProvider = FutureProvider.autoDispose<ResultsVisibility>(
   (ref) => ref.watch(resultsRepositoryProvider).fetchResultsPrivacy(),
@@ -88,6 +96,8 @@ abstract class ResultsRepository {
   Future<ResultHistory> fetchHistory(int sectionId);
 
   Future<MyResults> fetchMyResults(ResultFilter? filter);
+
+  Future<MyResults> fetchMemberResults(int userId, ResultFilter? filter);
 
   Future<ResultsVisibility> fetchResultsPrivacy();
 
@@ -156,9 +166,16 @@ class ApiResultsRepository implements ResultsRepository {
   }
 
   @override
-  Future<MyResults> fetchMyResults(ResultFilter? filter) async {
+  Future<MyResults> fetchMyResults(ResultFilter? filter) =>
+      _fetchResults('/results/me', filter);
+
+  @override
+  Future<MyResults> fetchMemberResults(int userId, ResultFilter? filter) =>
+      _fetchResults('/membership/members/$userId/results', filter);
+
+  Future<MyResults> _fetchResults(String path, ResultFilter? filter) async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/results/me',
+      path,
       queryParameters: {
         if (filter?.movementId != null) 'movement_id': filter!.movementId,
         if (filter != null && filter.movementId == null)

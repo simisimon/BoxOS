@@ -238,8 +238,9 @@ class _CellText extends StatelessWidget {
 }
 
 /// Member details page body (docs/admin-ui-reference.md §4.2): header card,
-/// then tabs Overview | Memberships | Classes. [planSection] is the member's
-/// plan card, [membershipsTab] the full plan table, [bookings] feeds Classes.
+/// then tabs Overview | Memberships | Classes | Results. [planSection] is the
+/// member's plan card, [membershipsTab] the full plan table, [bookings] feeds
+/// Classes, [resultsTab] (when given) is the member's WOD results.
 class MemberDetailView extends StatelessWidget {
   const MemberDetailView({
     super.key,
@@ -249,6 +250,7 @@ class MemberDetailView extends StatelessWidget {
     required this.planSection,
     required this.membershipsTab,
     required this.bookings,
+    this.resultsTab,
     this.onBack,
   });
 
@@ -258,27 +260,30 @@ class MemberDetailView extends StatelessWidget {
   final Widget planSection;
   final Widget membershipsTab;
   final Future<List<MemberBooking>> bookings;
+  final Widget? resultsTab;
   final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
+    final resultsTab = this.resultsTab;
     return DefaultTabController(
-      length: 3,
+      length: resultsTab == null ? 3 : 4,
       child: NestedScrollView(
         headerSliverBuilder: (context, _) => [
           SliverToBoxAdapter(
             child: _MemberDetailHeader(user: user, onBack: onBack),
           ),
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.only(top: appSpaceMd),
+              padding: const EdgeInsets.only(top: appSpaceMd),
               child: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
                 tabs: [
-                  Tab(text: 'Overview'),
-                  Tab(text: 'Memberships'),
-                  Tab(text: 'Classes'),
+                  const Tab(text: 'Overview'),
+                  const Tab(text: 'Memberships'),
+                  const Tab(text: 'Classes'),
+                  if (resultsTab != null) const Tab(text: 'Results'),
                 ],
               ),
             ),
@@ -294,6 +299,11 @@ class MemberDetailView extends StatelessWidget {
             ),
             membershipsTab,
             _ClassesTab(bookings: bookings),
+            if (resultsTab != null)
+              ListView(
+                padding: const EdgeInsets.symmetric(vertical: appSpaceLg),
+                children: [resultsTab],
+              ),
           ],
         ),
       ),

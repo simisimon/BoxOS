@@ -175,3 +175,68 @@ class MovementTests(FastApiTestCase):
         own = self.client.get(f"/movements/{workout['sections'][0]['movement_id']}", headers=headers).json()["movement"]
         self.assertEqual(own["instructions"], [])
         self.assertEqual(self.client.get("/movements/999999", headers=headers).status_code, 404)
+
+
+class MovementSettingsTests(FastApiTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.admin, self.gym_id = self.create_gym_as_admin("Settings Box")
+        self.add_active_membership(settings.DEMO_EMAIL, self.gym_id)
+        self.athlete = self.auth_headers(settings.DEMO_EMAIL, settings.DEMO_PASSWORD)
+
+    def _block(self, name: str, days: int = 0) -> dict:
+        response = self.client.post(
+            "/programming/workouts",
+            headers=self.admin,
+            json={
+                "scheduled_date": (security.now_utc().date() + timedelta(days=days)).isoformat(),
+                "title": "WOD",
+                "status": "published",
+                "sections": [{**_blocks()[1], "exercise_name": name}],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["workout"]["sections"][0]
+
+    def test_rename_archive_and_merge(self) -> None:
+        typo = self._block("Bak Squat")
+        listed = self.client.get("/gym-movements", headers=self.admin).json()["movements"]
+        self.assertEqual([(m["name"], m["block_count"]) for m in listed], [("Bak Squat", 1)])
+        own_id = listed[0]["id"]
+
+        clash = self.client.patch(f"/movements/{own_id}", headers=self.admin, json={"name": "back squat"})
+        self.assertEqual(clash.status_code, 409, clash.text)
+        renamed = self.client.patch(f"/movements/{own_id}", headers=self.admin, json={"name": "Banded Squat"})
+        self.assertEqual(renamed.status_code, 200, renamed.text)
+        self.assertEqual(renamed.json()["movement"]["name"], "Banded Squat")
+
+        archived = self.client.patch(f"/movements/{own_id}", headers=self.admin, json={"archived": True})
+        self.assertTrue(archived.json()["movement"]["archived"])
+        search = self.client.get("/movements", headers=self.admin, params={"query": "banded squat"}).json()["movements"]
+        self.assertEqual(search, [])
+
+        # Built-ins can't be changed; the athlete can't manage movements.
+        squat = self.client.get("/movements", headers=self.admin, params={"query": "back squat"}).json()["movements"][0]
+        self.assertEqual(self.client.patch(f"/movements/{squat['id']}", headers=self.admin, json={"name": "X"}).status_code, 404)
+        self.assertEqual(self.client.get("/gym-movements", headers=self.athlete).status_code, 403)
+
+        self.client.put("/results", headers=self.athlete, json={"section_id": typo["id"], "sets": [{"reps": 5, "kg": 100}]})
+        merged = self.client.post(f"/movements/{own_id}/merge", headers=self.admin, json={"into_id": squat["id"]})
+        self.assertEqual(merged.status_code, 200, merged.text)
+        self.assertEqual(self.client.get("/gym-movements", headers=self.admin).json()["movements"], [])
+        mine = self.client.get("/results/me", headers=self.athlete, params={"movement_id": squat["id"]}).json()
+        self.assertEqual(len(mine["results"]), 1)
+        # The old name now resolves to the movement it was merged into.
+        again = self._block("Banded Squat", days=1)
+        self.assertEqual(again["movement_id"], squat["id"])
+
+    def test_owner_sees_a_members_results_at_this_gym(self) -> None:
+        block = self._block("Back Squat")
+        self.client.put("/results", headers=self.athlete, json={"section_id": block["id"], "sets": [{"reps": 3, "kg": 90}]})
+        me = self.client.get("/profile", headers=self.athlete).json()
+        user_id = me.get("user", me).get("id")
+        response = self.client.get(f"/membership/members/{user_id}/results", headers=self.admin)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual([r["score_label"] for r in response.json()["results"]], ["90 kg"])
+        self.assertEqual(self.client.get(f"/membership/members/{user_id}/results", headers=self.athlete).status_code, 403)
+        self.assertEqual(self.client.get("/membership/members/999999/results", headers=self.admin).status_code, 404)

@@ -14,6 +14,8 @@ import 'package:app/features/calendar/presentation/widgets/class_template_dialog
 import 'package:app/features/calendar/presentation/widgets/schedule_hour_grid.dart';
 import 'package:app/features/calendar/presentation/widgets/schedule_week_view.dart';
 import 'package:app/features/programming/data/repositories/api_programming_repository.dart';
+import 'package:app/features/programming/domain/models/daily_workout.dart';
+import 'package:app/features/results/presentation/block_results_panel.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
 import 'package:app/features/programming/presentation/widgets/wod_day_section.dart';
@@ -492,14 +494,21 @@ class _ClassSidePanel extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final date = _dateOnly(item.startTime);
-    String? wodTitle;
+    DailyWorkout? wod;
     for (final workout
         in ref.watch(programmingListProvider).value ?? const []) {
       if (_isSameDay(workout.scheduledDate, date)) {
-        wodTitle = workout.title;
+        wod = workout;
         break;
       }
     }
+    final wodTitle = wod?.title;
+    final showResults =
+        canCoach &&
+        item.type.showsWod &&
+        wod != null &&
+        wod.isPublished &&
+        wod.sections.any((section) => section.isScored);
     final localizations = MaterialLocalizations.of(context);
     final end = item.startTime.add(Duration(minutes: item.durationMinutes));
     String time(DateTime t) =>
@@ -548,6 +557,11 @@ class _ClassSidePanel extends ConsumerWidget {
                   style: const TextStyle(color: appSubtleText),
                 ),
         ),
+        if (showResults)
+          AppPanelTab(
+            'Results',
+            child: ClassResults(workout: wod, bookings: item.bookings),
+          ),
         if (canManage)
           AppPanelTab(
             'Details',

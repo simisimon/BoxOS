@@ -10,6 +10,7 @@ import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/programming/presentation/screens/import_workouts_dialog.dart';
 import 'package:app/features/programming/presentation/widgets/block_editor_panel.dart';
 import 'package:app/features/programming/presentation/widgets/wod_day_section.dart';
+import 'package:app/features/results/presentation/block_results_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -462,6 +463,16 @@ class _DayColumnState extends ConsumerState<_DayColumn> {
                   section: sections[index],
                   index: index,
                   readOnly: isPast,
+                  onResults: workout != null && sections[index].resultCount > 0
+                      ? () => showBlockResultsPanel(
+                          context,
+                          workoutId: workout.id,
+                          section: sections[index],
+                          dayLabel: MaterialLocalizations.of(
+                            context,
+                          ).formatMediumDate(date),
+                        )
+                      : null,
                   onTap: isPast
                       ? () => showWodDetailsDialog(
                           context,
@@ -507,6 +518,7 @@ class _BlockCard extends StatelessWidget {
     required this.readOnly,
     required this.onTap,
     required this.onSelected,
+    this.onResults,
   });
 
   final DailyWorkoutSection section;
@@ -514,6 +526,9 @@ class _BlockCard extends StatelessWidget {
   final bool readOnly;
   final VoidCallback onTap;
   final ValueChanged<String> onSelected;
+
+  /// Opens the block's results; null when nobody logged one yet.
+  final VoidCallback? onResults;
 
   static String _value(WorkoutSet set) {
     final value = set.value;
@@ -625,6 +640,24 @@ class _BlockCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (onResults != null)
+                    TextButton(
+                      key: ValueKey('block-results-${section.id}'),
+                      onPressed: onResults,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        minimumSize: const Size(0, 28),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: appSpaceXs,
+                        ),
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: Text(
+                        section.resultCount == 1
+                            ? '1 result'
+                            : '${section.resultCount} results',
+                      ),
+                    ),
                   if (notes.isNotEmpty)
                     Tooltip(
                       message: notes.join(' · '),

@@ -147,6 +147,7 @@ const List<ShellDestination> _ownerDestinations = [
       ('Gym profile', '/box-settings?section=profile'),
       ('Booking rules', '/box-settings?section=booking-rules'),
       ('Class types', '/box-settings?section=class-types'),
+      ('Movements', '/box-settings?section=movements'),
       ('Payments', '/box-settings?section=payments'),
       ('Notifications', '/box-settings?section=notifications'),
     ],

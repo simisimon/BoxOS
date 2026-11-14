@@ -13,6 +13,7 @@ import 'package:app/features/memberships/presentation/membership_settings_panel.
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
+import 'package:app/features/results/presentation/movements_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -43,6 +44,7 @@ enum SettingsSection {
   profile('profile', 'Gym profile'),
   bookingRules('booking-rules', 'Booking rules'),
   classTypes('class-types', 'Class types'),
+  movements('movements', 'Movements'),
   payments('payments', 'Payments'),
   notifications('notifications', 'Notifications');
 
@@ -165,6 +167,8 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
         );
       case SettingsSection.classTypes:
         return const _ClassTypesTable();
+      case SettingsSection.movements:
+        return const MovementsSettings();
       case SettingsSection.payments:
         return const MembershipSettingsPanel();
       case SettingsSection.notifications:

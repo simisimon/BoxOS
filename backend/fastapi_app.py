@@ -2159,6 +2159,32 @@ def get_member_bookings(
         connection.close()
 
 
+@app.get("/membership/members/{user_id}/results")
+def get_member_results(
+    user_id: int,
+    movement_id: int | None = None,
+    workout_name: str = "",
+    limit: int = 200,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """A member's results at this gym for the Results tab of the owner's
+    member detail; same shape as /results/me."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        _require_member(connection, gym_id, user_id)
+        return results_service.my_results(
+            connection,
+            user_id=user_id,
+            movement_id=movement_id,
+            workout_name=workout_name,
+            limit=limit,
+            gym_id=gym_id,
+        )
+    finally:
+        connection.close()
+
+
 @app.get("/membership/me/bookings")
 def get_my_bookings(
     session: dict[str, Any] = Depends(require_active_gym_member_session),
@@ -4356,6 +4382,68 @@ def get_movement(
         )
         if movement is None:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Movement not found.")
+        return {"movement": movement}
+    finally:
+        connection.close()
+
+
+@app.get("/gym-movements")
+def list_gym_movements(session: dict[str, Any] = Depends(require_admin_gym_session)) -> dict[str, Any]:
+    """Settings > Movements: the gym's own movements with their usage."""
+    connection = db.get_connection()
+    try:
+        return {"movements": movement_service.gym_movements(connection, gym_id=session["active_gym_id"])}
+    finally:
+        connection.close()
+
+
+class MovementUpdateRequest(BaseModel):
+    name: str | None = None
+    archived: bool | None = None
+
+
+@app.patch("/movements/{movement_id}")
+def update_movement(
+    movement_id: int,
+    body: MovementUpdateRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            movement = movement_service.update_movement(
+                connection,
+                gym_id=session["active_gym_id"],
+                movement_id=movement_id,
+                name=body.name,
+                archived=body.archived,
+            )
+        return {"movement": movement}
+    finally:
+        connection.close()
+
+
+class MovementMergeRequest(BaseModel):
+    into_id: int
+
+
+@app.post("/movements/{movement_id}/merge")
+def merge_movement(
+    movement_id: int,
+    body: MovementMergeRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Merge a duplicate into another movement: its WOD blocks and results
+    move there, so history and PRs see them as one."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            movement = movement_service.merge_movement(
+                connection,
+                gym_id=session["active_gym_id"],
+                movement_id=movement_id,
+                into_id=body.into_id,
+            )
         return {"movement": movement}
     finally:
         connection.close()
