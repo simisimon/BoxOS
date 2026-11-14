@@ -68,7 +68,7 @@ void main() {
       expect(outcome.canImport, isFalse);
       expect(
         outcome.rows.first.error,
-        contains('time, rounds_reps, or weight'),
+        contains('time, rounds_reps, reps'),
       );
     });
 

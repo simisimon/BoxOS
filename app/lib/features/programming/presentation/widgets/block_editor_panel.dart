@@ -1,6 +1,6 @@
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/app_side_panel.dart';
-import 'package:app/features/exercises/data/api_exercise_repository.dart';
+import 'package:app/features/programming/data/repositories/api_programming_lookup.dart';
 import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -76,8 +76,16 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
   late final _memberNotes = TextEditingController(
     text: widget.existing?.memberNotes,
   );
+  late final _workoutName = TextEditingController(
+    text: widget.existing?.workoutName,
+  );
   final _magic = TextEditingController();
   final _exerciseFocus = FocusNode();
+  final _workoutNameFocus = FocusNode();
+
+  /// Until the coach picks a score, it follows the block name: a warm-up
+  /// gets "No score", anything else "Time".
+  late bool _scoreTouched = widget.existing != null;
   late BlockKind _kind = widget.existing?.kind ?? BlockKind.workout;
   late SetUnit _unit = widget.existing?.setUnit ?? SetUnit.percent;
   late WorkoutSectionScore _score =
@@ -97,11 +105,19 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
 
   @override
   void dispose() {
-    for (final c in [_name, _text, _exercise, _coachNotes, _memberNotes]) {
+    for (final c in [
+      _name,
+      _text,
+      _exercise,
+      _coachNotes,
+      _memberNotes,
+      _workoutName,
+    ]) {
       c.dispose();
     }
     _magic.dispose();
     _exerciseFocus.dispose();
+    _workoutNameFocus.dispose();
     for (final row in _rows) {
       row.dispose();
     }
@@ -160,6 +176,9 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
       _memberNotes.text,
     ].any((text) => text.trim().length > 2000);
     if (long) return 'Names and notes are limited to 2000 characters.';
+    if (_workoutName.text.trim().length > 80) {
+      return 'The workout name is limited to 80 characters.';
+    }
     if (_text.text.trim().length > 4000) {
       return 'The workout text is limited to 4000 characters.';
     }
@@ -178,11 +197,13 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
       }
       Navigator.of(context).pop(
         DailyWorkoutSection(
+          id: widget.existing?.id,
           title: _name.text.trim(),
           description: text,
           scoreType: _score,
           coachNotes: coachNotes,
           memberNotes: memberNotes,
+          workoutName: _workoutName.text.trim(),
         ),
       );
       return;
@@ -201,6 +222,7 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
     }
     Navigator.of(context).pop(
       DailyWorkoutSection(
+        id: widget.existing?.id,
         title: _name.text.trim().isEmpty ? exercise : _name.text.trim(),
         // Readable text for every reader (athletes, older views).
         description: [
@@ -222,14 +244,32 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
   Future<Iterable<String>> _searchExercises(String query) async {
     if (query.trim().length < 2) return const [];
     try {
-      final found = await ref
-          .read(exerciseRepositoryProvider)
-          .fetchExercises(query: query.trim(), limit: 8);
-      return found.map((e) => e.name);
+      return await ref
+          .read(programmingLookupProvider)
+          .movementNames(query.trim());
     } catch (_) {
-      // The library is a help, not a requirement: free text still works.
+      // The list is a help, not a requirement: free text still works.
       return const [];
     }
+  }
+
+  Future<Iterable<String>> _searchWorkoutNames(String query) async {
+    if (query.trim().isEmpty) return const [];
+    try {
+      return await ref
+          .read(programmingLookupProvider)
+          .workoutNames(query.trim());
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void _onNameChanged(String name) {
+    if (_scoreTouched || _kind != BlockKind.workout) return;
+    final score = looksLikeWarmUp(name)
+        ? WorkoutSectionScore.none
+        : WorkoutSectionScore.time;
+    if (score != _score) setState(() => _score = score);
   }
 
   @override
@@ -252,6 +292,7 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
           TextField(
             controller: _name,
             maxLength: 80,
+            onChanged: _onNameChanged,
             decoration: const InputDecoration(
               labelText: 'Block name',
               hintText: 'e.g. Strength, Metcon, Accessory',
@@ -285,9 +326,14 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
             ),
             const SizedBox(height: appSpaceMd),
             DropdownButtonFormField<WorkoutSectionScore>(
+              // Rebuilt when the score follows the block name.
+              key: ValueKey(_score),
               initialValue: _score,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Score'),
+              decoration: const InputDecoration(
+                labelText: 'Score',
+                helperText: 'What athletes log. Warm-ups need no score.',
+              ),
               items: [
                 for (final score in WorkoutSectionScore.values)
                   DropdownMenuItem(
@@ -296,53 +342,35 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
                   ),
               ],
               onChanged: (value) {
-                if (value != null) setState(() => _score = value);
+                if (value != null) {
+                  setState(() {
+                    _score = value;
+                    _scoreTouched = true;
+                  });
+                }
               },
             ),
+            const SizedBox(height: appSpaceMd),
+            _Suggestions(
+              controller: _workoutName,
+              focusNode: _workoutNameFocus,
+              search: _searchWorkoutNames,
+              labelText: 'Named workout (optional)',
+              hintText: 'e.g. Fran, Murph, Box Test 1',
+              helperText:
+                  'Repeats of the same named workout are compared in '
+                  'athletes\' history.',
+            ),
           ] else ...[
-            // Suggestions from the movement library; free text works too.
-            RawAutocomplete<String>(
-              textEditingController: _exercise,
+            // Suggestions from the gym's movements; free text works too and
+            // becomes a new movement of the gym on save.
+            _Suggestions(
+              controller: _exercise,
               focusNode: _exerciseFocus,
-              optionsBuilder: (value) => _searchExercises(value.text),
-              // Close the suggestions once one is picked.
-              onSelected: (_) => _exerciseFocus.unfocus(),
-              fieldViewBuilder: (context, controller, focus, onSubmit) =>
-                  TextField(
-                    controller: controller,
-                    focusNode: focus,
-                    decoration: const InputDecoration(
-                      labelText: 'Exercise name',
-                      hintText: 'Search the movement library',
-                      prefixIcon: Icon(Icons.search_rounded, size: 18),
-                    ),
-                  ),
-              optionsViewBuilder: (context, onSelected, options) => Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  color: appSurfaceElevated,
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(appRadiusMd),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxHeight: 280,
-                      maxWidth: 420,
-                    ),
-                    child: ListView(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      children: [
-                        for (final name in options)
-                          ListTile(
-                            dense: true,
-                            title: Text(name),
-                            onTap: () => onSelected(name),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              search: _searchExercises,
+              labelText: 'Exercise name',
+              hintText: 'Search movements',
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
             ),
             const SizedBox(height: appSpaceLg),
             Row(
@@ -524,6 +552,74 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
             Text(_error!, style: const TextStyle(color: appDanger)),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// A text field with suggestions from [search]; free text is always allowed.
+class _Suggestions extends StatelessWidget {
+  const _Suggestions({
+    required this.controller,
+    required this.focusNode,
+    required this.search,
+    required this.labelText,
+    required this.hintText,
+    this.helperText,
+    this.prefixIcon,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final Future<Iterable<String>> Function(String query) search;
+  final String labelText;
+  final String hintText;
+  final String? helperText;
+  final Widget? prefixIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<String>(
+      textEditingController: controller,
+      focusNode: focusNode,
+      optionsBuilder: (value) => search(value.text),
+      // Close the suggestions once one is picked.
+      onSelected: (_) => focusNode.unfocus(),
+      fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+        controller: controller,
+        focusNode: focus,
+        maxLength: 80,
+        decoration: InputDecoration(
+          labelText: labelText,
+          hintText: hintText,
+          helperText: helperText,
+          helperMaxLines: 2,
+          prefixIcon: prefixIcon,
+          counterText: '',
+        ),
+      ),
+      optionsViewBuilder: (context, onSelected, options) => Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          color: appSurfaceElevated,
+          elevation: 4,
+          borderRadius: BorderRadius.circular(appRadiusMd),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280, maxWidth: 420),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              children: [
+                for (final name in options)
+                  ListTile(
+                    dense: true,
+                    title: Text(name),
+                    onTap: () => onSelected(name),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

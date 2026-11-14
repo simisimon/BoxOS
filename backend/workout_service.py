@@ -13,6 +13,7 @@ def workout_section_payload(row: Row) -> dict[str, Any]:
     except (TypeError, ValueError):
         sets = []
     return {
+        "id": row["id"],
         "title": row["title"],
         "description": row["description"],
         "score_type": row["score_type"],
@@ -22,6 +23,8 @@ def workout_section_payload(row: Row) -> dict[str, Any]:
         "sets": sets,
         "coach_notes": row["coach_notes"],
         "member_notes": row["member_notes"],
+        "movement_id": row["movement_id"],
+        "workout_name": row["workout_name"],
     }
 
 
@@ -30,8 +33,8 @@ def fetch_workout_sections(
 ) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        select title, description, score_type, kind, exercise_name, set_unit,
-               sets_json, coach_notes, member_notes
+        select id, title, description, score_type, kind, exercise_name, set_unit,
+               sets_json, coach_notes, member_notes, movement_id, workout_name
         from daily_workout_sections
         where daily_workout_id = ?
         order by position asc, id asc
@@ -47,34 +50,85 @@ def replace_workout_sections(
     daily_workout_id: int,
     sections: list[dict[str, Any]],
 ) -> None:
-    """Replaces all sections for a WOD. ``sections`` is already validated."""
+    """Saves a WOD's blocks in the given order. ``sections`` is already
+    validated. A block that carries the ``id`` of one of this WOD's blocks is
+    updated in place, so anything attached to it (results) survives the edit;
+    blocks without a known id are inserted and blocks left out are deleted.
+    Ids from another WOD (duplicate, copy) are treated as new blocks."""
+    from backend import movement_service
+
+    gym_id = connection.execute(
+        "select gym_id from daily_workouts where id = ?", (daily_workout_id,)
+    ).fetchone()["gym_id"]
+    existing_ids = {
+        int(row["id"])
+        for row in connection.execute(
+            "select id from daily_workout_sections where daily_workout_id = ?",
+            (daily_workout_id,),
+        ).fetchall()
+    }
+    kept: set[int] = set()
+    for section in sections:
+        section_id = section.get("id")
+        if isinstance(section_id, int) and section_id in existing_ids and section_id not in kept:
+            kept.add(section_id)
+    for stale_id in existing_ids - kept:
+        connection.execute("delete from daily_workout_sections where id = ?", (stale_id,))
+    # Move kept rows out of the way of unique(daily_workout_id, position).
     connection.execute(
-        "delete from daily_workout_sections where daily_workout_id = ?",
+        "update daily_workout_sections set position = -1 - position where daily_workout_id = ?",
         (daily_workout_id,),
     )
+    claimed: set[int] = set()
     for index, section in enumerate(sections):
-        connection.execute(
-            """
-            insert into daily_workout_sections (
-              daily_workout_id, position, title, description, score_type,
-              kind, exercise_name, set_unit, sets_json, coach_notes, member_notes
+        kind = section.get("kind", "workout")
+        movement_id = (
+            movement_service.resolve_movement_id(
+                connection, gym_id=gym_id, name=section.get("exercise_name", "")
             )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                daily_workout_id,
-                index,
-                section["title"],
-                section["description"],
-                section["score_type"],
-                section.get("kind", "workout"),
-                section.get("exercise_name", ""),
-                section.get("set_unit", "percent"),
-                json.dumps(section.get("sets", [])),
-                section.get("coach_notes", ""),
-                section.get("member_notes", ""),
-            ),
+            if kind == "exercise"
+            else None
         )
+        values = (
+            index,
+            section["title"],
+            section["description"],
+            section["score_type"],
+            kind,
+            section.get("exercise_name", ""),
+            section.get("set_unit", "percent"),
+            json.dumps(section.get("sets", [])),
+            section.get("coach_notes", ""),
+            section.get("member_notes", ""),
+            movement_id,
+            section.get("workout_name", "") if kind == "workout" else "",
+        )
+        section_id = section.get("id")
+        if section_id in kept and section_id not in claimed:
+            claimed.add(section_id)
+            connection.execute(
+                """
+                update daily_workout_sections set
+                  position = ?, title = ?, description = ?, score_type = ?,
+                  kind = ?, exercise_name = ?, set_unit = ?, sets_json = ?,
+                  coach_notes = ?, member_notes = ?, movement_id = ?, workout_name = ?
+                where id = ?
+                """,
+                (*values, section_id),
+            )
+        else:
+            connection.execute(
+                """
+                insert into daily_workout_sections (
+                  position, title, description, score_type,
+                  kind, exercise_name, set_unit, sets_json,
+                  coach_notes, member_notes, movement_id, workout_name,
+                  daily_workout_id
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (*values, daily_workout_id),
+            )
 
 
 def daily_workout_payload(connection: ManagedConnection, row: Row, *, current_user_id: int, can_edit: bool) -> dict[str, Any]:

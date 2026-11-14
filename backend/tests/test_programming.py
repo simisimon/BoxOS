@@ -208,7 +208,7 @@ class ProgrammingApiTests(FastApiTestCase):
                     {
                         "title": "Mystery",
                         "description": "What",
-                        "score_type": "calories",
+                        "score_type": "points",
                     },
                 ],
             },

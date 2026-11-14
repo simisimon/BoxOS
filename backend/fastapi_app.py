@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, schedule_service, security, settings, session_auth, validation
 
 logger = logging.getLogger("boxos.backend")
 
@@ -348,6 +348,8 @@ class DailyWorkoutSetPayload(BaseModel):
 
 
 class DailyWorkoutSectionPayload(BaseModel):
+    # Sent back for existing blocks so they are updated in place.
+    id: int | None = None
     title: str | None = None
     description: str
     score_type: str
@@ -358,6 +360,7 @@ class DailyWorkoutSectionPayload(BaseModel):
     sets: list[DailyWorkoutSetPayload] | None = None
     coach_notes: str | None = None
     member_notes: str | None = None
+    workout_name: str | None = None
 
 
 class DailyWorkoutRequest(BaseModel):
@@ -4314,6 +4317,71 @@ def list_exercises(
                 (normalized_limit,),
             ).fetchall()
         return {"exercises": [programming_service.exercise_payload(row) for row in rows]}
+    finally:
+        connection.close()
+
+
+@app.get("/movements")
+def list_movements(
+    query: str = "",
+    limit: int = 20,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """The gym's movements (bundled CrossFit list plus its own) for the block
+    editor's exercise picker; result history matches on these."""
+    connection = db.get_connection()
+    try:
+        movements = movement_service.search_movements(
+            connection,
+            gym_id=session["active_gym_id"],
+            query=query,
+            limit=max(1, min(limit, 100)),
+        )
+        return {"movements": movements}
+    finally:
+        connection.close()
+
+
+@app.get("/workout-names")
+def list_workout_names(
+    query: str = "",
+    limit: int = 10,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """Suggestions for a workout block's name: the benchmark catalog plus
+    names this gym has used before."""
+    wanted = " ".join(query.strip().lower().split())
+    connection = db.get_connection()
+    try:
+        benchmarks = [
+            row["name"]
+            for row in connection.execute(
+                "select name from benchmark_workouts order by sort_order"
+            ).fetchall()
+        ]
+        used = [
+            row["workout_name"]
+            for row in connection.execute(
+                """
+                select distinct s.workout_name
+                from daily_workout_sections s
+                join daily_workouts w on w.id = s.daily_workout_id
+                where w.gym_id = ? and s.workout_name <> ''
+                order by s.workout_name
+                """,
+                (session["active_gym_id"],),
+            ).fetchall()
+        ]
+        names: list[str] = []
+        seen: set[str] = set()
+        for name in [*used, *benchmarks]:
+            key = name.lower()
+            if key in seen or (wanted and wanted not in key):
+                continue
+            seen.add(key)
+            names.append(name)
+        names.sort(key=lambda n: (not n.lower().startswith(wanted), n.lower()))
+        return {"workout_names": names[: max(1, min(limit, 50))]}
     finally:
         connection.close()
 

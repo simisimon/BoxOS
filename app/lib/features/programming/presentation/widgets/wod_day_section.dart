@@ -557,6 +557,7 @@ class _SectionDraft {
     // sets; the text wins and it becomes a plain workout block.
     final keepStructure = source?.description == description;
     return DailyWorkoutSection(
+      id: source?.id,
       title: titleController.text.trim(),
       description: description,
       scoreType: scoreType,
@@ -566,6 +567,7 @@ class _SectionDraft {
       sets: keepStructure ? source!.sets : const [],
       coachNotes: source?.coachNotes ?? '',
       memberNotes: source?.memberNotes ?? '',
+      workoutName: keepStructure ? source!.workoutName : '',
     );
   }
 
@@ -915,19 +917,12 @@ class _SectionCard extends StatelessWidget {
             initialValue: draft.scoreType,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Score unit'),
-            items: const [
-              DropdownMenuItem<WorkoutSectionScore>(
-                value: WorkoutSectionScore.time,
-                child: Text('Time'),
-              ),
-              DropdownMenuItem<WorkoutSectionScore>(
-                value: WorkoutSectionScore.roundsReps,
-                child: Text('Rounds + Reps'),
-              ),
-              DropdownMenuItem<WorkoutSectionScore>(
-                value: WorkoutSectionScore.weight,
-                child: Text('Weight (kg)'),
-              ),
+            items: [
+              for (final score in WorkoutSectionScore.values)
+                DropdownMenuItem<WorkoutSectionScore>(
+                  value: score,
+                  child: Text(workoutSectionScoreLabel(score)),
+                ),
             ],
             onChanged: isSaving
                 ? null
