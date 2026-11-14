@@ -115,6 +115,8 @@ class AuthenticatedShellScreen extends ConsumerWidget {
     (_, 'announcement') => manager ? '/messages' : '/home',
     (_, 'daily_workout') => manager ? '/programs' : '/my-box',
     (_, 'schedule_class') => '/my-box',
+    // Bumps and comments on the athlete's own results.
+    (_, 'workout_result') => '/profile?section=results',
     // Members see their plan and extra tokens on their profile.
     (_, 'member_plan' || 'token_credit') =>
       owner ? '/members' : '/profile?section=membership',

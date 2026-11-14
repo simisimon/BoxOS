@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, results_service, schedule_service, security, settings, session_auth, validation
+from backend import announcement_service, audit, auth_service, community_service, db, membership_service, movement_service, notifications_core, payment_service, plan_service, programming_service, result_social_service, results_service, schedule_service, security, settings, session_auth, validation
 
 logger = logging.getLogger("boxos.backend")
 
@@ -294,6 +294,8 @@ class NotificationPreferencesRequest(BaseModel):
     wod_posted: bool
     pr_achievements: bool
     announcement_activity: bool
+    # Fist bumps and comments on my results; older clients leave it out.
+    result_activity: bool | None = None
 
 
 class AnnouncementRequest(BaseModel):
@@ -874,7 +876,8 @@ def get_notification_preferences(
         user = connection.execute(
             """
             select notify_booking_confirmations, notify_waitlist_promotions, notify_payment_issues,
-                   notify_wod_posted, notify_pr_achievements, notify_announcement_activity
+                   notify_wod_posted, notify_pr_achievements, notify_announcement_activity,
+                   notify_result_activity
             from users where id = ? and deleted_at is null
             """,
             (session["user_id"],),
@@ -900,7 +903,8 @@ def update_notification_preferences(
                 """
                 update users
                 set notify_booking_confirmations = ?, notify_waitlist_promotions = ?, notify_payment_issues = ?,
-                    notify_wod_posted = ?, notify_pr_achievements = ?, notify_announcement_activity = ?, updated_at = ?
+                    notify_wod_posted = ?, notify_pr_achievements = ?, notify_announcement_activity = ?,
+                    notify_result_activity = coalesce(?, notify_result_activity), updated_at = ?
                 where id = ? and deleted_at is null
                 """,
                 (
@@ -910,6 +914,7 @@ def update_notification_preferences(
                     int(preferences["wod_posted"]),
                     int(preferences["pr_achievements"]),
                     int(preferences["announcement_activity"]),
+                    None if body.result_activity is None else int(body.result_activity),
                     security.isoformat(security.now_utc()),
                     session["user_id"],
                 ),
@@ -917,7 +922,8 @@ def update_notification_preferences(
         user = connection.execute(
             """
             select notify_booking_confirmations, notify_waitlist_promotions, notify_payment_issues,
-                   notify_wod_posted, notify_pr_achievements, notify_announcement_activity
+                   notify_wod_posted, notify_pr_achievements, notify_announcement_activity,
+                   notify_result_activity
             from users where id = ? and deleted_at is null
             """,
             (session["user_id"],),
@@ -4651,6 +4657,166 @@ def update_results_privacy(
                 (visibility, security.isoformat(security.now_utc()), session["user_id"]),
             )
         return {"visibility": visibility}
+    finally:
+        connection.close()
+
+
+def _staff(session: dict[str, Any]) -> bool:
+    return programming_service.can_view_drafts(session["role"])
+
+
+def _viewable(connection: Any, result_id: int, session: dict[str, Any]) -> Any:
+    return result_social_service.viewable_result(
+        connection,
+        result_id=result_id,
+        viewer_id=session["user_id"],
+        gym_id=session["active_gym_id"],
+        staff=_staff(session),
+    )
+
+
+def _result_detail(connection: Any, result: Any, session: dict[str, Any]) -> dict[str, Any]:
+    fresh = _viewable(connection, int(result["id"]), session)
+    return {
+        "result": result_social_service.result_detail(
+            connection, result=fresh, viewer_id=session["user_id"], staff=_staff(session)
+        )
+    }
+
+
+@app.get("/results/{result_id}")
+def get_workout_result(
+    result_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """One result with its photo, fist bumps and comments."""
+    connection = db.get_connection()
+    try:
+        return _result_detail(connection, _viewable(connection, result_id, session), session)
+    finally:
+        connection.close()
+
+
+@app.put("/results/{result_id}/bump")
+def bump_workout_result(
+    result_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = _viewable(connection, result_id, session)
+            result_social_service.set_bump(connection, result=result, user_id=session["user_id"], bumped=True)
+        return _result_detail(connection, result, session)
+    finally:
+        connection.close()
+
+
+@app.delete("/results/{result_id}/bump")
+def unbump_workout_result(
+    result_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = _viewable(connection, result_id, session)
+            result_social_service.set_bump(connection, result=result, user_id=session["user_id"], bumped=False)
+        return _result_detail(connection, result, session)
+    finally:
+        connection.close()
+
+
+class ResultCommentRequest(BaseModel):
+    body: str
+
+
+@app.post("/results/{result_id}/comments")
+def comment_on_workout_result(
+    result_id: int,
+    body: ResultCommentRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = _viewable(connection, result_id, session)
+            result_social_service.add_comment(connection, result=result, user_id=session["user_id"], body=body.body)
+        return _result_detail(connection, result, session)
+    finally:
+        connection.close()
+
+
+@app.delete("/results/comments/{comment_id}")
+def delete_result_comment(
+    comment_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """Authors delete their comments; owners and trainers any in their gym."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            result_social_service.delete_comment(
+                connection,
+                comment_id=comment_id,
+                user_id=session["user_id"],
+                gym_id=session["active_gym_id"],
+                staff=_staff(session),
+            )
+        return {"message": "Comment deleted."}
+    finally:
+        connection.close()
+
+
+class ResultPhotoRequest(BaseModel):
+    filename: str
+    content_type: str
+    data_base64: str
+
+
+@app.put("/results/{result_id}/photo")
+def upload_result_photo(
+    result_id: int,
+    body: ResultPhotoRequest,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """The athlete's one photo on their result (replaces an earlier one)."""
+    validation.require_upload_filename(body.filename)
+    data = validation.require_base64_bytes(
+        body.data_base64,
+        label="Photo data",
+        max_bytes=result_social_service.MAX_RESULT_PHOTO_BYTES,
+    )
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = _viewable(connection, result_id, session)
+            result_social_service.set_photo(
+                connection,
+                result=result,
+                user_id=session["user_id"],
+                content_type=body.content_type.strip().lower(),
+                data=data,
+            )
+        return _result_detail(connection, result, session)
+    finally:
+        connection.close()
+
+
+@app.delete("/results/{result_id}/photo")
+def remove_result_photo(
+    result_id: int,
+    session: dict[str, Any] = Depends(require_active_gym_member_session),
+) -> dict[str, Any]:
+    """The athlete removes their photo; owners and trainers moderate."""
+    connection = db.get_connection()
+    try:
+        with connection:
+            result = _viewable(connection, result_id, session)
+            result_social_service.remove_photo(
+                connection, result=result, user_id=session["user_id"], staff=_staff(session)
+            )
+        return _result_detail(connection, result, session)
     finally:
         connection.close()
 

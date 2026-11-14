@@ -102,6 +102,7 @@ class ApiProfileRepository implements ProfileRepository {
         'wod_posted': preferences.wodPosted,
         'pr_achievements': preferences.prAchievements,
         'announcement_activity': preferences.announcementActivity,
+        'result_activity': preferences.resultActivity,
       },
       options: Options(headers: await _authHeaders()),
     );
@@ -230,6 +231,7 @@ class ApiProfileRepository implements ProfileRepository {
       wodPosted: data['wod_posted'] as bool? ?? true,
       prAchievements: data['pr_achievements'] as bool? ?? true,
       announcementActivity: data['announcement_activity'] as bool? ?? true,
+      resultActivity: data['result_activity'] as bool? ?? true,
     );
   }
 

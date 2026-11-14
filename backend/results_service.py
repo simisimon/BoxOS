@@ -27,7 +27,7 @@ MAX_RESULT_SETS = 30
 RESULT_COLUMNS = (
     "id, user_id, gym_id, section_id, daily_workout_id, performed_on, class_schedule_id, "
     "movement_id, workout_name, section_title, score_type, score_value, score_label, "
-    "division, time_capped, sets_json, notes, created_at, updated_at"
+    "division, time_capped, sets_json, notes, photo_url, created_at, updated_at"
 )
 
 
@@ -182,6 +182,7 @@ def result_payload(row: Row) -> dict[str, Any]:
         "time_capped": bool(row["time_capped"]),
         "sets": sets,
         "notes": row["notes"],
+        "photo_url": row["photo_url"] or "",
         "updated_at": row["updated_at"],
     }
 
@@ -302,11 +303,15 @@ def save_result(
 
 def delete_result(connection: ManagedConnection, *, user_id: int, gym_id: int, section_id: int) -> None:
     deleted = connection.execute(
-        "delete from workout_results where user_id = ? and gym_id = ? and section_id = ? returning id",
+        "delete from workout_results where user_id = ? and gym_id = ? and section_id = ? returning id, photo_url",
         (user_id, gym_id, section_id),
     ).fetchone()
     if deleted is None:
         raise ApiError(HTTPStatus.NOT_FOUND, "Result not found.")
+    if deleted["photo_url"]:
+        from backend import result_social_service
+
+        result_social_service._remove_photo_file(deleted["photo_url"])
 
 
 def my_results_by_section(
@@ -479,6 +484,11 @@ def leaderboard(
         (daily_workout_id, staff, viewer_id),
     ).fetchall()
     prs = pr_flags(connection, rows)
+    from backend import result_social_service
+
+    social = result_social_service.social_counts(
+        connection, result_ids=[int(r["id"]) for r in rows], viewer_id=viewer_id
+    )
     by_section: dict[int, list[Row]] = {}
     for row in rows:
         by_section.setdefault(int(row["section_id"]), []).append(row)
@@ -494,7 +504,10 @@ def leaderboard(
             ranked.append(
                 {
                     "rank": rank,
+                    "result_id": row["id"],
                     "user_id": row["user_id"],
+                    "photo_url": row["photo_url"] or "",
+                    **social[int(row["id"])],
                     "name": _display_name(row),
                     "avatar_url": row["profile_image_url"] or "",
                     "score_label": row["score_label"],

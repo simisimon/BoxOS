@@ -15,6 +15,7 @@ def notification_preferences_payload(row: Row) -> dict[str, bool]:
         "wod_posted": bool(row["notify_wod_posted"]),
         "pr_achievements": bool(row["notify_pr_achievements"]),
         "announcement_activity": bool(row["notify_announcement_activity"]),
+        "result_activity": bool(row["notify_result_activity"]),
     }
 
 

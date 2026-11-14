@@ -369,7 +369,8 @@ class _BlockBoard extends ConsumerWidget {
             style: TextStyle(color: appSubtleText, fontSize: 13),
           )
         else
-          for (final entry in entries) LeaderboardRow(entry: entry),
+          for (final entry in entries)
+            LeaderboardRow(entry: entry, workoutId: workoutId),
       ],
     );
   }

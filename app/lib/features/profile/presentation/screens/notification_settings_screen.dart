@@ -190,6 +190,21 @@ class _NotificationSettingsScreenState
                               );
                             },
                           ),
+                          const SizedBox(height: 12),
+                          _PreferenceCard(
+                            title: 'Fist Bumps and Comments',
+                            subtitle:
+                                'When someone bumps or comments on your results.',
+                            accentColor: appPrimary,
+                            value: currentPreferences.resultActivity,
+                            onChanged: (value) {
+                              _updatePreferences(
+                                currentPreferences.copyWith(
+                                  resultActivity: value,
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),
