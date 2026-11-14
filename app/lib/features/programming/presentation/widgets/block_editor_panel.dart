@@ -351,7 +351,7 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
               },
             ),
             const SizedBox(height: appSpaceMd),
-            _Suggestions(
+            SuggestionField(
               controller: _workoutName,
               focusNode: _workoutNameFocus,
               search: _searchWorkoutNames,
@@ -364,7 +364,7 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
           ] else ...[
             // Suggestions from the gym's movements; free text works too and
             // becomes a new movement of the gym on save.
-            _Suggestions(
+            SuggestionField(
               controller: _exercise,
               focusNode: _exerciseFocus,
               search: _searchExercises,
@@ -558,8 +558,8 @@ class _BlockEditorState extends ConsumerState<_BlockEditor> {
 }
 
 /// A text field with suggestions from [search]; free text is always allowed.
-class _Suggestions extends StatelessWidget {
-  const _Suggestions({
+class SuggestionField extends StatelessWidget {
+  const SuggestionField({
     required this.controller,
     required this.focusNode,
     required this.search,

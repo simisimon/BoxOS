@@ -148,14 +148,11 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
         notes: notes,
       );
     }
-    final main = _main.text.trim();
-    if (main.isEmpty) {
+    final score = ResultScoreFields.typed(_score, _main, _reps);
+    if (score == null) {
       setState(() => _error = 'Enter your score.');
       return null;
     }
-    final score = _score == WorkoutSectionScore.roundsReps
-        ? '$main+${_reps.text.trim().isEmpty ? '0' : _reps.text.trim()}'
-        : main;
     return ResultDraft(
       sectionId: sectionId,
       score: score,
@@ -210,83 +207,13 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
     }
   }
 
-  Widget _scoreInput() {
-    final digits = [FilteringTextInputFormatter.digitsOnly];
-    final decimals = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))];
-    switch (_score) {
-      case WorkoutSectionScore.time:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              key: const ValueKey('result-score'),
-              controller: _main,
-              keyboardType: _capped
-                  ? TextInputType.number
-                  : TextInputType.datetime,
-              inputFormatters: _capped
-                  ? digits
-                  : [FilteringTextInputFormatter.allow(RegExp(r'[0-9:]'))],
-              decoration: InputDecoration(
-                labelText: _capped ? 'Reps at the cap' : 'Time',
-                hintText: _capped ? '120' : 'mm:ss',
-              ),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Time capped'),
-              subtitle: const Text('Not finished: log the reps you reached.'),
-              value: _capped,
-              onChanged: (value) => setState(() {
-                _capped = value;
-                _main.clear();
-              }),
-            ),
-          ],
-        );
-      case WorkoutSectionScore.roundsReps:
-        return Row(
-          children: [
-            Expanded(
-              child: TextField(
-                key: const ValueKey('result-score'),
-                controller: _main,
-                keyboardType: TextInputType.number,
-                inputFormatters: digits,
-                decoration: const InputDecoration(labelText: 'Rounds'),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: appSpaceMd),
-              child: Text('+', style: TextStyle(color: appMutedText)),
-            ),
-            Expanded(
-              child: TextField(
-                key: const ValueKey('result-reps'),
-                controller: _reps,
-                keyboardType: TextInputType.number,
-                inputFormatters: digits,
-                decoration: const InputDecoration(labelText: 'Reps'),
-              ),
-            ),
-          ],
-        );
-      default:
-        final (label, suffix, formatters) = switch (_score) {
-          WorkoutSectionScore.reps => ('Reps', 'reps', digits),
-          WorkoutSectionScore.calories => ('Calories', 'cal', digits),
-          WorkoutSectionScore.distance => ('Distance', 'm', decimals),
-          _ => ('Weight', 'kg', decimals),
-        };
-        return TextField(
-          key: const ValueKey('result-score'),
-          controller: _main,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: formatters,
-          decoration: InputDecoration(labelText: label, suffixText: suffix),
-        );
-    }
-  }
+  Widget _scoreInput() => ResultScoreFields(
+    score: _score,
+    main: _main,
+    reps: _reps,
+    capped: _capped,
+    onCappedChanged: (value) => setState(() => _capped = value),
+  );
 
   /// "≈ 82.5" for a set prescribed at a percentage, from the athlete's
   /// estimated one-rep max for this movement.
@@ -473,6 +400,119 @@ class _LogResultPanelState extends ConsumerState<LogResultPanel> {
         ],
       ),
     );
+  }
+}
+
+/// The score field(s) for a score type: a time (or the reps reached at the
+/// cap), rounds + reps, or one number with its unit.
+class ResultScoreFields extends StatelessWidget {
+  const ResultScoreFields({
+    super.key,
+    required this.score,
+    required this.main,
+    required this.reps,
+    required this.capped,
+    required this.onCappedChanged,
+  });
+
+  final WorkoutSectionScore score;
+  final TextEditingController main;
+
+  /// The reps after the rounds; only rounds + reps uses it.
+  final TextEditingController reps;
+  final bool capped;
+  final ValueChanged<bool> onCappedChanged;
+
+  /// The score as the server reads it, or null when nothing is entered.
+  static String? typed(
+    WorkoutSectionScore score,
+    TextEditingController main,
+    TextEditingController reps,
+  ) {
+    final value = main.text.trim();
+    if (value.isEmpty) return null;
+    if (score != WorkoutSectionScore.roundsReps) return value;
+    final extra = reps.text.trim();
+    return '$value+${extra.isEmpty ? '0' : extra}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final digits = [FilteringTextInputFormatter.digitsOnly];
+    final decimals = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))];
+    switch (score) {
+      case WorkoutSectionScore.time:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              key: const ValueKey('result-score'),
+              controller: main,
+              keyboardType: capped
+                  ? TextInputType.number
+                  : TextInputType.datetime,
+              inputFormatters: capped
+                  ? digits
+                  : [FilteringTextInputFormatter.allow(RegExp(r'[0-9:]'))],
+              decoration: InputDecoration(
+                labelText: capped ? 'Reps at the cap' : 'Time',
+                hintText: capped ? '120' : 'mm:ss',
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Time capped'),
+              subtitle: const Text('Not finished: log the reps you reached.'),
+              value: capped,
+              onChanged: (value) {
+                main.clear();
+                onCappedChanged(value);
+              },
+            ),
+          ],
+        );
+      case WorkoutSectionScore.roundsReps:
+        return Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('result-score'),
+                controller: main,
+                keyboardType: TextInputType.number,
+                inputFormatters: digits,
+                decoration: const InputDecoration(labelText: 'Rounds'),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: appSpaceMd),
+              child: Text('+', style: TextStyle(color: appMutedText)),
+            ),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('result-reps'),
+                controller: reps,
+                keyboardType: TextInputType.number,
+                inputFormatters: digits,
+                decoration: const InputDecoration(labelText: 'Reps'),
+              ),
+            ),
+          ],
+        );
+      default:
+        final (label, suffix, formatters) = switch (score) {
+          WorkoutSectionScore.reps => ('Reps', 'reps', digits),
+          WorkoutSectionScore.calories => ('Calories', 'cal', digits),
+          WorkoutSectionScore.distance => ('Distance', 'm', decimals),
+          _ => ('Weight', 'kg', decimals),
+        };
+        return TextField(
+          key: const ValueKey('result-score'),
+          controller: main,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: formatters,
+          decoration: InputDecoration(labelText: label, suffixText: suffix),
+        );
+    }
   }
 }
 
