@@ -574,14 +574,21 @@ def my_results(
     movement_id: int | None,
     workout_name: str,
     limit: int,
+    gym_id: int | None = None,
 ) -> dict[str, Any]:
-    """All the athlete's results (any gym), newest first, with PR marks,
-    optionally narrowed to one movement or named workout; plus the filters
-    the athlete has results for."""
-    rows = connection.execute(
-        f"select {RESULT_COLUMNS} from workout_results where user_id = ?",
-        (user_id,),
-    ).fetchall()
+    """All the athlete's results (any gym, or only ``gym_id``'s), newest
+    first, with PR marks, optionally narrowed to one movement or named
+    workout; plus the filters the athlete has results for."""
+    if gym_id is None:
+        rows = connection.execute(
+            f"select {RESULT_COLUMNS} from workout_results where user_id = ?",
+            (user_id,),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            f"select {RESULT_COLUMNS} from workout_results where user_id = ? and gym_id = ?",
+            (user_id, gym_id),
+        ).fetchall()
     prs: set[int] = set()
     groups: dict[tuple, list[Row]] = {}
     for row in rows:

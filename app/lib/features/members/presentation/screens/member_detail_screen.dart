@@ -8,6 +8,7 @@ import 'package:app/features/memberships/presentation/member_plan_widgets.dart';
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/data/repositories/api_profile_repository.dart';
 import 'package:app/features/profile/domain/models/role_managed_user.dart';
+import 'package:app/features/results/presentation/my_results_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -115,6 +116,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                 onSave: _save,
                 onBack: _back,
                 bookings: _bookings,
+                resultsTab: MyResultsSection(memberId: user.id),
                 planSection: MemberPlanSection(
                   userId: user.id,
                   memberName: memberDisplayName(user),

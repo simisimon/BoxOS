@@ -14,8 +14,13 @@ String _number(double value) => value == value.roundToDouble()
 
 /// Profile › Results: the athlete's results, newest first, filtered to one
 /// movement or named workout; a lift also shows its percentage chart.
+///
+/// With [memberId] it shows that member's results at the owner's gym
+/// (Member details › Results), without export and privacy.
 class MyResultsSection extends ConsumerStatefulWidget {
-  const MyResultsSection({super.key});
+  const MyResultsSection({super.key, this.memberId});
+
+  final int? memberId;
 
   @override
   ConsumerState<MyResultsSection> createState() => _MyResultsSectionState();
@@ -58,8 +63,13 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(myResultsProvider(null));
-    final shown = ref.watch(myResultsProvider(_filter));
+    final memberId = widget.memberId;
+    final all = memberId == null
+        ? ref.watch(myResultsProvider(null))
+        : ref.watch(memberResultsProvider((memberId, null)));
+    final shown = memberId == null
+        ? ref.watch(myResultsProvider(_filter))
+        : ref.watch(memberResultsProvider((memberId, _filter)));
     final filters = all.value?.filters ?? const <ResultFilter>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -92,12 +102,13 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
                 onChanged: (value) => setState(() => _filter = value),
               ),
             ),
-            OutlinedButton.icon(
-              onPressed: _exporting || filters.isEmpty ? null : _export,
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-              icon: const Icon(Icons.download_outlined, size: 18),
-              label: const Text('Download CSV'),
-            ),
+            if (memberId == null)
+              OutlinedButton.icon(
+                onPressed: _exporting || filters.isEmpty ? null : _export,
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Download CSV'),
+              ),
           ],
         ),
         const SizedBox(height: appSpaceMd),
@@ -114,12 +125,19 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
                 PercentageChart(bestSets: data.bestSets),
                 const SizedBox(height: appSpaceMd),
               ],
-              _ResultsCard(results: data.results),
+              _ResultsCard(
+                results: data.results,
+                emptyText: memberId == null
+                    ? 'No results yet. Log one from the WOD of the day on Home.'
+                    : 'No results logged at your gym yet.',
+              ),
             ],
           ),
         ),
-        const SizedBox(height: appSpaceLg),
-        const ResultsPrivacyCard(),
+        if (memberId == null) ...[
+          const SizedBox(height: appSpaceLg),
+          const ResultsPrivacyCard(),
+        ],
       ],
     );
   }
@@ -208,9 +226,10 @@ BoxDecoration _card() => BoxDecoration(
 );
 
 class _ResultsCard extends StatelessWidget {
-  const _ResultsCard({required this.results});
+  const _ResultsCard({required this.results, required this.emptyText});
 
   final List<WorkoutResult> results;
+  final String emptyText;
 
   @override
   Widget build(BuildContext context) {
@@ -219,10 +238,7 @@ class _ResultsCard extends StatelessWidget {
       decoration: _card(),
       padding: const EdgeInsets.all(appSpaceLg),
       child: results.isEmpty
-          ? const Text(
-              'No results yet. Log one from the WOD of the day on Home.',
-              style: TextStyle(color: appSubtleText),
-            )
+          ? Text(emptyText, style: const TextStyle(color: appSubtleText))
           : Column(
               children: [
                 for (final result in results)

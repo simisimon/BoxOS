@@ -509,6 +509,10 @@ create table if not exists movements (
 );
 create unique index if not exists movements_scope_name_idx
   on movements (coalesce(gym_id, 0), lower(name));
+-- Settings > Movements: an archived movement leaves the picker, a merged one
+-- points at the movement that replaced it (its blocks and results moved there).
+alter table movements add column if not exists archived_at text;
+alter table movements add column if not exists merged_into_id integer references movements(id) on delete set null;
 alter table daily_workout_sections add column if not exists movement_id integer references movements(id) on delete set null;
 alter table daily_workout_sections add column if not exists workout_name text not null default '';
 -- Who sees an athlete's results on gym leaderboards: 'gym' (everyone in

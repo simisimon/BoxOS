@@ -188,10 +188,12 @@ class LeaderboardEntry {
     required this.name,
     required this.scoreLabel,
     required this.division,
+    this.userId = 0,
     this.avatarUrl = '',
     this.isPr = false,
     this.isMe = false,
     this.notes = '',
+    this.timeCapped = false,
   });
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) =>
@@ -202,13 +204,16 @@ class LeaderboardEntry {
         division: json['division'] == 'scaled'
             ? ResultDivision.scaled
             : ResultDivision.rx,
+        userId: (json['user_id'] as num?)?.toInt() ?? 0,
         avatarUrl: json['avatar_url'] as String? ?? '',
         isPr: json['is_pr'] as bool? ?? false,
         isMe: json['is_me'] as bool? ?? false,
         notes: json['notes'] as String? ?? '',
+        timeCapped: json['time_capped'] as bool? ?? false,
       );
 
   final int rank;
+  final int userId;
   final String name;
   final String scoreLabel;
   final ResultDivision division;
@@ -218,6 +223,7 @@ class LeaderboardEntry {
 
   /// Only the athlete's own notes, or everyone's for owners and trainers.
   final String notes;
+  final bool timeCapped;
 }
 
 /// Who sees an athlete's results on gym leaderboards.

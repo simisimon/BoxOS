@@ -43,6 +43,10 @@ class _FakeResults implements ResultsRepository {
   Future<MyResults> fetchMyResults(ResultFilter? filter) async =>
       const MyResults(results: [], filters: []);
 
+  @override
+  Future<MyResults> fetchMemberResults(int userId, ResultFilter? filter) =>
+      fetchMyResults(filter);
+
   ResultsVisibility visibility = ResultsVisibility.gym;
 
   @override

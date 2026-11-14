@@ -103,6 +103,8 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   its results. "The same exercise" is a movement (`movements`, the bundled
   list in `backend/data/movements.json` plus a gym's own, resolved from an
   exercise block's name); a workout block can carry a `workout_name`
-  (Fran, a box test) so repeats are found.
+  (Fran, a box test) so repeats are found. Owners rename, archive and merge
+  the gym's own movements in Settings › Movements; a merged movement's name
+  resolves to the movement it was merged into.
 - Join requests live in the Members tab (Requests segment); the Members nav
   item shows the open count as a badge.
