@@ -99,6 +99,11 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   'gym' (default, "My gym") or 'private' (other athletes don't see them on
   leaderboards; coaches still do). A followers level comes with the friends
   feed. Athletes can download all their results as CSV (`/results/me.csv`).
+  Whoever sees a result on the leaderboard can fist-bump it (once) and
+  comment (`result_social_service`, `result_bumps`, `result_comments`); the
+  athlete adds one photo (`workout_results.photo_url`, `/uploads/results/`).
+  Authors and coaches delete comments, the athlete and coaches remove the
+  photo. The athlete is notified (`notify_result_activity`, mutable).
 - WOD blocks are saved by id (`workout_service.replace_workout_sections`):
   clients send back each block's `id` so it is updated in place and keeps
   its results. "The same exercise" is a movement (`movements`, the bundled

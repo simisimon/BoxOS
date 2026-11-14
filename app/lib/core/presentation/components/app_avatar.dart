@@ -28,7 +28,7 @@ class AppAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = _resolveUrl(imageUrl);
+    final resolved = resolveUrl(imageUrl);
     final bg = background ?? appPrimarySoft;
     final fg = foreground ?? appText;
     final child = Container(
@@ -91,7 +91,8 @@ class AppAvatar extends StatelessWidget {
     );
   }
 
-  static String? _resolveUrl(String? raw) {
+  /// An upload path (`/uploads/...`) as a full URL on the API host.
+  static String? resolveUrl(String? raw) {
     if (raw == null) return null;
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return null;

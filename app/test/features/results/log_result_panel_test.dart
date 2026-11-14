@@ -3,7 +3,9 @@ import 'package:app/features/programming/domain/models/daily_workout.dart';
 import 'package:app/features/results/data/api_results_repository.dart';
 import 'package:app/features/results/domain/workout_result.dart';
 import 'package:app/features/results/presentation/log_result_panel.dart';
+import 'package:app/features/results/presentation/block_leaderboard.dart';
 import 'package:app/features/results/presentation/my_results_section.dart';
+import 'package:app/features/results/presentation/result_detail_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,6 +66,59 @@ class _FakeResults implements ResultsRepository {
   @override
   Future<MovementInfo> fetchMovement(int movementId) async =>
       movement ?? MovementInfo(id: movementId, name: '');
+
+  final bumps = <int, bool>{};
+  final comments = <String>[];
+
+  ResultDetail detail(int id) => ResultDetail(
+    id: id,
+    name: 'Ada',
+    scoreLabel: '4:12',
+    division: ResultDivision.rx,
+    performedOn: DateTime(2026, 11, 14),
+    bumpCount: bumps[id] == true ? 1 : 0,
+    bumpedByMe: bumps[id] == true,
+    comments: [
+      for (final (i, body) in comments.indexed)
+        ResultComment(
+          id: i + 1,
+          name: 'Ben',
+          body: body,
+          createdAt: DateTime(2026, 11, 14),
+          canDelete: true,
+        ),
+    ],
+  );
+
+  @override
+  Future<ResultDetail> fetchResult(int resultId) async => detail(resultId);
+
+  @override
+  Future<ResultDetail> setBump(int resultId, {required bool bumped}) async {
+    bumps[resultId] = bumped;
+    return detail(resultId);
+  }
+
+  @override
+  Future<ResultDetail> addComment(int resultId, String body) async {
+    comments.add(body);
+    return detail(resultId);
+  }
+
+  @override
+  Future<void> deleteComment(int commentId) async =>
+      comments.removeAt(commentId - 1);
+
+  @override
+  Future<ResultDetail> uploadPhoto(
+    int resultId, {
+    required String filename,
+    required String contentType,
+    required String dataBase64,
+  }) async => detail(resultId);
+
+  @override
+  Future<ResultDetail> removePhoto(int resultId) async => detail(resultId);
 }
 
 Future<LogResultOutcome?> Function() _open(
@@ -321,5 +376,86 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.visibility, ResultsVisibility.private);
     expect(find.textContaining('Your coaches still do.'), findsOneWidget);
+  });
+
+  testWidgets('a result takes fist bumps and comments', (tester) async {
+    final fake = _FakeResults();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [resultsRepositoryProvider.overrideWithValue(fake)],
+        child: MaterialApp(
+          theme: buildBoxOsTheme(),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showResultDetailPanel(context, resultId: 5),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ada'), findsOneWidget);
+    expect(find.text('No comments yet.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('detail-bump')));
+    await tester.pumpAndSettle();
+    expect(fake.bumps[5], isTrue);
+    expect(find.text('👊 1'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('result-comment')),
+      'Strong!',
+    );
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+    expect(fake.comments, ['Strong!']);
+    expect(find.text('Strong!'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Delete comment'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete').last);
+    await tester.pumpAndSettle();
+    expect(fake.comments, isEmpty);
+    await tester.pump();
+  });
+
+  testWidgets('leaderboard rows bump in place', (tester) async {
+    final fake = _FakeResults();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [resultsRepositoryProvider.overrideWithValue(fake)],
+        child: MaterialApp(
+          theme: buildBoxOsTheme(),
+          home: const Scaffold(
+            body: LeaderboardRow(
+              entry: LeaderboardEntry(
+                rank: 1,
+                name: 'Ada',
+                scoreLabel: '4:12',
+                division: ResultDivision.rx,
+                resultId: 8,
+                bumpCount: 2,
+                commentCount: 3,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('👊 2'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('bump-8')));
+    await tester.pumpAndSettle();
+    expect(fake.bumps[8], isTrue);
   });
 }

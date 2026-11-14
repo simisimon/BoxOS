@@ -46,6 +46,13 @@ final movementInfoProvider = FutureProvider.autoDispose
           ref.watch(resultsRepositoryProvider).fetchMovement(movementId),
     );
 
+/// One result with its photo, bumps and comments.
+final resultDetailProvider = FutureProvider.autoDispose
+    .family<ResultDetail, int>(
+      (ref, resultId) =>
+          ref.watch(resultsRepositoryProvider).fetchResult(resultId),
+    );
+
 final resultsRepositoryProvider = Provider<ResultsRepository>((ref) {
   return ApiResultsRepository(
     dio: ref.read(dioProvider),
@@ -107,6 +114,24 @@ abstract class ResultsRepository {
   Future<String> exportResultsCsv();
 
   Future<MovementInfo> fetchMovement(int movementId);
+
+  Future<ResultDetail> fetchResult(int resultId);
+
+  Future<ResultDetail> setBump(int resultId, {required bool bumped});
+
+  Future<ResultDetail> addComment(int resultId, String body);
+
+  Future<void> deleteComment(int commentId);
+
+  /// [dataBase64] is the image file, base64 encoded.
+  Future<ResultDetail> uploadPhoto(
+    int resultId, {
+    required String filename,
+    required String contentType,
+    required String dataBase64,
+  });
+
+  Future<ResultDetail> removePhoto(int resultId);
 }
 
 class ApiResultsRepository implements ResultsRepository {
@@ -229,6 +254,79 @@ class ApiResultsRepository implements ResultsRepository {
       response.data!['movement'] as Map<String, dynamic>,
     );
   }
+
+  @override
+  Future<ResultDetail> fetchResult(int resultId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/results/$resultId',
+      options: Options(headers: await _authHeaders()),
+    );
+    return _detail(response.data);
+  }
+
+  @override
+  Future<ResultDetail> setBump(int resultId, {required bool bumped}) async {
+    final options = Options(headers: await _authHeaders());
+    final response = bumped
+        ? await _dio.put<Map<String, dynamic>>(
+            '/results/$resultId/bump',
+            options: options,
+          )
+        : await _dio.delete<Map<String, dynamic>>(
+            '/results/$resultId/bump',
+            options: options,
+          );
+    return _detail(response.data);
+  }
+
+  @override
+  Future<ResultDetail> addComment(int resultId, String body) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/results/$resultId/comments',
+      data: {'body': body},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _detail(response.data);
+  }
+
+  @override
+  Future<void> deleteComment(int commentId) async {
+    await _dio.delete<Map<String, dynamic>>(
+      '/results/comments/$commentId',
+      options: Options(headers: await _authHeaders()),
+    );
+  }
+
+  @override
+  Future<ResultDetail> uploadPhoto(
+    int resultId, {
+    required String filename,
+    required String contentType,
+    required String dataBase64,
+  }) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/results/$resultId/photo',
+      data: {
+        'filename': filename,
+        'content_type': contentType,
+        'data_base64': dataBase64,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return _detail(response.data);
+  }
+
+  @override
+  Future<ResultDetail> removePhoto(int resultId) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/results/$resultId/photo',
+      options: Options(headers: await _authHeaders()),
+    );
+    return _detail(response.data);
+  }
+
+  ResultDetail _detail(Map<String, dynamic>? data) =>
+      ResultDetail.fromJson(data!['result'] as Map<String, dynamic>);
 
   Future<Map<String, String>> _authHeaders() async {
     final tokens = await _tokenStorage.readTokens();

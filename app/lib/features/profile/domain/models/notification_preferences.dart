@@ -6,6 +6,7 @@ class NotificationPreferences {
     required this.wodPosted,
     required this.prAchievements,
     required this.announcementActivity,
+    this.resultActivity = true,
   });
 
   final bool bookingConfirmations;
@@ -15,6 +16,9 @@ class NotificationPreferences {
   final bool prAchievements;
   final bool announcementActivity;
 
+  /// Fist bumps and comments on the athlete's results.
+  final bool resultActivity;
+
   NotificationPreferences copyWith({
     bool? bookingConfirmations,
     bool? waitlistPromotions,
@@ -22,6 +26,7 @@ class NotificationPreferences {
     bool? wodPosted,
     bool? prAchievements,
     bool? announcementActivity,
+    bool? resultActivity,
   }) {
     return NotificationPreferences(
       bookingConfirmations: bookingConfirmations ?? this.bookingConfirmations,
@@ -30,6 +35,7 @@ class NotificationPreferences {
       wodPosted: wodPosted ?? this.wodPosted,
       prAchievements: prAchievements ?? this.prAchievements,
       announcementActivity: announcementActivity ?? this.announcementActivity,
+      resultActivity: resultActivity ?? this.resultActivity,
     );
   }
 }

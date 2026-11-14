@@ -57,7 +57,8 @@ class _BlockResults extends ConsumerWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final entry in entries) LeaderboardRow(entry: entry),
+                for (final entry in entries)
+                  LeaderboardRow(entry: entry, workoutId: workoutId),
               ],
             );
           },

@@ -194,6 +194,11 @@ class LeaderboardEntry {
     this.isMe = false,
     this.notes = '',
     this.timeCapped = false,
+    this.resultId = 0,
+    this.photoUrl = '',
+    this.bumpCount = 0,
+    this.commentCount = 0,
+    this.bumpedByMe = false,
   });
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) =>
@@ -210,6 +215,11 @@ class LeaderboardEntry {
         isMe: json['is_me'] as bool? ?? false,
         notes: json['notes'] as String? ?? '',
         timeCapped: json['time_capped'] as bool? ?? false,
+        resultId: (json['result_id'] as num?)?.toInt() ?? 0,
+        photoUrl: json['photo_url'] as String? ?? '',
+        bumpCount: (json['bump_count'] as num?)?.toInt() ?? 0,
+        commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+        bumpedByMe: json['bumped_by_me'] as bool? ?? false,
       );
 
   final int rank;
@@ -224,6 +234,117 @@ class LeaderboardEntry {
   /// Only the athlete's own notes, or everyone's for owners and trainers.
   final String notes;
   final bool timeCapped;
+  final int resultId;
+  final String photoUrl;
+  final int bumpCount;
+  final int commentCount;
+  final bool bumpedByMe;
+}
+
+/// A comment under a result.
+class ResultComment {
+  const ResultComment({
+    required this.id,
+    required this.name,
+    required this.body,
+    required this.createdAt,
+    this.avatarUrl = '',
+    this.canDelete = false,
+  });
+
+  factory ResultComment.fromJson(Map<String, dynamic> json) => ResultComment(
+    id: (json['id'] as num).toInt(),
+    name: json['name'] as String? ?? '',
+    body: json['body'] as String? ?? '',
+    createdAt:
+        DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal() ??
+        DateTime.now(),
+    avatarUrl: json['avatar_url'] as String? ?? '',
+    canDelete: json['can_delete'] as bool? ?? false,
+  );
+
+  final int id;
+  final String name;
+  final String body;
+  final DateTime createdAt;
+  final String avatarUrl;
+  final bool canDelete;
+}
+
+/// One result with its photo, fist bumps and comments (`GET /results/{id}`).
+class ResultDetail {
+  const ResultDetail({
+    required this.id,
+    required this.name,
+    required this.scoreLabel,
+    required this.division,
+    required this.performedOn,
+    this.avatarUrl = '',
+    this.sectionTitle = '',
+    this.workoutName = '',
+    this.notes = '',
+    this.photoUrl = '',
+    this.isMe = false,
+    this.canEditPhoto = false,
+    this.canRemovePhoto = false,
+    this.bumpCount = 0,
+    this.bumpedByMe = false,
+    this.bumpedBy = const [],
+    this.comments = const [],
+  });
+
+  factory ResultDetail.fromJson(Map<String, dynamic> json) => ResultDetail(
+    id: (json['id'] as num).toInt(),
+    name: json['name'] as String? ?? '',
+    scoreLabel: json['score_label'] as String? ?? '',
+    division: json['division'] == 'scaled'
+        ? ResultDivision.scaled
+        : ResultDivision.rx,
+    performedOn:
+        DateTime.tryParse(json['performed_on'] as String? ?? '') ??
+        DateTime.now(),
+    avatarUrl: json['avatar_url'] as String? ?? '',
+    sectionTitle: json['section_title'] as String? ?? '',
+    workoutName: json['workout_name'] as String? ?? '',
+    notes: json['notes'] as String? ?? '',
+    photoUrl: json['photo_url'] as String? ?? '',
+    isMe: json['is_me'] as bool? ?? false,
+    canEditPhoto: json['can_edit_photo'] as bool? ?? false,
+    canRemovePhoto: json['can_remove_photo'] as bool? ?? false,
+    bumpCount: (json['bump_count'] as num?)?.toInt() ?? 0,
+    bumpedByMe: json['bumped_by_me'] as bool? ?? false,
+    bumpedBy: [
+      for (final name in json['bumped_by'] as List? ?? const []) '$name',
+    ],
+    comments: [
+      for (final raw in json['comments'] as List? ?? const [])
+        ResultComment.fromJson(raw as Map<String, dynamic>),
+    ],
+  );
+
+  final int id;
+  final String name;
+  final String scoreLabel;
+  final ResultDivision division;
+  final DateTime performedOn;
+  final String avatarUrl;
+  final String sectionTitle;
+  final String workoutName;
+  final String notes;
+  final String photoUrl;
+  final bool isMe;
+  final bool canEditPhoto;
+  final bool canRemovePhoto;
+  final int bumpCount;
+  final bool bumpedByMe;
+  final List<String> bumpedBy;
+  final List<ResultComment> comments;
+
+  String get title => workoutName.isNotEmpty
+      ? workoutName
+      : sectionTitle.isNotEmpty
+      ? sectionTitle
+      : 'Workout';
 }
 
 /// Who sees an athlete's results on gym leaderboards.
