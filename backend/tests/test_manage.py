@@ -3,7 +3,8 @@ from __future__ import annotations
 import contextlib
 import io
 
-from backend import db, manage, settings
+from backend.core import db, settings
+from backend.scripts import manage
 from backend.tests.support import FastApiTestCase
 
 

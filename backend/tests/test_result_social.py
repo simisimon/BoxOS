@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 
-from backend import db, security, settings
+from backend.core import db, security, settings
 from backend.tests.support import FastApiTestCase
 
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()

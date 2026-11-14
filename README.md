@@ -36,7 +36,7 @@ Beitrittsanfragen, ein Wochenplan mit Classes inkl. Buchungen, Attendance und Wa
 veröffentlichte WODs sowie Community-Inhalte.
 
 ```bash
-docker compose exec backend-dev python -m backend.seed_demo
+docker compose exec backend-dev python -m backend.scripts.seed_demo
 ```
 
 Jeder Lauf löscht die Demo-Box „Iron Forge CrossFit“ und baut sie neu auf. Danach als Owner

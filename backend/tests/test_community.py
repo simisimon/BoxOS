@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend import db, security, settings
+from backend.core import db, security, settings
 from backend.tests.support import FastApiTestCase
 
 

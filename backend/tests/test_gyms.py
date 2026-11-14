@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from backend import db, settings
+from backend.core import db, settings
 from backend.tests.support import FastApiTestCase
 
 

@@ -19,7 +19,7 @@ Status legend: `[x]` implemented end to end (backend + UI) · `[~]` partial
 A person can hold several roles in a box and switches the active one in the
 app. Backend checks are the security boundary: owner-only endpoints use
 `require_admin_gym_session`, owner + trainer endpoints use
-`require_schedule_manager_session` (`backend/fastapi_app.py`). Classes and
+`require_schedule_manager_session` (`backend/api/deps.py`). Classes and
 weekly templates are owner-only; trainers keep attendance, programming and
 announcements.
 
@@ -118,7 +118,7 @@ other:
 - **One plan at a time:** a new plan ends the current one the day before it
   starts.
 - **Booking gate:** off by default (Box configuration → Memberships). Owners
-  and trainers are never checked. Code: `backend/plan_service.py`,
+  and trainers are never checked. Code: `backend/services/plan_service.py`,
   `app/lib/features/memberships/`.
 
 Smaller follow-ups: a trainer "My classes" view and an audit-log screen for

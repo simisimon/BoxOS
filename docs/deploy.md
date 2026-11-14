@@ -98,7 +98,7 @@ curl -I https://app.boxos-app.de
 ```
 
 The first build takes several minutes (Flutter). The database schema is created
-on the backend's first start (`backend/db.py`). The first HTTPS request can take
+on the backend's first start (`backend/core/db.py`). The first HTTPS request can take
 a few seconds while Traefik gets the certificate.
 
 If the backend restarts in a loop, read why:
@@ -155,16 +155,16 @@ Accounts are created on the server; each command prints a generated password.
 
 ```bash
 cd /docker/boxos
-boxos exec backend python -m backend.manage create-user --email owner@example.com --name "Box Owner" --role admin
+boxos exec backend python -m backend.scripts.manage create-user --email owner@example.com --name "Box Owner" --role admin
 ```
 
 The owner logs in at https://app.boxos-app.de, goes to Profile › "Create box"
 (or Home › "Create Box") and sets up the box. Then add members and trainers:
 
 ```bash
-boxos exec backend python -m backend.manage list-gyms
-boxos exec backend python -m backend.manage create-user --email coach@example.com --name "Coach" --role trainer --gym "<slug>"
-boxos exec backend python -m backend.manage create-user --email member@example.com --name "Member" --role athlete --gym "<slug>"
+boxos exec backend python -m backend.scripts.manage list-gyms
+boxos exec backend python -m backend.scripts.manage create-user --email coach@example.com --name "Coach" --role trainer --gym "<slug>"
+boxos exec backend python -m backend.scripts.manage create-user --email member@example.com --name "Member" --role athlete --gym "<slug>"
 ```
 
 Test data: fills an existing box with 20 test members, 2 trainers, two join
@@ -174,8 +174,8 @@ again replaces the test data, `--remove` deletes it (real members, the owner and
 the box's own WODs stay):
 
 ```bash
-boxos exec backend python -m backend.manage seed-test-data --gym "<slug>"
-boxos exec backend python -m backend.manage seed-test-data --gym "<slug>" --remove
+boxos exec backend python -m backend.scripts.manage seed-test-data --gym "<slug>"
+boxos exec backend python -m backend.scripts.manage seed-test-data --gym "<slug>" --remove
 ```
 
 Forgotten password: `... manage reset-password --email ...` (password reset by
@@ -230,7 +230,7 @@ boxos up -d --build
 curl -I https://api.boxos-app.de/health
 ```
 
-There are no migrations yet: `backend/db.py` applies the schema on startup and
+There are no migrations yet: `backend/core/db.py` applies the schema on startup and
 adds new tables and columns itself. Anything that changes or removes existing
 data has to be done by hand, so read the commits before pulling and take a
 backup first (as above).

@@ -7,8 +7,8 @@ setup is in [`deploy.md`](deploy.md).
 
 1. Start the dev stack: `docker compose up -d --build` (app at
    http://localhost:3001 with quick login, API at http://localhost:8081).
-   Demo data: `docker compose exec backend-dev python -m backend.seed_demo`.
-   Accounts: `docker compose exec backend-dev python -m backend.manage ...`.
+   Demo data: `docker compose exec backend-dev python -m backend.scripts.seed_demo`.
+   Accounts: `docker compose exec backend-dev python -m backend.scripts.manage ...`.
    Stripe test mode works here with the keys in `.env`. Production is never
    touched by anything you do here.
 2. One branch per feature: `git checkout -b feature/<name>`.
@@ -51,7 +51,7 @@ echo "alias boxos='cd /docker/boxos && docker compose -f docker-compose.prod.yml
 
 ## 3. Things to watch
 
-- **Database changes.** New tables and columns are added by `backend/db.py`
+- **Database changes.** New tables and columns are added by `backend/core/db.py`
   when the backend starts. Renaming or deleting columns, or changing existing
   data, needs a manual step on the server (there is no migration tool yet):
   write it down in the pull request and run it right after `git pull`, after
@@ -94,11 +94,11 @@ same server, so copy them off it too ([`deploy.md` §7](deploy.md#7-backups)).
 ## 6. Accounts and test data on the server
 
 ```bash
-boxos exec backend python -m backend.manage list-gyms
-boxos exec backend python -m backend.manage list-users --gym "<slug>"
-boxos exec backend python -m backend.manage create-user --email x@y.de --name "Name" --role athlete|trainer|admin --gym "<slug>"
-boxos exec backend python -m backend.manage reset-password --email x@y.de      # prints a new password
-boxos exec backend python -m backend.manage deactivate-user --email x@y.de     # signs out, locks the account
-boxos exec backend python -m backend.manage seed-test-data --gym "<slug>"           # test members, classes, WODs
-boxos exec backend python -m backend.manage seed-test-data --gym "<slug>" --remove  # delete them again
+boxos exec backend python -m backend.scripts.manage list-gyms
+boxos exec backend python -m backend.scripts.manage list-users --gym "<slug>"
+boxos exec backend python -m backend.scripts.manage create-user --email x@y.de --name "Name" --role athlete|trainer|admin --gym "<slug>"
+boxos exec backend python -m backend.scripts.manage reset-password --email x@y.de      # prints a new password
+boxos exec backend python -m backend.scripts.manage deactivate-user --email x@y.de     # signs out, locks the account
+boxos exec backend python -m backend.scripts.manage seed-test-data --gym "<slug>"           # test members, classes, WODs
+boxos exec backend python -m backend.scripts.manage seed-test-data --gym "<slug>" --remove  # delete them again
 ```

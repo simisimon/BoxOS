@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend import db, security, session_auth, settings, validation
+from backend.core import db, security, session_auth, settings, validation
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
 TESTCLIENT_AVAILABLE = False
@@ -14,7 +14,7 @@ if FASTAPI_AVAILABLE:
 
 if FASTAPI_AVAILABLE and TESTCLIENT_AVAILABLE:
     from fastapi.testclient import TestClient
-    from backend import fastapi_app
+    from backend.api import deps as api_deps
     from backend.fastapi_app import app
     from backend.tests import pg
 else:  # pragma: no cover
@@ -38,7 +38,7 @@ class FastApiTestCase(unittest.TestCase):
         settings.ANNOUNCEMENT_UPLOADS_DIR = settings.UPLOADS_ROOT / "announcements"
         self.client = TestClient(app)
         settings.RATE_LIMIT_ENABLED = False
-        fastapi_app.reset_rate_limits()
+        api_deps.reset_rate_limits()
         db.init_db()
 
     def tearDown(self) -> None:

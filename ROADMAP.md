@@ -454,9 +454,9 @@ Offene Punkte:
 - **Architektur**: Service-Layer-Pattern
 
 **Schichten:**
-1. **Route-Layer**: `fastapi_app.py` - HTTP-Endpunkte
-2. **Core Infrastructure**: `db.py`, `settings.py`, `security.py`, `session_auth.py`, `validation.py`, `notifications_core.py`, `audit.py`
-3. **Domain Services**: `auth_service.py`, `membership_service.py`, `schedule_service.py`, `announcement_service.py`, `workout_service.py`, `programming_service.py`
+1. **Route-Layer**: `api/routes/` (ein Router pro Bereich, `fastapi_app.py` bindet sie ein) - HTTP-Endpunkte
+2. **Core Infrastructure**: `core/` (`db.py`, `settings.py`, `security.py`, `session_auth.py`, `validation.py`, `notifications.py`, `audit.py`)
+3. **Domain Services**: `services/` (`auth_service.py`, `membership_service.py`, `schedule_service.py`, `results_service.py`, …)
 
 **Besonderheiten:**
 - Raw SQL statt ORM (bewusste Entscheidung)
@@ -534,13 +534,13 @@ Die Backend-Modernisierung wurde erfolgreich umgesetzt.
 Das Projekt verwendet bewusst raw SQL mit psycopg statt SQLAlchemy ORM. Die `db.py` enthält einen `ManagedConnection`-Wrapper, der die SQLite-ähnliche API auf psycopg abbildet.
 
 **Schema-Management:**
-Das Schema wird direkt in `db.py` als `SCHEMA_SQL` definiert und bei Startup angewendet. Es gibt kein separates Migrations-Tool wie Alembic.
+Das Schema wird direkt in `core/db.py` als `SCHEMA_SQL` definiert und bei Startup angewendet. Es gibt kein separates Migrations-Tool wie Alembic.
 
 **Service-Layer:**
 Das Backend ist in eine klare Schichtenarchitektur aufgeteilt:
-1. **Route-Layer**: `fastapi_app.py`
-2. **Core Infrastructure**: `db.py`, `settings.py`, `security.py`, `session_auth.py`, `validation.py`, `notifications_core.py`, `audit.py`
-3. **Domain Services**: `auth_service.py`, `membership_service.py`, `schedule_service.py`, `announcement_service.py`, `workout_service.py`, `programming_service.py`
+1. **Route-Layer**: `api/routes/`
+2. **Core Infrastructure**: `core/`
+3. **Domain Services**: `services/`
 
 ### Was erreicht wurde
 

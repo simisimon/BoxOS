@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from backend import db, schedule_service, security, settings, validation
+from backend.core import db, security, settings, validation
+from backend.services import schedule_service
 from backend.tests.support import FastApiTestCase
 
 

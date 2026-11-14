@@ -19,7 +19,7 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   `cd app && flutter pub get` before local `flutter test` / `flutter analyze`.
 - Payments (Stripe Connect, test mode): put `BOXOS_STRIPE_SECRET_KEY=sk_test_...`
   in a git-ignored `.env` next to `docker-compose.yml`. Without it payments are
-  hidden. All Stripe calls go through `backend/payment_service.py` (`client`
+  hidden. All Stripe calls go through `backend/services/payment_service.py` (`client`
   is swapped for a fake in `backend/tests/test_payments.py`).
   Webhooks locally (Stripe CLI via Docker, no install needed):
   ```
@@ -32,18 +32,18 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   `docker compose up -d backend-dev` (`restart` does not reload `.env`). Keep
   the listener running; events sent while it is down are not replayed. Add new
   event types to `--events` when `payment_service.handle_event` learns them.
-- Accounts (invite-only production): `python -m backend.manage create-user
+- Accounts (invite-only production): `python -m backend.scripts.manage create-user
   --email x@y.de --name "Name" --role athlete|trainer|admin --gym "<name or slug>"`
   prints a generated password; also `reset-password`, `deactivate-user`,
   `list-users`, `list-gyms`. In dev: `docker compose exec backend-dev python -m
-  backend.manage ...`; on the server: `docker compose -f docker-compose.prod.yml
-  exec backend python -m backend.manage ...` (see `docs/deploy.md`). Production sets `BOXOS_SIGNUP_ENABLED=0` (sign-up
+  backend.scripts.manage ...`; on the server: `docker compose -f docker-compose.prod.yml
+  exec backend python -m backend.scripts.manage ...` (see `docs/deploy.md`). Production sets `BOXOS_SIGNUP_ENABLED=0` (sign-up
   endpoints answer 403), `BOXOS_SEED_DEMO_USERS=0` (no public demo accounts)
   and builds the web app with `INVITE_ONLY=true` (hides sign-up and password
   reset). Quick-login buttons only show in `ENV=dev` builds.
-- Demo data: `docker compose exec backend-dev python -m backend.seed_demo`.
+- Demo data: `docker compose exec backend-dev python -m backend.scripts.seed_demo`.
   Dev only (public passwords). Four weeks of WODs with results, fist bumps,
-  comments, logbook entries and follows (`backend/seed_results.py`); the
+  comments, logbook entries and follows (`backend/scripts/seed_results.py`); the
   demo athlete (`demo@boxos.app`) has PRs, a squat chart and a Friends feed. For a real box, also production:
   `manage seed-test-data --gym <slug>` (accounts on `@test.boxos.invalid`,
   no login; `--remove` deletes them).
@@ -83,6 +83,12 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
 - Scroll listeners fire before layout; measure positions in a post-frame
   callback.
 - Backend SQL uses `?` placeholders (the psycopg wrapper translates them).
+- Backend layout (`backend/ARCHITECTURE.md`): endpoints in `api/routes/<area>.py`
+  (one `APIRouter` each, included in `fastapi_app.py`; include order decides
+  overlapping paths), auth dependencies in `api/deps.py`, single-router
+  validators in `api/validators/`, shared ones and `ApiError` in
+  `core/validation.py`, domain logic in `services/`, CLI entry points in
+  `scripts/`.
 
 ## Product decisions
 

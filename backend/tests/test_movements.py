@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from backend import security, settings
+from backend.core import security, settings
 from backend.tests.support import FastApiTestCase
 
 

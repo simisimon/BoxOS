@@ -5,9 +5,10 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from zoneinfo import ZoneInfo
 
-from backend import payment_service, settings
+from backend.services import payment_service
+from backend.core import settings
 from backend.tests.support import FastApiTestCase
-from backend.validation import ApiError
+from backend.core.validation import ApiError
 
 
 class FakeStripe:

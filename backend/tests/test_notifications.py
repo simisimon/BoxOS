@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from backend import db, notifications_core, security, settings, validation
+from backend.core import db, notifications, security, settings, validation
 from backend.tests.support import FastApiTestCase
 
 
@@ -37,19 +37,19 @@ class NotificationCoreTests(FastApiTestCase):
                     "update users set notify_booking_confirmations = 0 where id = ?",
                     (silent_user_id,),
                 )
-                notifications_core.create_booking_confirmation_notification(
+                notifications.create_booking_confirmation_notification(
                     connection,
                     user_id=self.lookup_user_id(settings.DEMO_EMAIL),
                     gym_id=gym_id,
                     class_schedule_id=class_id,
                 )
-                notifications_core.create_booking_confirmation_notification(
+                notifications.create_booking_confirmation_notification(
                     connection,
                     user_id=silent_user_id,
                     gym_id=gym_id,
                     class_schedule_id=class_id,
                 )
-                notifications_core.create_schedule_update_notifications(
+                notifications.create_schedule_update_notifications(
                     connection,
                     gym_id=gym_id,
                     class_schedule_id=class_id,
@@ -81,9 +81,9 @@ class NotificationCoreTests(FastApiTestCase):
                     "insert into class_waitlist_entries (class_schedule_id, user_id, created_at) values (?, ?, ?)",
                     (class_id, promoted_user_id, timestamp),
                 )
-                user_id = notifications_core.promote_next_waitlisted_user(connection, class_schedule_id=class_id)
+                user_id = notifications.promote_next_waitlisted_user(connection, class_schedule_id=class_id)
                 self.assertEqual(user_id, promoted_user_id)
-                notifications_core.create_waitlist_promotion_notification(
+                notifications.create_waitlist_promotion_notification(
                     connection,
                     user_id=promoted_user_id,
                     gym_id=gym_id,
@@ -120,7 +120,7 @@ class NotificationCoreTests(FastApiTestCase):
         try:
             with connection:
                 connection.execute("update users set notify_wod_posted = 0 where id = ?", (muted_user_id,))
-                notifications_core.create_wod_notifications(
+                notifications.create_wod_notifications(
                     connection,
                     gym_id=gym_id,
                     workout_id=11,
@@ -149,7 +149,7 @@ class NotificationCoreTests(FastApiTestCase):
         connection = db.get_connection()
         try:
             with connection:
-                notifications_core.create_announcement_like_notification(
+                notifications.create_announcement_like_notification(
                     connection,
                     recipient_user_id=author_id,
                     actor_user_id=actor_id,
@@ -157,7 +157,7 @@ class NotificationCoreTests(FastApiTestCase):
                     announcement_id=7,
                     announcement_title="Gym Party",
                 )
-                notifications_core.create_announcement_like_notification(
+                notifications.create_announcement_like_notification(
                     connection,
                     recipient_user_id=author_id,
                     actor_user_id=author_id,
@@ -165,7 +165,7 @@ class NotificationCoreTests(FastApiTestCase):
                     announcement_id=7,
                     announcement_title="Gym Party",
                 )
-                notifications_core.create_announcement_comment_notification(
+                notifications.create_announcement_comment_notification(
                     connection,
                     recipient_user_id=author_id,
                     actor_user_id=actor_id,
@@ -201,8 +201,8 @@ class NotificationCoreTests(FastApiTestCase):
         finally:
             connection.close()
 
-        payload = notifications_core.notification_payload(row)
-        prefs = notifications_core.notification_preferences_payload(user)
+        payload = notifications.notification_payload(row)
+        prefs = notifications.notification_preferences_payload(user)
         self.assertEqual(payload["type"], "demo")
         self.assertEqual(payload["entity_id"], 9)
         self.assertIn("booking_confirmations", prefs)
