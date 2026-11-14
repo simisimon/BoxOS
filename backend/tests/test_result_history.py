@@ -164,3 +164,47 @@ class ResultHistoryTests(FastApiTestCase):
             "/results/me", headers=self.athlete, params={"movement_id": labels["Back Squat"]["movement_id"]}
         ).json()
         self.assertEqual(squat["best_sets"], [{"reps": 5, "kg": 100}])
+
+    def test_private_results_leave_the_gym_leaderboard(self) -> None:
+        workout = self._workout(0, [_metcon()])
+        metcon = workout["sections"][0]
+        self.assertEqual(self.client.get("/profile/results-privacy", headers=self.second).json(), {"visibility": "gym"})
+        self._log(self.athlete, {"section_id": metcon["id"], "score": "4:30"})
+        self._log(self.second, {"section_id": metcon["id"], "score": "4:00"})
+        changed = self.client.patch("/profile/results-privacy", headers=self.second, json={"visibility": "private"})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertEqual(
+            self.client.patch("/profile/results-privacy", headers=self.second, json={"visibility": "world"}).status_code,
+            400,
+        )
+
+        def board(headers: dict) -> list[dict]:
+            response = self.client.get(f"/programming/workouts/{workout['id']}/leaderboard", headers=headers)
+            return response.json()["sections"][0]["entries"]
+
+        def count(headers: dict) -> int:
+            workouts = self.client.get("/programming/workouts", headers=headers).json()["workouts"]
+            return workouts[0]["sections"][0]["result_count"]
+
+        self.assertEqual([e["score_label"] for e in board(self.athlete)], ["4:30"])
+        self.assertEqual(count(self.athlete), 1)
+        self.assertEqual([e["score_label"] for e in board(self.second)], ["4:00", "4:30"])
+        self.assertEqual([e["score_label"] for e in board(self.admin)], ["4:00", "4:30"])
+        self.assertEqual(count(self.admin), 2)
+
+    def test_results_export_as_csv(self) -> None:
+        old = self._workout(5, [_metcon(), _squat([{"reps": 5}])])["sections"]
+        new = self._workout(0, [_metcon()])["sections"]
+        self._log(self.athlete, {"section_id": old[0]["id"], "score": "4:30", "notes": "=cmd"})
+        self._log(self.athlete, {"section_id": new[0]["id"], "score": "4:00", "division": "rx"})
+        self._log(self.athlete, {"section_id": old[1]["id"], "sets": [{"reps": 5, "kg": 100}, {"reps": 5, "kg": 102.5}]})
+
+        response = self.client.get("/results/me.csv", headers=self.athlete)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.headers["content-type"].startswith("text/csv"))
+        lines = response.text.strip().splitlines()
+        self.assertEqual(lines[0], "date,gym,block,movement,workout,score_type,result,division,time_capped,sets,pr,notes")
+        self.assertEqual(len(lines), 4)
+        self.assertIn("History Box,Strength,Back Squat,,weight,102.5 kg,Rx,,5 x 100 kg; 5 x 102.5 kg,,", response.text)
+        self.assertTrue(lines[-1].endswith(",Metcon,,Fran,time,4:00,Rx,,,yes,"))
+        self.assertIn("'=cmd", response.text)

@@ -511,6 +511,9 @@ create unique index if not exists movements_scope_name_idx
   on movements (coalesce(gym_id, 0), lower(name));
 alter table daily_workout_sections add column if not exists movement_id integer references movements(id) on delete set null;
 alter table daily_workout_sections add column if not exists workout_name text not null default '';
+-- Who sees an athlete's results on gym leaderboards: 'gym' (everyone in
+-- the gym, the default) or 'private' (only the athlete and the gym's coaches).
+alter table users add column if not exists results_visibility text not null default 'gym';
 
 -- An athlete's result on one scored WOD block (phase 2 of the results plan).
 -- Block fields are copied in, so history survives later block edits.
@@ -704,30 +707,45 @@ def seed_exercises(connection: ManagedConnection) -> None:
 
 def seed_movements(connection: ManagedConnection) -> None:
     """Add the bundled CrossFit movements that are not there yet (by name),
-    so the list can grow in later releases without touching gym additions."""
+    so the list can grow in later releases without touching gym additions.
+    Built-in movements also get their link to the exercise library (for
+    instructions) when they have none yet."""
     if not settings.MOVEMENTS_SEED_PATH.exists():
         return
     with open(settings.MOVEMENTS_SEED_PATH, encoding="utf-8") as handle:
         data = json.load(handle)
+    exercise_ids = {
+        row["id"] for row in connection.execute("select id from exercises").fetchall()
+    }
     existing = {
-        row["name"].lower()
+        row["name"].lower(): row
         for row in connection.execute(
-            "select name from movements where gym_id is null"
+            "select id, name, exercise_id from movements where gym_id is null"
         ).fetchall()
     }
     timestamp = isoformat(now_utc())
     for item in data:
         name = str(item.get("name") or "").strip()
-        if not name or name.lower() in existing:
+        if not name:
+            continue
+        exercise_id = item.get("exercise_id")
+        if exercise_id not in exercise_ids:
+            exercise_id = None
+        row = existing.get(name.lower())
+        if row is not None:
+            if exercise_id and row["exercise_id"] is None:
+                connection.execute(
+                    "update movements set exercise_id = ? where id = ?", (exercise_id, row["id"])
+                )
             continue
         connection.execute(
             """
-            insert into movements (gym_id, name, category, aliases_json, created_at)
-            values (null, ?, ?, ?, ?)
+            insert into movements (gym_id, name, category, aliases_json, exercise_id, created_at)
+            values (null, ?, ?, ?, ?, ?)
             """,
-            (name, str(item.get("category") or ""), json.dumps(item.get("aliases") or []), timestamp),
+            (name, str(item.get("category") or ""), json.dumps(item.get("aliases") or []), exercise_id, timestamp),
         )
-        existing.add(name.lower())
+        existing[name.lower()] = {"id": None, "name": name, "exercise_id": exercise_id}
 
 
 def backfill_section_movements(connection: ManagedConnection) -> None:

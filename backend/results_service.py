@@ -7,6 +7,8 @@ still work after the coach edits or removes the block.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from datetime import datetime
 from http import HTTPStatus
@@ -317,14 +319,26 @@ def my_results_by_section(
     return {int(row["section_id"]): result_payload(row) for row in rows if row["section_id"] is not None}
 
 
-def result_counts_by_section(connection: ManagedConnection, *, daily_workout_id: int) -> dict[int, int]:
+RESULTS_VISIBILITY = ("gym", "private")
+
+# Leaderboard rows a viewer may see: coaches see everyone, athletes see
+# results of people who share them with the gym, plus their own.
+_VISIBLE_TO_VIEWER = "(? or u.results_visibility <> 'private' or r.user_id = ?)"
+
+
+def result_counts_by_section(
+    connection: ManagedConnection, *, daily_workout_id: int, viewer_id: int, staff: bool
+) -> dict[int, int]:
     rows = connection.execute(
-        """
-        select section_id, count(*) as count from workout_results
-        where daily_workout_id = ? and section_id is not null
-        group by section_id
+        f"""
+        select r.section_id, count(*) as count
+        from workout_results r
+        join users u on u.id = r.user_id
+        where r.daily_workout_id = ? and r.section_id is not null and u.deleted_at is null
+          and {_VISIBLE_TO_VIEWER}
+        group by r.section_id
         """,
-        (daily_workout_id,),
+        (daily_workout_id, staff, viewer_id),
     ).fetchall()
     return {int(row["section_id"]): int(row["count"]) for row in rows}
 
@@ -448,10 +462,11 @@ def leaderboard(
     *,
     daily_workout_id: int,
     viewer_id: int,
-    include_notes: bool,
+    staff: bool,
 ) -> list[dict[str, Any]]:
     """Ranked results per scored block: Rx before Scaled, then by score.
-    Equal scores share a rank."""
+    Equal scores share a rank. Coaches see everyone and the notes; athletes
+    don't see results their owners keep private."""
     rows = connection.execute(
         f"""
         select {", ".join("r." + c.strip() for c in RESULT_COLUMNS.split(","))},
@@ -459,8 +474,9 @@ def leaderboard(
         from workout_results r
         join users u on u.id = r.user_id
         where r.daily_workout_id = ? and r.section_id is not null and u.deleted_at is null
+          and {_VISIBLE_TO_VIEWER}
         """,
-        (daily_workout_id,),
+        (daily_workout_id, staff, viewer_id),
     ).fetchall()
     prs = pr_flags(connection, rows)
     by_section: dict[int, list[Row]] = {}
@@ -486,7 +502,7 @@ def leaderboard(
                     "time_capped": bool(row["time_capped"]),
                     "is_pr": int(row["id"]) in prs,
                     "is_me": row["user_id"] == viewer_id,
-                    "notes": row["notes"] if include_notes or row["user_id"] == viewer_id else "",
+                    "notes": row["notes"] if staff or row["user_id"] == viewer_id else "",
                 }
             )
         sections.append({"section_id": section_id, "entries": ranked})
@@ -606,3 +622,66 @@ def my_results(
     if wanted:
         payload["best_sets"] = best_sets(shown)
     return payload
+
+
+# --- Export -------------------------------------------------------------------
+
+CSV_COLUMNS = [
+    "date", "gym", "block", "movement", "workout", "score_type",
+    "result", "division", "time_capped", "sets", "pr", "notes",
+]
+
+
+def _csv_cell(value: Any) -> str:
+    """Text a spreadsheet won't run as a formula."""
+    text = str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+def my_results_csv(connection: ManagedConnection, *, user_id: int) -> str:
+    """Every result of the athlete, oldest first, as CSV for a spreadsheet."""
+    rows = connection.execute(
+        f"""
+        select {", ".join("r." + c.strip() for c in RESULT_COLUMNS.split(","))},
+               coalesce(g.name, '') as gym_name, coalesce(m.name, '') as movement_name
+        from workout_results r
+        left join gyms g on g.id = r.gym_id
+        left join movements m on m.id = r.movement_id
+        where r.user_id = ?
+        order by r.performed_on, r.id
+        """,
+        (user_id,),
+    ).fetchall()
+    groups: dict[tuple, list[Row]] = {}
+    for row in rows:
+        key = identity(row)
+        if key is not None:
+            groups.setdefault(key, []).append(row)
+    prs: set[int] = set()
+    for group in groups.values():
+        prs |= compute_prs(group)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(CSV_COLUMNS)
+    for row in rows:
+        sets = "; ".join(f"{int(s['reps'])} x {_number(float(s['kg']))} kg" for s in _sets(row))
+        writer.writerow(
+            [
+                _csv_cell(v)
+                for v in (
+                    row["performed_on"],
+                    row["gym_name"],
+                    row["section_title"],
+                    row["movement_name"],
+                    row["workout_name"],
+                    row["score_type"],
+                    row["score_label"],
+                    "Rx" if row["division"] == "rx" else "Scaled",
+                    "yes" if row["time_capped"] else "",
+                    sets,
+                    "yes" if int(row["id"]) in prs else "",
+                    row["notes"],
+                )
+            ]
+        )
+    return buffer.getvalue()

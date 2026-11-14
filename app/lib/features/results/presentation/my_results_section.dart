@@ -1,8 +1,11 @@
+import 'package:app/core/errors/error_message.dart';
+import 'package:app/core/platform/save_text_file.dart';
 import 'package:app/core/presentation/app_chrome.dart';
 import 'package:app/core/presentation/components/components.dart';
 import 'package:app/features/results/data/api_results_repository.dart';
 import 'package:app/features/results/domain/workout_result.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 String _number(double value) => value == value.roundToDouble()
@@ -20,6 +23,38 @@ class MyResultsSection extends ConsumerStatefulWidget {
 
 class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
   ResultFilter? _filter;
+  bool _exporting = false;
+
+  Future<void> _export() async {
+    setState(() => _exporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final csv = await ref.read(resultsRepositoryProvider).exportResultsCsv();
+      final saved = await saveTextFile(
+        'boxos-results.csv',
+        csv,
+        mimeType: 'text/csv',
+      );
+      if (!saved) await Clipboard.setData(ClipboardData(text: csv));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            saved ? 'Results downloaded.' : 'Results copied as CSV.',
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Something went wrong.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,31 +64,41 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: DropdownButtonFormField<ResultFilter?>(
-              key: ValueKey(_filter),
-              initialValue: _filter,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Movement or workout',
-              ),
-              items: [
-                const DropdownMenuItem<ResultFilter?>(
-                  value: null,
-                  child: Text('All results'),
+        Wrap(
+          spacing: appSpaceMd,
+          runSpacing: appSpaceSm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: DropdownButtonFormField<ResultFilter?>(
+                key: ValueKey(_filter),
+                initialValue: _filter,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Movement or workout',
                 ),
-                for (final filter in filters)
-                  DropdownMenuItem<ResultFilter?>(
-                    value: filter,
-                    child: Text('${filter.label} (${filter.count})'),
+                items: [
+                  const DropdownMenuItem<ResultFilter?>(
+                    value: null,
+                    child: Text('All results'),
                   ),
-              ],
-              onChanged: (value) => setState(() => _filter = value),
+                  for (final filter in filters)
+                    DropdownMenuItem<ResultFilter?>(
+                      value: filter,
+                      child: Text('${filter.label} (${filter.count})'),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _filter = value),
+              ),
             ),
-          ),
+            OutlinedButton.icon(
+              onPressed: _exporting || filters.isEmpty ? null : _export,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Download CSV'),
+            ),
+          ],
         ),
         const SizedBox(height: appSpaceMd),
         shown.when(
@@ -73,7 +118,85 @@ class _MyResultsSectionState extends ConsumerState<MyResultsSection> {
             ],
           ),
         ),
+        const SizedBox(height: appSpaceLg),
+        const ResultsPrivacyCard(),
       ],
+    );
+  }
+}
+
+/// Who sees the athlete's results on gym leaderboards.
+class ResultsPrivacyCard extends ConsumerStatefulWidget {
+  const ResultsPrivacyCard({super.key});
+
+  @override
+  ConsumerState<ResultsPrivacyCard> createState() => _ResultsPrivacyCardState();
+}
+
+class _ResultsPrivacyCardState extends ConsumerState<ResultsPrivacyCard> {
+  bool _saving = false;
+
+  Future<void> _save(ResultsVisibility visibility) async {
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(resultsRepositoryProvider).saveResultsPrivacy(visibility);
+      ref.invalidate(resultsPrivacyProvider);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessageFrom(error, fallback: 'Something went wrong.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ref.watch(resultsPrivacyProvider).value;
+    return Container(
+      decoration: _card(),
+      padding: const EdgeInsets.all(appSpaceLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('WHO SEES MY RESULTS', style: appMono(fontSize: 10)),
+          const SizedBox(height: appSpaceSm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: DropdownButtonFormField<ResultsVisibility>(
+                key: ValueKey(current),
+                initialValue: current,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Leaderboards'),
+                items: [
+                  for (final value in ResultsVisibility.values)
+                    DropdownMenuItem(value: value, child: Text(value.label)),
+                ],
+                onChanged: current == null || _saving
+                    ? null
+                    : (value) {
+                        if (value != null && value != current) _save(value);
+                      },
+              ),
+            ),
+          ),
+          const SizedBox(height: appSpaceSm),
+          Text(
+            current == ResultsVisibility.private
+                ? 'Other athletes don\'t see your results on the leaderboards. '
+                      'Your coaches still do.'
+                : 'Everyone in your gym sees your results on the leaderboards.',
+            style: const TextStyle(color: appSubtleText, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }

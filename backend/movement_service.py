@@ -36,6 +36,36 @@ def movement_payload(row: Row) -> dict[str, Any]:
     }
 
 
+def movement_detail(connection: ManagedConnection, *, gym_id: int, movement_id: int) -> dict[str, Any] | None:
+    """A movement with the how-to from the exercise library, when linked."""
+    row = connection.execute(
+        """
+        select m.id, m.gym_id, m.name, m.category, m.aliases_json,
+               e.instructions, e.primary_muscles, e.secondary_muscles, e.equipment
+        from movements m
+        left join exercises e on e.id = m.exercise_id
+        where m.id = ? and (m.gym_id is null or m.gym_id = ?)
+        """,
+        (movement_id, gym_id),
+    ).fetchone()
+    if row is None:
+        return None
+
+    def _list(value: Any) -> list[str]:
+        try:
+            return [str(item) for item in json.loads(value or "[]") if str(item).strip()]
+        except (TypeError, ValueError):
+            return []
+
+    return {
+        **movement_payload(row),
+        "instructions": _list(row["instructions"]),
+        "primary_muscles": _list(row["primary_muscles"]),
+        "secondary_muscles": _list(row["secondary_muscles"]),
+        "equipment": row["equipment"] or "",
+    }
+
+
 def _visible_rows(connection: ManagedConnection, gym_id: int) -> list[Row]:
     return connection.execute(
         """
