@@ -124,6 +124,39 @@ Future<void> publishWod(
   }
 }
 
+/// Hands [workout] to the gym's release time: it goes live (with the push)
+/// at e.g. 20:00 the evening before, or right away if that has passed.
+Future<void> scheduleWod(
+  BuildContext context,
+  WidgetRef ref,
+  DailyWorkout workout,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final scheduled = await ref
+        .read(programmingRepositoryProvider)
+        .scheduleWorkout(id: workout.id);
+    ref.invalidate(programmingListProvider);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          scheduled.isPublished
+              ? 'The release time has passed, so the WOD is published now.'
+              : '${scheduled.statusLabel}. Athletes see it then.',
+        ),
+      ),
+    );
+  } catch (error) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          errorMessageFrom(error, fallback: 'Failed to schedule workout'),
+        ),
+      ),
+    );
+  }
+}
+
 /// Copies [workout] to a picked day as a draft ("Copy to day…").
 Future<void> duplicateWod(
   BuildContext context,
@@ -360,6 +393,8 @@ class _WorkoutCard extends ConsumerWidget {
                         );
                       case 'publish':
                         publishWod(context, ref, workout, publish: true);
+                      case 'schedule':
+                        scheduleWod(context, ref, workout);
                       case 'unpublish':
                         publishWod(context, ref, workout, publish: false);
                       case 'duplicate':
@@ -371,12 +406,19 @@ class _WorkoutCard extends ConsumerWidget {
                     if (!workout.isPublished)
                       const PopupMenuItem(
                         value: 'publish',
-                        child: Text('Publish'),
+                        child: Text('Publish now'),
                       ),
-                    if (workout.isPublished)
+                    if (!workout.isPublished && !workout.isScheduled)
                       const PopupMenuItem(
+                        value: 'schedule',
+                        child: Text('Schedule release'),
+                      ),
+                    if (workout.isPublished || workout.isScheduled)
+                      PopupMenuItem(
                         value: 'unpublish',
-                        child: Text('Unpublish'),
+                        child: Text(
+                          workout.isScheduled ? 'Unschedule' : 'Unpublish',
+                        ),
                       ),
                     const PopupMenuItem(
                       value: 'duplicate',
@@ -501,7 +543,11 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPublished = status == DailyWorkoutStatus.published;
     final color = isPublished ? appPrimary : appMutedText;
-    final label = isPublished ? 'PUBLISHED' : 'DRAFT';
+    final label = switch (status) {
+      DailyWorkoutStatus.published => 'PUBLISHED',
+      DailyWorkoutStatus.scheduled => 'SCHEDULED',
+      DailyWorkoutStatus.draft => 'DRAFT',
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -691,9 +737,8 @@ class _WorkoutEditorDialogState extends ConsumerState<_WorkoutEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = MaterialLocalizations.of(
-      context,
-    ).formatFullDate(_selectedDate);
+    final dateLabel = MaterialLocalizations.of(context)
+        .formatFullDate(_selectedDate);
     final isCreating = widget.existing == null;
     return AppSidePanel(
       title: isCreating ? 'New WOD' : 'Edit WOD',

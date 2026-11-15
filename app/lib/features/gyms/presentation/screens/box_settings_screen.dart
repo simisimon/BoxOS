@@ -13,6 +13,7 @@ import 'package:app/features/memberships/presentation/membership_settings_panel.
 import 'package:app/features/profile/application/profile_controller.dart';
 import 'package:app/features/profile/domain/models/gym_summary.dart';
 import 'package:app/features/profile/domain/models/user_role.dart';
+import 'package:app/features/programming/presentation/widgets/release_settings_panel.dart';
 import 'package:app/features/results/presentation/movements_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +46,7 @@ enum SettingsSection {
   bookingRules('booking-rules', 'Booking rules'),
   classTypes('class-types', 'Class types'),
   movements('movements', 'Movements'),
+  programming('programming', 'Programming'),
   payments('payments', 'Payments'),
   notifications('notifications', 'Notifications');
 
@@ -169,6 +171,8 @@ class _BoxSettingsScreenState extends ConsumerState<BoxSettingsScreen> {
         return const _ClassTypesTable();
       case SettingsSection.movements:
         return const MovementsSettings();
+      case SettingsSection.programming:
+        return const ReleaseSettingsPanel();
       case SettingsSection.payments:
         return const MembershipSettingsPanel();
       case SettingsSection.notifications:
@@ -607,17 +611,15 @@ class _IdentityPanelState extends ConsumerState<_IdentityPanel> {
             Text(
               'Class times follow the box timezone. The box link '
               '(${widget.gym.slug}) stays the same when you rename it.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: appMutedText, height: 1.5),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: appMutedText, height: 1.5),
             ),
             if (_error != null) ...[
               const SizedBox(height: appSpaceMd),
               Text(
                 _error!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: appDanger),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: appDanger),
               ),
             ],
             if (_dirty && !_saving) ...[
@@ -825,9 +827,8 @@ class _StepperField extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 help,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: appSubtleText),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: appSubtleText),
               ),
             ],
           ),
@@ -921,9 +922,8 @@ class _ToggleRow extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 help,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: appSubtleText),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: appSubtleText),
               ),
             ],
           ),
@@ -1015,9 +1015,8 @@ class _DangerPanel extends StatelessWidget {
           Text(
             'Archiving hides the box from members while keeping its data. '
             'Deleting is permanent and removes classes, bookings and logs.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: appMutedText, height: 1.5),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: appMutedText, height: 1.5),
           ),
           const SizedBox(height: appSpaceLg),
           Row(
@@ -1346,9 +1345,8 @@ class _ClassTypePanelState extends ConsumerState<_ClassTypePanel> {
             const SizedBox(height: appSpaceSm),
             Text(
               'New classes of this type start with this many spots.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: appMutedText),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: appMutedText),
             ),
           ],
         ),

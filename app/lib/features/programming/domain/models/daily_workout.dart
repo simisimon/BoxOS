@@ -1,15 +1,23 @@
 import 'package:app/features/results/domain/workout_result.dart';
 
-enum DailyWorkoutStatus { draft, published }
+/// `scheduled`: hidden from athletes until [DailyWorkout.releaseAt], the
+/// gym's release time (Settings › Programming); then the server publishes it.
+enum DailyWorkoutStatus { draft, scheduled, published }
 
 DailyWorkoutStatus parseDailyWorkoutStatus(Object? value) {
-  return value == 'published'
-      ? DailyWorkoutStatus.published
-      : DailyWorkoutStatus.draft;
+  return switch (value) {
+    'published' => DailyWorkoutStatus.published,
+    'scheduled' => DailyWorkoutStatus.scheduled,
+    _ => DailyWorkoutStatus.draft,
+  };
 }
 
 String dailyWorkoutStatusToWire(DailyWorkoutStatus status) {
-  return status == DailyWorkoutStatus.published ? 'published' : 'draft';
+  return switch (status) {
+    DailyWorkoutStatus.published => 'published',
+    DailyWorkoutStatus.scheduled => 'scheduled',
+    DailyWorkoutStatus.draft => 'draft',
+  };
 }
 
 /// Score unit a coach assigns to a WOD section. Matches the backend's
@@ -242,6 +250,7 @@ class DailyWorkout {
     required this.status,
     required this.publishedAt,
     required this.canEdit,
+    this.releaseAt,
   });
 
   final int id;
@@ -253,5 +262,23 @@ class DailyWorkout {
   final DateTime? publishedAt;
   final bool canEdit;
 
+  /// When a scheduled WOD goes live (UTC from the server).
+  final DateTime? releaseAt;
+
   bool get isPublished => status == DailyWorkoutStatus.published;
+  bool get isScheduled => status == DailyWorkoutStatus.scheduled;
+
+  /// "Published", "Draft" or "Scheduled · Mon 20:00" (local time).
+  String get statusLabel {
+    if (isPublished) return 'Published';
+    final release = releaseAt;
+    if (isScheduled && release != null) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final local = release.toLocal();
+      final hh = local.hour.toString().padLeft(2, '0');
+      final mm = local.minute.toString().padLeft(2, '0');
+      return 'Scheduled · ${days[local.weekday - 1]} $hh:$mm';
+    }
+    return isScheduled ? 'Scheduled' : 'Draft';
+  }
 }

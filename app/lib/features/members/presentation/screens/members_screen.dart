@@ -24,7 +24,11 @@ import 'package:go_router/go_router.dart';
 /// Renders as a shell branch body (the shell supplies the top header), so
 /// there is no local app bar.
 class MembersScreen extends ConsumerStatefulWidget {
-  const MembersScreen({super.key});
+  const MembersScreen({super.key, this.attentionOnly = false});
+
+  /// Opened from the dashboard's "Members at risk" tile
+  /// (`/members?filter=attention`): roster filtered to them.
+  final bool attentionOnly;
 
   @override
   ConsumerState<MembersScreen> createState() => _MembersScreenState();
@@ -45,6 +49,15 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   /// Members and join requests share the page as two tabs.
   bool _showRequests = false;
   String _query = '';
+
+  @override
+  void didUpdateWidget(MembersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The dashboard tile shows the roster, even when Requests was open.
+    if (widget.attentionOnly && !oldWidget.attentionOnly) {
+      _showRequests = false;
+    }
+  }
 
   Future<void> _load() async {
     setState(() {
@@ -198,8 +211,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         child: AppEmptyState(
           icon: Icons.lock_outline_rounded,
           title: 'Owner access required',
-          subtitle:
-              'Switch to an active box you own to manage members and join requests.',
+          subtitle: 'Switch to an active box you own to manage members and join requests.',
         ),
       );
     }
@@ -288,6 +300,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       );
     }
     return MemberRoster(
+      attentionOnly: widget.attentionOnly,
       users: _users,
       query: _query,
       onRefresh: _refresh,

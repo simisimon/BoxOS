@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from backend.api.common import get_gym_timezone
 from backend.api.deps import require_admin_gym_session
 from backend.core import db, security, validation
-from backend.services import programming_service, schedule_service
+from backend.services import membership_service, programming_service, schedule_service
 
 router = APIRouter()
 
@@ -252,7 +252,7 @@ def admin_analytics_overview(
         connection.close()
 
 
-AT_RISK_DAYS = 21
+AT_RISK_DAYS = membership_service.AT_RISK_DAYS
 EXPIRING_DAYS = 14
 
 

@@ -68,6 +68,8 @@ class RoleManagedUser {
     this.lastBookingAt,
     this.plan,
     this.hasPlanRequest = false,
+    this.lastClassAt,
+    this.needsAttention = false,
   });
 
   final int id;
@@ -99,4 +101,11 @@ class RoleManagedUser {
 
   /// The member asked for a plan and the owner has not answered yet.
   final bool hasPlanRequest;
+
+  /// Start of the last class the member came to (no-shows don't count).
+  final DateTime? lastClassAt;
+
+  /// An athlete who has been a member for a while but hasn't come to a
+  /// class in 21 days (the dashboard's "Members at risk").
+  final bool needsAttention;
 }

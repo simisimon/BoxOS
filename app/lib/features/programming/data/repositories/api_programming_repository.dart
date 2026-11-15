@@ -125,6 +125,41 @@ class ApiProgrammingRepository implements ProgrammingRepository {
   }
 
   @override
+  Future<DailyWorkout> scheduleWorkout({required int id}) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/programming/workouts/schedule',
+      data: {'id': id},
+      options: Options(headers: await _authHeaders()),
+    );
+    return _fromJson(response.data?['workout'] as Map<String, dynamic>?);
+  }
+
+  @override
+  Future<WodReleaseSettings> fetchReleaseSettings() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/programming/settings',
+      options: Options(headers: await _authHeaders()),
+    );
+    return WodReleaseSettings.fromJson(response.data);
+  }
+
+  @override
+  Future<WodReleaseSettings> updateReleaseSettings({
+    required String? releaseTime,
+    required bool releaseDayBefore,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/programming/settings',
+      data: {
+        'release_time': releaseTime,
+        'release_day_before': releaseDayBefore,
+      },
+      options: Options(headers: await _authHeaders()),
+    );
+    return WodReleaseSettings.fromJson(response.data);
+  }
+
+  @override
   Future<DailyWorkout> duplicateWorkout({
     required DateTime sourceDate,
     required DateTime targetDate,
@@ -153,6 +188,7 @@ class ApiProgrammingRepository implements ProgrammingRepository {
       throw Exception('Missing workout data.');
     }
     final publishedAtRaw = data['published_at'] as String?;
+    final releaseAtRaw = data['release_at'] as String?;
     return DailyWorkout(
       id: data['id'] as int? ?? 0,
       gymId: data['gym_id'] as int? ?? 0,
@@ -166,6 +202,9 @@ class ApiProgrammingRepository implements ProgrammingRepository {
           ? null
           : DateTime.parse(publishedAtRaw),
       canEdit: data['can_edit'] as bool? ?? false,
+      releaseAt: releaseAtRaw == null || releaseAtRaw.isEmpty
+          ? null
+          : DateTime.parse(releaseAtRaw),
     );
   }
 

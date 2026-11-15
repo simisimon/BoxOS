@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from backend.api.deps import (
     require_active_gym_member_session,
+    require_admin_gym_session,
     require_schedule_manager_session,
 )
 from backend.api.validators import programming as validators
@@ -74,6 +75,9 @@ class DailyWorkoutDuplicateRequest(BaseModel):
 def list_daily_workouts(session: dict[str, Any] = Depends(require_active_gym_member_session)) -> dict[str, Any]:
     connection = db.get_connection()
     try:
+        # The background loop releases scheduled WODs every minute; doing it
+        # here too means nobody waits for the loop at the release moment.
+        programming_service.release_due_workouts(connection)
         can_manage = programming_service.can_view_drafts(session["role"])
         if can_manage:
             rows = connection.execute(
@@ -224,6 +228,13 @@ def update_daily_workout(
                 daily_workout_id=workout_id,
                 sections=sections,
             )
+            if existing["status"] == "scheduled":
+                # A new date means a new release moment.
+                release = programming_service.gym_release_settings(connection, session["active_gym_id"])
+                connection.execute(
+                    "update daily_workouts set release_at = ? where id = ?",
+                    (programming_service.release_moment(scheduled_date, release), workout_id),
+                )
             row = connection.execute(
                 f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
                 (workout_id,),
@@ -259,6 +270,7 @@ def publish_daily_workout(
                 update daily_workouts
                 set status = 'published',
                     published_at = ?,
+                    release_at = null,
                     published_by_user_id = ?,
                     updated_by_user_id = ?,
                     updated_at = ?
@@ -275,6 +287,108 @@ def publish_daily_workout(
                 notifications.create_wod_notifications(connection, gym_id=session["active_gym_id"], workout_id=workout_id, scheduled_date=existing["scheduled_date"], title=existing["title"], is_update=False)
             audit.write_audit_log(connection, gym_id=session["active_gym_id"], actor_user_id=session["user_id"], action="daily_workout_published", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": existing["scheduled_date"]})
         return {"workout": payload}
+    finally:
+        connection.close()
+
+
+@router.post("/programming/workouts/schedule")
+def schedule_daily_workout(
+    body: DailyWorkoutPublishRequest,
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    """Publish at the gym's release time instead of now. A WOD whose release
+    moment has already passed is published right away."""
+    workout_id = validation.require_user_id(body.id)
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        existing = connection.execute(
+            "select id, scheduled_date, status from daily_workouts where id = ? and gym_id = ?",
+            (workout_id, gym_id),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.value, detail="Workout not found.")
+        if existing["status"] == "published":
+            raise HTTPException(status_code=HTTPStatus.CONFLICT.value, detail="This workout is already published.")
+        release = programming_service.gym_release_settings(connection, gym_id)
+        if release["release_time"] is None:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST.value,
+                detail="Set a release time in Settings › Programming first.",
+            )
+        release_at = programming_service.release_moment(existing["scheduled_date"], release)
+        timestamp = security.isoformat(security.now_utc())
+        with connection:
+            connection.execute(
+                """
+                update daily_workouts
+                set status = 'scheduled', release_at = ?, published_by_user_id = ?,
+                    updated_by_user_id = ?, updated_at = ?
+                where id = ?
+                """,
+                (release_at, session["user_id"], session["user_id"], timestamp, workout_id),
+            )
+            audit.write_audit_log(connection, gym_id=gym_id, actor_user_id=session["user_id"], action="daily_workout_scheduled", entity_type="daily_workout", entity_id=workout_id, details={"scheduled_date": existing["scheduled_date"], "release_at": release_at})
+        programming_service.release_due_workouts(connection)
+        row = connection.execute(
+            f"select {programming_service.DAILY_WORKOUT_COLUMNS} from daily_workouts where id = ?",
+            (workout_id,),
+        ).fetchone()
+        payload = programming_service.daily_workout_payload(connection, row, current_user_id=session["user_id"], can_edit=True)
+        return {"workout": payload}
+    finally:
+        connection.close()
+
+
+class ProgrammingSettingsRequest(BaseModel):
+    release_time: str | None = None
+    release_day_before: bool | None = None
+
+
+@router.get("/programming/settings")
+def get_programming_settings(
+    session: dict[str, Any] = Depends(require_schedule_manager_session),
+) -> dict[str, Any]:
+    connection = db.get_connection()
+    try:
+        release = programming_service.gym_release_settings(connection, session["active_gym_id"])
+        return programming_service.release_settings_payload(release)
+    finally:
+        connection.close()
+
+
+@router.patch("/programming/settings")
+def update_programming_settings(
+    body: ProgrammingSettingsRequest,
+    session: dict[str, Any] = Depends(require_admin_gym_session),
+) -> dict[str, Any]:
+    """Owners set the gym's WOD release time; release_time null turns it off
+    (scheduled WODs go back to draft)."""
+    gym_id = session["active_gym_id"]
+    connection = db.get_connection()
+    try:
+        current = programming_service.gym_release_settings(connection, gym_id)
+        release_time = (
+            programming_service.require_release_time(body.release_time)
+            if "release_time" in body.model_fields_set
+            else current["release_time"]
+        )
+        day_before = (
+            body.release_day_before
+            if body.release_day_before is not None
+            else current["release_day_before"]
+        )
+        with connection:
+            connection.execute(
+                "update gyms set wod_release_time = ?, wod_release_day_before = ?, updated_at = ? where id = ?",
+                (release_time, int(day_before), security.isoformat(security.now_utc()), gym_id),
+            )
+            programming_service.reschedule_gym_workouts(connection, gym_id)
+            audit.write_audit_log(connection, gym_id=gym_id, actor_user_id=session["user_id"], action="programming_settings_updated", entity_type="gym", entity_id=gym_id, details={"release_time": release_time, "release_day_before": day_before})
+        programming_service.release_due_workouts(connection)
+        return programming_service.release_settings_payload(
+            programming_service.gym_release_settings(connection, gym_id)
+        )
     finally:
         connection.close()
 
@@ -300,6 +414,7 @@ def unpublish_daily_workout(
                 update daily_workouts
                 set status = 'draft',
                     published_at = null,
+                    release_at = null,
                     published_by_user_id = null,
                     updated_by_user_id = ?,
                     updated_at = ?

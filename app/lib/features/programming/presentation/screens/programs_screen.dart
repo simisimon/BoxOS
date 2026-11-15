@@ -61,10 +61,8 @@ class _ProgramsScreenState extends ConsumerState<ProgramsScreen> {
                   '${localizations.formatShortMonthDay(weekEnd)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: appText,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(color: appText, fontWeight: FontWeight.w700),
                 ),
               ),
               IconButton(
@@ -367,6 +365,7 @@ class _DayColumnState extends ConsumerState<_DayColumn> {
                           workout,
                           publish: true,
                         ),
+                        'schedule' => scheduleWod(context, ref, workout),
                         'unpublish' => publishWod(
                           context,
                           ref,
@@ -386,11 +385,22 @@ class _DayColumnState extends ConsumerState<_DayColumn> {
                             value: 'unpublish',
                             child: Text('Unpublish'),
                           )
-                        else
+                        else ...[
                           const PopupMenuItem(
                             value: 'publish',
-                            child: Text('Publish'),
+                            child: Text('Publish now'),
                           ),
+                          if (workout.isScheduled)
+                            const PopupMenuItem(
+                              value: 'unpublish',
+                              child: Text('Unschedule'),
+                            )
+                          else
+                            const PopupMenuItem(
+                              value: 'schedule',
+                              child: Text('Schedule release'),
+                            ),
+                        ],
                         const PopupMenuItem(
                           value: 'details',
                           child: Text('View as member'),
@@ -416,9 +426,11 @@ class _DayColumnState extends ConsumerState<_DayColumn> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: AppPill(
-                  label: workout.isPublished ? 'Published' : 'Draft',
+                  label: workout.statusLabel,
                   intent: workout.isPublished
                       ? AppPillIntent.success
+                      : workout.isScheduled
+                      ? AppPillIntent.primary
                       : AppPillIntent.warning,
                   dense: true,
                 ),
@@ -468,9 +480,8 @@ class _DayColumnState extends ConsumerState<_DayColumn> {
                           context,
                           workoutId: workout.id,
                           section: sections[index],
-                          dayLabel: MaterialLocalizations.of(
-                            context,
-                          ).formatMediumDate(date),
+                          dayLabel: MaterialLocalizations.of(context)
+                              .formatMediumDate(date),
                         )
                       : null,
                   onTap: isPast

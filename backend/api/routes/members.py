@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from http import HTTPStatus
 from typing import Any
 
@@ -10,7 +11,7 @@ from backend.api.common import get_gym_timezone
 from backend.api.deps import require_admin_gym_session
 from backend.api.validators import members as validators
 from backend.core import audit, db, security, validation
-from backend.services import membership_service, plan_service
+from backend.services import membership_service, plan_service, schedule_service
 
 router = APIRouter()
 
@@ -76,7 +77,16 @@ def list_role_users(
                      join class_schedules on class_schedules.id = class_bookings.class_schedule_id
                      where class_bookings.user_id = gym_memberships.user_id
                        and class_schedules.gym_id = gym_memberships.gym_id
-                   ) as last_booking_at
+                   ) as last_booking_at,
+                   (
+                     select max(class_schedules.start_time)
+                     from class_bookings
+                     join class_schedules on class_schedules.id = class_bookings.class_schedule_id
+                     where class_bookings.user_id = gym_memberships.user_id
+                       and class_schedules.gym_id = gym_memberships.gym_id
+                       and class_schedules.start_time <= ?
+                       and class_bookings.attendance_status <> 'no_show'
+                   ) as last_class_at
             from gym_memberships
             join users on users.id = gym_memberships.user_id
             where gym_memberships.gym_id = ?
@@ -85,12 +95,26 @@ def list_role_users(
             order by case gym_memberships.active_role when 'admin' then 0 when 'trainer' then 1 else 2 end,
                      lower(coalesce(nullif(users.display_name, ''), users.email)) asc
             """,
-            (session["active_gym_id"],),
+            (security.isoformat(security.now_utc()), session["active_gym_id"]),
         ).fetchall()
-        summaries = plan_service.plan_summaries_for_gym(
-            connection, session["active_gym_id"], get_gym_timezone(connection, session["active_gym_id"])
-        )
-        return {"users": [_member_payload_with_plan(row, summaries) for row in rows]}
+        gym_timezone = get_gym_timezone(connection, session["active_gym_id"])
+        summaries = plan_service.plan_summaries_for_gym(connection, session["active_gym_id"], gym_timezone)
+        cutoff = (
+            schedule_service.local_today(gym_timezone) - timedelta(days=membership_service.AT_RISK_DAYS)
+        ).isoformat()
+        users = []
+        for row in rows:
+            payload = _member_payload_with_plan(row, summaries)
+            payload["last_class_at"] = row["last_class_at"]
+            payload["needs_attention"] = membership_service.needs_attention(
+                active_role=row["active_role"],
+                status=row["status"],
+                joined_at=row["joined_at"],
+                last_class_at=row["last_class_at"],
+                cutoff=cutoff,
+            )
+            users.append(payload)
+        return {"users": users}
     finally:
         connection.close()
 

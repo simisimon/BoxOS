@@ -274,6 +274,7 @@ class ApiProfileRepository implements ProfileRepository {
     }
     final joinedAtRaw = data['joined_at'] as String?;
     final lastBookingAtRaw = data['last_booking_at'] as String?;
+    final lastClassAtRaw = data['last_class_at'] as String?;
     return RoleManagedUser(
       id: data['id'] as int? ?? 0,
       membershipId: data['membership_id'] as int? ?? 0,
@@ -298,6 +299,10 @@ class ApiProfileRepository implements ProfileRepository {
           : DateTime.tryParse(lastBookingAtRaw),
       plan: MemberPlanSummary.fromJson(data['plan'] as Map<String, dynamic>?),
       hasPlanRequest: data['has_plan_request'] as bool? ?? false,
+      lastClassAt: lastClassAtRaw == null || lastClassAtRaw.isEmpty
+          ? null
+          : DateTime.tryParse(lastClassAtRaw),
+      needsAttention: data['needs_attention'] as bool? ?? false,
     );
   }
 

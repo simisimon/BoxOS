@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from http import HTTPStatus
 
 from fastapi import FastAPI, Request
@@ -27,6 +28,25 @@ from backend.api.routes import (
     system,
 )
 from backend.core import db, settings, validation
+from backend.services import programming_service
+
+
+def _release_due_workouts_once() -> None:
+    connection = db.get_connection()
+    try:
+        programming_service.release_due_workouts(connection)
+    finally:
+        connection.close()
+
+
+async def _release_scheduled_workouts_forever() -> None:
+    """Publish scheduled WODs at their release time (checked every minute)."""
+    while True:
+        try:
+            await asyncio.to_thread(_release_due_workouts_once)
+        except Exception:  # keep the loop alive; the next minute retries
+            logger.exception("Releasing scheduled workouts failed")
+        await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -35,7 +55,13 @@ async def lifespan(_: FastAPI):
     if problems:
         raise RuntimeError("Refusing to start in production: " + " ".join(problems))
     db.init_db()
-    yield
+    release_task = asyncio.create_task(_release_scheduled_workouts_forever())
+    try:
+        yield
+    finally:
+        release_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await release_task
 
 
 app = FastAPI(title="BoxOS Backend", version="0.1.0", lifespan=lifespan)
