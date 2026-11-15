@@ -204,13 +204,14 @@ def daily_workout_payload(connection: ManagedConnection, row: Row, *, current_us
         "sections": _sections_with_results(connection, row["id"], current_user_id, can_edit),
         "status": row["status"],
         "published_at": row["published_at"],
+        "release_at": row["release_at"],
         "can_edit": can_edit,
     }
 
 
 DAILY_WORKOUT_COLUMNS = (
     "id, gym_id, scheduled_date, title, "
-    "status, published_at, published_by_user_id, created_by_user_id, updated_by_user_id, "
+    "status, published_at, release_at, published_by_user_id, created_by_user_id, updated_by_user_id, "
     "created_at, updated_at"
 )
 

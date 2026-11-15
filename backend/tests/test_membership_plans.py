@@ -146,6 +146,25 @@ class MembershipPlanTests(FastApiTestCase):
             self.client.get("/admin/dashboard", headers=self.athlete_headers).status_code, 403
         )
 
+    def test_member_list_flags_the_members_at_risk(self) -> None:
+        # Joined long ago and never came: needs attention. A brand-new
+        # athlete and the owner do not.
+        self.create_verified_user("quiet@boxos.app")
+        self.add_active_membership("quiet@boxos.app", self.gym_id)
+        quiet_id = self.lookup_user_id("quiet@boxos.app")
+        self.run_sql(
+            "update gym_memberships set created_at = ? where user_id = ?",
+            ("2025-01-01T00:00:00+00:00", quiet_id),
+        )
+
+        response = self.client.get("/roles/users", headers=self.admin_headers)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        flagged = {u["id"] for u in response.json()["users"] if u["needs_attention"]}
+        self.assertEqual(flagged, {quiet_id})
+        dashboard = self.client.get("/admin/dashboard", headers=self.admin_headers).json()
+        self.assertEqual(dashboard["members_at_risk"], len(flagged))
+
     # --- plan definition ------------------------------------------------------
 
     def test_owner_creates_edits_and_archives_plans(self) -> None:

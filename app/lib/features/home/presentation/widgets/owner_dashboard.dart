@@ -56,7 +56,7 @@ class OwnerDashboard extends ConsumerWidget {
                   label: 'Members at risk',
                   value: '${data.membersAtRisk}',
                   hint: 'No class in ${data.atRiskDays} days',
-                  onOpen: () => context.go('/members'),
+                  onOpen: () => context.go('/members?filter=attention'),
                 ),
                 _MetricCard(
                   label: 'Churned members',
@@ -714,9 +714,11 @@ class _ActivityState extends ConsumerState<_Activity> {
                 ),
                 if (widget.manager)
                   AppPill(
-                    label: workout.isPublished ? 'Published' : 'Draft',
+                    label: workout.statusLabel,
                     intent: workout.isPublished
                         ? AppPillIntent.success
+                        : workout.isScheduled
+                        ? AppPillIntent.primary
                         : AppPillIntent.warning,
                     dense: true,
                   ),

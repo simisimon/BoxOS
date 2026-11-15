@@ -128,7 +128,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/members',
                 name: 'members',
-                builder: (context, state) => const MembersScreen(),
+                builder: (context, state) => MembersScreen(
+                  attentionOnly:
+                      state.uri.queryParameters['filter'] == 'attention',
+                ),
                 routes: [
                   GoRoute(
                     path: ':userId',

@@ -45,9 +45,13 @@ class MemberRoster extends StatefulWidget {
     required this.onOpen,
     this.query = '',
     this.onRefresh,
+    this.attentionOnly = false,
   });
 
   final List<RoleManagedUser> users;
+
+  /// Start on the "Needs attention" filter (from the dashboard tile).
+  final bool attentionOnly;
   final ValueChanged<RoleManagedUser> onOpen;
 
   /// Search text from the page toolbar: matches name, nickname or email.
@@ -62,6 +66,18 @@ class MemberRoster extends StatefulWidget {
 
 class _MemberRosterState extends State<MemberRoster> {
   UserRole? _roleFilter;
+
+  /// Only members who haven't come to a class in 21 days.
+  late bool _attentionOnly = widget.attentionOnly;
+
+  @override
+  void didUpdateWidget(MemberRoster oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.attentionOnly != widget.attentionOnly) {
+      _attentionOnly = widget.attentionOnly;
+      if (_attentionOnly) _roleFilter = null;
+    }
+  }
 
   /// Column index of [_columns] the table is sorted by.
   int _sortColumn = 0;
@@ -83,6 +99,7 @@ class _MemberRosterState extends State<MemberRoster> {
     final query = widget.query.trim().toLowerCase();
     final filtered = widget.users.where((user) {
       if (_roleFilter != null && user.role != _roleFilter) return false;
+      if (_attentionOnly && !user.needsAttention) return false;
       if (query.isEmpty) return true;
       return user.displayName.toLowerCase().contains(query) ||
           user.nickname.toLowerCase().contains(query) ||
@@ -99,9 +116,9 @@ class _MemberRosterState extends State<MemberRoster> {
         }
         return aDate.compareTo(bDate) * dir;
       }
-      return memberDisplayName(
-            a,
-          ).toLowerCase().compareTo(memberDisplayName(b).toLowerCase()) *
+      return memberDisplayName(a)
+              .toLowerCase()
+              .compareTo(memberDisplayName(b).toLowerCase()) *
           dir;
     });
     return filtered;
@@ -128,9 +145,22 @@ class _MemberRosterState extends State<MemberRoster> {
                 label:
                     '${role?.label ?? 'All'} '
                     '${role == null ? widget.users.length : widget.users.where((u) => u.role == role).length}',
-                selected: _roleFilter == role,
-                onTap: () => setState(() => _roleFilter = role),
+                selected: !_attentionOnly && _roleFilter == role,
+                onTap: () => setState(() {
+                  _roleFilter = role;
+                  _attentionOnly = false;
+                }),
               ),
+            _FilterChip(
+              label:
+                  'Needs attention '
+                  '${widget.users.where((u) => u.needsAttention).length}',
+              selected: _attentionOnly,
+              onTap: () => setState(() {
+                _roleFilter = null;
+                _attentionOnly = true;
+              }),
+            ),
           ],
         ),
         const SizedBox(height: appSpaceMd),
@@ -147,7 +177,9 @@ class _MemberRosterState extends State<MemberRoster> {
                 _sortColumn = column;
               }),
               onRowTap: widget.onOpen,
-              emptyText: 'No members match the current search or filter.',
+              emptyText: _attentionOnly
+                  ? 'Everyone has been to a class in the last 21 days.'
+                  : 'No members match the current search or filter.',
               cells: (user) => [
                 Row(
                   children: [
@@ -221,6 +253,14 @@ List<Widget> _attentionPills(RoleManagedUser user) => [
     )
   else if (user.plan?.paymentStatus == PaymentStatus.overdue)
     const AppPill(label: 'Overdue', intent: AppPillIntent.danger, dense: true),
+  if (user.needsAttention)
+    AppPill(
+      label: user.lastClassAt == null
+          ? 'No class yet'
+          : 'Last class ${formatShortDate(user.lastClassAt!)}',
+      intent: AppPillIntent.warning,
+      dense: true,
+    ),
 ];
 
 class _CellText extends StatelessWidget {

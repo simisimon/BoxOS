@@ -495,6 +495,12 @@ alter table daily_workout_sections add column if not exists set_unit text not nu
 alter table daily_workout_sections add column if not exists sets_json text not null default '[]';
 alter table daily_workout_sections add column if not exists coach_notes text not null default '';
 alter table daily_workout_sections add column if not exists member_notes text not null default '';
+-- Scheduled WOD release: the gym's default release time ('HH:MM' in the
+-- gym's timezone, null = off) and whether it is the evening before the WOD's
+-- date. A 'scheduled' WOD goes live at release_at (UTC).
+alter table gyms add column if not exists wod_release_time text;
+alter table gyms add column if not exists wod_release_day_before integer not null default 1;
+alter table daily_workouts add column if not exists release_at text;
 
 -- Movements identify "the same exercise" across WODs (result history, PRs).
 -- gym_id null = the bundled CrossFit list, otherwise a gym's own addition.

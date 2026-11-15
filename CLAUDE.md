@@ -138,3 +138,20 @@ PostgreSQL backend in `backend/`, wired together by `docker-compose.yml`.
   resolves to the movement it was merged into.
 - Join requests live in the Members tab (Requests segment); the Members nav
   item shows the open count as a badge.
+- WOD release (decided 2026-11-15): one gym-wide release time in Settings ›
+  Programming (`gyms.wod_release_time` 'HH:MM' in the gym timezone, null =
+  off; `wod_release_day_before` = the evening before vs. on the day). No
+  per-WOD time. Coaches pick "Schedule release" on a WOD: status
+  `scheduled`, `daily_workouts.release_at` (UTC), hidden from athletes like a
+  draft. `programming_service.release_due_workouts` publishes due WODs and
+  sends the usual push; it runs every minute from the app lifespan and on
+  each `GET /programming/workouts`. "Publish now" still works. Changing the
+  time moves scheduled WODs; turning it off returns them to draft.
+- Members needing attention (decided 2026-11-15): owners only (trainers
+  have no Members page). One reason: an active athlete, a member for more
+  than 21 days, with no class in the last 21 days
+  (`membership_service.needs_attention`, the same rule as the dashboard's
+  "Members at risk" tile). `/roles/users` returns `needs_attention` and
+  `last_class_at`; the roster has a "Needs attention" filter chip, opened
+  from the tile via `/members?filter=attention`. Names only, no
+  "contacted" tracking.

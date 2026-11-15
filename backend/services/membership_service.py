@@ -302,3 +302,25 @@ def make_gym_owner(connection: ManagedConnection, *, gym_id: int, user_id: int) 
     )
     sync_user_context(connection, user_id)
     return True
+
+
+# Members at risk / "Needs attention" (owner dashboard tile and the Members
+# filter): an active athlete, a member for longer than AT_RISK_DAYS, who has
+# not come to a class (one that already happened, no-shows excluded) in that
+# time. Dates are compared on the gym's local "today".
+AT_RISK_DAYS = 21
+
+
+def needs_attention(
+    *,
+    active_role: str,
+    status: str,
+    joined_at: str | None,
+    last_class_at: str | None,
+    cutoff: str,
+) -> bool:
+    if active_role != "athlete" or status != "active":
+        return False
+    if not joined_at or joined_at[:10] >= cutoff:
+        return False
+    return last_class_at is None or last_class_at[:10] < cutoff
